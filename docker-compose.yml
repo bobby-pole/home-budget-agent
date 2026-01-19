@@ -1,0 +1,17 @@
+services:
+  app:
+    container_name: smart-budget-app
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data  # Data dir for SQLite database
+      - ./.env:/app/.env  # Environment variables
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 600M
