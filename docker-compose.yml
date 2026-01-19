@@ -7,6 +7,7 @@ services:
     volumes:
       - ./data:/app/data  # Data dir for SQLite database
       - ./.env:/app/.env  # Environment variables
+      - ./backend/static/uploads:/app/static/uploads  # Uploaded files
     restart: unless-stopped
     environment:
       - ENVIRONMENT=production
@@ -15,3 +16,5 @@ services:
       resources:
         limits:
           memory: 600M
+    env_file:
+      - .env
