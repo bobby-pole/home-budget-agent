@@ -3,10 +3,11 @@ import shutil
 import os
 from uuid import uuid4
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
-from sqlmodel import Session, select
-from .models import Receipt, Item
+from sqlmodel import Session, select, desc
+from .models import Receipt, Item, ReceiptCreate, ReceiptRead
 from .database import get_session
 from .services import AIService
+from typing import List
 
 router = APIRouter()
 UPLOAD_DIR = "static/uploads"
@@ -85,3 +86,10 @@ async def upload_receipt(
     background_tasks.add_task(process_receipt_in_background, new_receipt.id, file_path, session)
     
     return new_receipt
+
+@router.get("/receipts", response_model=List[ReceiptRead])
+async def get_receipts(session: Session = Depends(get_session)):
+    # Pobieramy paragony posortowane od najnowszego (data malejąco)
+    statement = select(Receipt).order_by(desc(Receipt.date))
+    results = session.exec(statement).all()
+    return results
