@@ -18,3 +18,9 @@ backend/static/index.html
 backend/static/vite.svg
 
 .env
+.venv/
+__pycache__/
+*.pyc
+
+.vscode/
+.DS_Store

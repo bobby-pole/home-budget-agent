@@ -29,5 +29,13 @@ class Item(ItemBase, table=True):
     receipt: Optional[Receipt] = Relationship(back_populates="items")
 
 # --- API Models (DTO) ---
+class ItemRead(ItemBase):
+    id: int
+
+class ReceiptRead(ReceiptBase):
+    id: int
+    items: List[ItemRead] = []
+
 class ReceiptCreate(ReceiptBase):
     pass
+
