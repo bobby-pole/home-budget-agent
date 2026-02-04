@@ -37,8 +37,12 @@ async def health_check():
 
 # Serwowanie Reacta (SPA)
 if os.path.exists("static"):
-    app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
-    
+    # Sprawdzamy czy assets istnieją (w dev mode mogą nie istnieć, bo pomijamy build frontu)
+    if os.path.exists("static/assets"):
+        app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+    else:
+        print("⚠️  static/assets folder not found. Skipping assets mount (Dev mode?).")
+
     # Obsługa uploadów (żebyś mógł zobaczyć wgrane zdjęcie w przeglądarce)
     # Tworzymy folder, jeśli nie istnieje, żeby nie było błędu przy starcie
     os.makedirs("static/uploads", exist_ok=True)
@@ -49,6 +53,13 @@ if os.path.exists("static"):
         file_path = f"static/{full_path}"
         if os.path.exists(file_path) and os.path.isfile(file_path):
              return FileResponse(file_path)
-        return FileResponse("static/index.html")
+        
+        # Jeśli nie znaleziono pliku, serwujemy index.html (SPA)
+        # Ale tylko jeśli istnieje!
+        index_path = "static/index.html"
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        return {"status": 404, "message": "Frontend static files not found (running in Dev/API mode)"}
 else:
     print("⚠️  Static folder not found. Running in API-only mode.")

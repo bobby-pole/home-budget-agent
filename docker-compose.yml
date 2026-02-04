@@ -1,16 +1,19 @@
 services:
   app:
     container_name: smart-budget-app
-    build: .
+    build:
+      context: .
+      target: backend-base
     ports:
       - "8000:8000"
     volumes:
+      - ./backend:/app  # Hot reload for backend code
       - ./data:/app/data  # Data dir for SQLite database
-      - ./.env:/app/.env  # Environment variables
       - ./backend/static/uploads:/app/static/uploads  # Uploaded files
     restart: unless-stopped
     environment:
-      - ENVIRONMENT=production
+      - ENVIRONMENT=development
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     # Resource limits
     deploy:
       resources:
