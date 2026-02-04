@@ -11,6 +11,7 @@ class ReceiptBase(SQLModel):
     currency: str = Field(default="PLN")
     image_path: Optional[str] = None
     status: str = Field(default="pending")
+    content_hash: Optional[str] = Field(default=None, index=True)
 
 class ItemBase(SQLModel):
     name: str
@@ -38,4 +39,18 @@ class ReceiptRead(ReceiptBase):
 
 class ReceiptCreate(ReceiptBase):
     pass
+
+class ReceiptUpdate(SQLModel):
+    merchant_name: Optional[str] = None
+    date: Optional[datetime] = None
+    total_amount: Optional[float] = None
+    currency: Optional[str] = None
+    status: Optional[str] = None
+    # Na razie nie aktualizujemy pozycji w prostym update, ale można to dodać później
+
+class ItemUpdate(SQLModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    quantity: Optional[float] = None
+    category: Optional[str] = None
 

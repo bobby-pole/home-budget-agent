@@ -1,133 +1,172 @@
 import { useState, useRef } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { Card, CardContent } from "@/components/ui/card"
-import { Upload, FileImage, Loader2, CheckCircle2 } from "lucide-react"
+import { Card } from "@/components/ui/card"
+import { Upload, Loader2, CheckCircle2, Clock, Receipt } from "lucide-react"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
-export function UploadBox() {
+interface UploadBoxProps {
+  totalCount?: number;
+  processingCount?: number;
+}
+
+export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProps) {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
-  // --- LOGIKA REACT QUERY ---
   const uploadMutation = useMutation({
-    mutationFn: api.uploadReceipt,
+    mutationFn: ({ file, force }: { file: File; force?: boolean }) =>
+      api.uploadReceipt(file, force),
     onSuccess: () => {
-      // Odśwież tabelę paragonów
       queryClient.invalidateQueries({ queryKey: ["receipts"] })
-      // Opcjonalnie: Tu można dodać Toast z sukcesem
+      toast.success("Paragon został przesłany!", {
+        description: "Rozpoczynam analizę AI w tle.",
+      })
+      
+      setTimeout(() => {
+        uploadMutation.reset()
+      }, 5000)
     },
-    onError: (error) => {
-      console.error("Błąd uploadu:", error)
-      alert("Wystąpił błąd podczas wysyłania pliku.")
+    onError: (error: any) => {
+      if (error.response?.status !== 409) {
+        console.error("Błąd uploadu:", error)
+        toast.error("Wystąpił błąd podczas wysyłania pliku.", {
+          description: "Spróbuj ponownie później.",
+        })
+      }
     },
   })
 
-  // --- OBSŁUGA ZDARZEŃ ---
-
-  // 1. Kliknięcie w obszar
   const handleBoxClick = () => {
     if (!uploadMutation.isPending) {
       fileInputRef.current?.click()
     }
   }
 
-  // 2. Wybór pliku z dysku
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file) handleUpload(file)
+    if (file) {
+      handleUpload(file)
+      event.target.value = ""
+    }
   }
 
-  // 3. Upuszczenie pliku (Drag & Drop)
   const handleDrop = (event: React.DragEvent) => {
     event.preventDefault()
     setIsDragging(false)
-
     const file = event.dataTransfer.files?.[0]
     if (file) handleUpload(file)
   }
 
-  // Pomocnicze funkcje do stylowania podczas przeciągania
   const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault() // Konieczne, aby pozwolić na upuszczenie!
+    event.preventDefault()
     setIsDragging(true)
   }
   const handleDragLeave = () => setIsDragging(false)
 
-  // Wspólna funkcja wysyłki
-  const handleUpload = (file: File) => {
-    // Prosta walidacja (opcjonalnie)
+  const handleUpload = (file: File, force = false) => {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
-      alert("Proszę wgrać zdjęcie lub PDF.")
+      toast.error("Nieprawidłowy format pliku.", {
+        description: "Proszę wgrać zdjęcie lub PDF.",
+      })
       return
     }
-    uploadMutation.mutate(file)
+
+    uploadMutation.mutate(
+      { file, force },
+      {
+        onError: (error: any) => {
+          if (error.response?.status === 409) {
+            toast.warning("Wykryto duplikat!", {
+              description: "Ten paragon został już przesłany. Czy chcesz go dodać ponownie?",
+              duration: 5000,
+              action: {
+                label: "Tak, dodaj",
+                onClick: () => handleUpload(file, true),
+              },
+            })
+          }
+        },
+      }
+    )
   }
 
   return (
-    <Card className="rounded-2xl border-0 shadow-sm">
-      <CardContent className="p-6">
-        {/* Ukryty input, który wykonuje brudną robotę */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept="image/png, image/jpeg, image/jpg, image/webp"
-        />
-
-        {/* Interaktywny obszar */}
+    <Card className="rounded-2xl border-0 shadow-sm h-full min-h-[120px]">
+      <div className="flex h-full p-3 gap-4">
+        {/* LEWA STRONA: Upload Area (75%) */}
         <div
           onClick={handleBoxClick}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 transition-all duration-200",
-            // Style warunkowe (korzystamy z funkcji cn)
+            "w-3/4 flex flex-col items-center justify-center p-4 transition-all cursor-pointer rounded-xl border-2 border-dashed",
             isDragging
-              ? "border-primary bg-primary/5 scale-[0.99]"
-              : "border-muted-foreground/25 bg-muted/30 hover:border-primary/50 hover:bg-accent/50",
+              ? "bg-primary/5 border-primary scale-[0.98]"
+              : "bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50",
             uploadMutation.isPending && "cursor-not-allowed opacity-70"
           )}
         >
-          {/* Różne ikony w zależności od stanu */}
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 mb-4">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/png, image/jpeg, image/jpg, image/webp"
+          />
+
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background border shadow-sm mb-2">
             {uploadMutation.isPending ? (
-              <Loader2 className="h-7 w-7 text-primary animate-spin" />
+              <Loader2 className="h-5 w-5 text-primary animate-spin" />
             ) : uploadMutation.isSuccess ? (
-              <CheckCircle2 className="h-7 w-7 text-green-500" />
+              <CheckCircle2 className="h-5 w-5 text-green-500" />
             ) : (
-              <Upload className="h-7 w-7 text-primary" />
+              <Upload className="h-5 w-5 text-primary" />
             )}
           </div>
-
-          {/* Teksty */}
-          <div className="text-center space-y-1">
-            {uploadMutation.isPending ? (
-              <p className="text-sm font-medium text-foreground">Przetwarzanie paragonu...</p>
-            ) : (
-              <>
-                <p className="text-sm font-medium text-foreground">
-                  Upuść paragon tutaj
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  lub kliknij, aby wybrać
-                </p>
-              </>
-            )}
-          </div>
-
-          {/* Informacja o formacie (tylko gdy nie ładujemy) */}
-          {!uploadMutation.isPending && (
-            <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-              <FileImage className="h-4 w-4" />
-              <span>PNG, JPG, WEBP (max 10MB)</span>
-            </div>
-          )}
+          <span className="text-xs font-semibold text-foreground text-center">
+            {uploadMutation.isPending ? "Przetwarzam..." : "Dodaj paragon"}
+          </span>
         </div>
-      </CardContent>
+
+        {/* PRAWA STRONA: Statystyki (25%) */}
+        <div className="w-1/4 flex flex-col justify-center gap-2 py-1 pr-2">
+            
+            {/* Oczekujące */}
+            <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Oczekujące
+                </span>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <span className={cn("text-2xl font-bold", processingCount > 0 ? "text-amber-500" : "text-foreground")}>
+                        {processingCount}
+                    </span>
+                    {processingCount > 0 && (
+                        <span className="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full animate-pulse">
+                            W toku
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            <div className="h-px bg-border/50 w-full my-1" />
+
+            {/* Wszystkie */}
+            <div className="flex flex-col">
+                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Receipt className="h-3 w-3" />
+                    Razem
+                </span>
+                <span className="text-lg font-semibold text-foreground mt-0.5">
+                    {totalCount}
+                </span>
+            </div>
+        </div>
+      </div>
     </Card>
   )
 }

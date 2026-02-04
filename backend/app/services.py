@@ -1,42 +1,47 @@
 # backend/app/services.py
 import os
 import json
-import google.generativeai as genai
+import base64
+from openai import OpenAI
 from .models import Receipt, Item
 
 # API setup
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+# Pamiętaj, że w środowisku lokalnym/Docker klucz musi być w zmiennych środowiskowych
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Select model
-MODEL_NAME = "gemini-2.5-flash"
+# Select model (Cheap and fast)
+MODEL_NAME = "gpt-4o-mini"
 
 class AIService:
     @staticmethod
     def parse_receipt(image_path: str) -> dict:
         """
-        Wysyła obraz do Gemini i wymusza zwrot w formacie JSON.
+        Sends image to OpenAI and enforces JSON response.
         """
-        model = genai.GenerativeModel(MODEL_NAME)
         
-        # Load image data
-        with open(image_path, "rb") as f:
-            image_data = f.read()
+        # 1. Encode image to base64
+        try:
+            with open(image_path, "rb") as image_file:
+                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            print(f"❌ Error reading image: {e}")
+            return None
 
-        # --- PROMPT ENGINEERING ---
-        # Instructions for the AI model
-        prompt = """
-        Analyze this receipt image and extract data into a strict JSON format.
+        # 2. Prepare Prompt
+        system_prompt = """
+        You are an expert receipt parser. 
+        Extract data from the receipt image into a strict JSON format.
         Identify:
         1. Merchant name (store).
         2. Date (YYYY-MM-DD format). If missing, use today.
-        3. Total amount.
+        3. Total amount (as a number).
         4. Currency (PLN, EUR, USD, etc.).
         5. List of items (name, price, quantity, category).
         
-        Assign a category to each item (e.g., Food, Chemicals, Alcohol, Electronics, Other).
+        Assign a category to each item (e.g., Food, Transport, Utilities, Shopping, Entertainment, Health, Other).
         
-        Output strictly valid JSON only. No markdown formatting (```json).
+        Return ONLY valid JSON.
         Structure:
         {
             "merchant_name": "Store Name",
@@ -51,16 +56,35 @@ class AIService:
         """
 
         try:
-            # Run AI
-            response = model.generate_content([
-                {'mime_type': 'image/jpeg', 'data': image_data},
-                prompt
-            ])
+            # 3. Call OpenAI API
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "Analyze this receipt image."},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{base64_image}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=1000
+            )
             
-            # Serializing response text
-            raw_text = response.text.replace("```json", "").replace("```", "").strip()
+            raw_text = response.choices[0].message.content
             
-            # Parse JSON
+            # 4. Parse JSON
             parsed_data = json.loads(raw_text)
             print("✅ AI Parsed Data:", parsed_data)
             return parsed_data

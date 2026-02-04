@@ -3,4 +3,4 @@ uvicorn[standard]>=0.27.0
 sqlmodel>=0.0.14
 python-multipart
 python-dotenv
-google-generativeai>=0.8.6
+openai>=1.0.0
