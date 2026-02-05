@@ -7,8 +7,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Instalacja niezbędnych zależności systemowych
-RUN apt-get update && apt-get install -y --no-install-recommends 
-    curl 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalacja zależności Pythona
@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # Kopiowanie ZBUDOWANEGO LOKALNIE frontendu
-# Musisz uruchomić 'npm run build' w folderze frontend przed budowaniem tego obrazu!
 COPY frontend/dist /app/static
 
 # Ustawienia środowiska
@@ -29,4 +28,5 @@ ENV ENVIRONMENT=production
 
 EXPOSE 8000
 
+# Host 0.0.0.0 jest wymagany w Dockerze
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
