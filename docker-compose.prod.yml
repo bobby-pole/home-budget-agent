@@ -5,7 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile.vps
     ports:
-      - "80:8000"
+      - "8080:8000"
     volumes:
       - ./data:/app/data  # Przechowywanie bazy danych SQLite
     restart: unless-stopped
