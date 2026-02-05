@@ -265,9 +265,9 @@ export function ReceiptDetailModal({
                 {receipt.items?.length || 0}
               </span>
             </h4>
-            <ScrollArea className="h-[300px] rounded-md border bg-card">
+            <div className="max-h-[350px] overflow-auto rounded-md border bg-card">
               {receipt.items?.length ? (
-                <div className="divide-y">
+                <div className="divide-y min-w-max">
                   {receipt.items.map((item) => (
                     <ReceiptItemRow
                       key={item.id}
@@ -277,11 +277,11 @@ export function ReceiptDetailModal({
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4">
+                <div className="flex flex-col items-center justify-center h-[100px] text-muted-foreground text-sm p-4">
                   <p>Brak wykrytych pozycji.</p>
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
         </div>
 

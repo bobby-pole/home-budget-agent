@@ -95,15 +95,15 @@ export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProp
 
   return (
     <Card className="rounded-2xl border-0 shadow-sm h-full min-h-[120px]">
-      <div className="flex h-full p-3 gap-4">
-        {/* LEWA STRONA: Upload Area (75%) */}
+      <div className="flex h-full p-2 lg:p-3 gap-2 lg:gap-4">
+        {/* LEWA STRONA: Upload Area */}
         <div
           onClick={handleBoxClick}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "w-3/4 flex flex-col items-center justify-center p-4 transition-all cursor-pointer rounded-xl border-2 border-dashed",
+            "w-[60%] lg:w-3/4 flex flex-col items-center justify-center p-3 lg:p-4 transition-all cursor-pointer rounded-xl border-2 border-dashed",
             isDragging
               ? "bg-primary/5 border-primary scale-[0.98]"
               : "bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50",
@@ -118,50 +118,48 @@ export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProp
             accept="image/png, image/jpeg, image/jpg, image/webp"
           />
 
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-background border shadow-sm mb-2">
+          <div className="flex h-8 w-8 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-background border shadow-sm mb-1 lg:mb-2">
             {uploadMutation.isPending ? (
-              <Loader2 className="h-5 w-5 text-primary animate-spin" />
+              <Loader2 className="h-4 w-4 lg:h-5 lg:w-5 text-primary animate-spin" />
             ) : uploadMutation.isSuccess ? (
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
+              <CheckCircle2 className="h-4 w-4 lg:h-5 lg:w-5 text-green-500" />
             ) : (
-              <Upload className="h-5 w-5 text-primary" />
+              <Upload className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
             )}
           </div>
-          <span className="text-xs font-semibold text-foreground text-center">
-            {uploadMutation.isPending ? "Przetwarzam..." : "Dodaj paragon"}
+          <span className="text-[10px] lg:text-xs font-semibold text-foreground text-center">
+            {uploadMutation.isPending ? "..." : "Dodaj"}
           </span>
         </div>
 
-        {/* PRAWA STRONA: Statystyki (25%) */}
-        <div className="w-1/4 flex flex-col justify-center gap-2 py-1 pr-2">
+        {/* PRAWA STRONA: Statystyki */}
+        <div className="w-[40%] lg:w-1/4 flex flex-col justify-center gap-2 py-1 pr-1">
             
             {/* Oczekujące */}
             <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
+                <span className="text-[9px] lg:text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-2.5 w-2.5" />
                     Oczekujące
                 </span>
-                <div className="flex items-center gap-2 mt-0.5">
-                    <span className={cn("text-2xl font-bold", processingCount > 0 ? "text-amber-500" : "text-foreground")}>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className={cn("text-lg lg:text-2xl font-bold", processingCount > 0 ? "text-amber-500" : "text-foreground")}>
                         {processingCount}
                     </span>
                     {processingCount > 0 && (
-                        <span className="text-[10px] text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full animate-pulse">
-                            W toku
-                        </span>
+                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
                     )}
                 </div>
             </div>
 
-            <div className="h-px bg-border/50 w-full my-1" />
+            <div className="h-px bg-border/50 w-full my-0.5" />
 
             {/* Wszystkie */}
             <div className="flex flex-col">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
-                    <Receipt className="h-3 w-3" />
+                <span className="text-[9px] lg:text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
+                    <Receipt className="h-2.5 w-2.5" />
                     Razem
                 </span>
-                <span className="text-lg font-semibold text-foreground mt-0.5">
+                <span className="text-base lg:text-lg font-semibold text-foreground mt-0.5">
                     {totalCount}
                 </span>
             </div>

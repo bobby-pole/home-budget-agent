@@ -39,7 +39,7 @@ class AIService:
         4. Currency (PLN, EUR, USD, etc.).
         5. List of items (name, price, quantity, category).
         
-        Assign a category to each item (e.g., Food, Transport, Utilities, Shopping, Entertainment, Health, Other).
+        Assign a category to each item (e.g., Food, Fast Food, Snacks, Transport, Utilities, Entertainment, Health, Other).
         
         Return ONLY valid JSON.
         Structure:

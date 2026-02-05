@@ -68,4 +68,20 @@ export const api = {
   deleteReceipt: async (id: number) => {
     await apiClient.delete(`/receipts/${id}`);
   },
+
+  /**
+   * Pobiera budżet dla danego miesiąca i roku.
+   */
+  getBudget: async (year: number, month: number) => {
+    const response = await apiClient.get(`/budget/${year}/${month}`);
+    return response.data;
+  },
+
+  /**
+   * Ustawia lub aktualizuje budżet.
+   */
+  setBudget: async (data: { year: number; month: number; amount: number }) => {
+    const response = await apiClient.post(`/budget`, data);
+    return response.data;
+  },
 };

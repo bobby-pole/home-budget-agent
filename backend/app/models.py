@@ -6,7 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 # --- Base Models ---
 class ReceiptBase(SQLModel):
     merchant_name: str = Field(index=True)
-    date: datetime = Field(default_factory=datetime.utcnow)
+    date: Optional[datetime] = Field(default=None)
     total_amount: float = Field(default=0.0)
     currency: str = Field(default="PLN")
     image_path: Optional[str] = None
@@ -53,4 +53,14 @@ class ItemUpdate(SQLModel):
     price: Optional[float] = None
     quantity: Optional[float] = None
     category: Optional[str] = None
+
+# --- Budget Models ---
+class Budget(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    month: int = Field(index=True)
+    year: int = Field(index=True)
+    amount: float = Field(default=0.0)
+
+class BudgetUpdate(SQLModel):
+    amount: float
 

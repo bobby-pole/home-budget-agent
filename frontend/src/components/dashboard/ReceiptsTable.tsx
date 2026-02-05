@@ -20,20 +20,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Store, RefreshCcw, Eye, Trash2 } from "lucide-react";
+import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import type { Receipt } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { ReceiptDetailModal } from "./ReceiptDetailModal";
-import { CATEGORY_COLORS, CATEGORY_LABELS } from "@/lib/constants";
-
-const getReceiptCategory = (receipt: Receipt): string => {
-  if (!receipt.items || receipt.items.length === 0) return "Other";
-  const firstItemWithCategory = receipt.items.find((item) => item.category);
-  return firstItemWithCategory?.category || "Other";
-};
 
 interface ReceiptsTableProps {
   receipts: Receipt[];
@@ -50,6 +43,16 @@ export function ReceiptsTable({
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [receiptToDelete, setReceiptToDelete] = useState<number | null>(null);
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
+
+  const totalPages = Math.ceil(receipts.length / ITEMS_PER_PAGE) || 1;
+  const paginatedReceipts = receipts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const retryMutation = useMutation({
     mutationFn: api.retryReceipt,
@@ -74,6 +77,9 @@ export function ReceiptsTable({
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
       toast.success("Paragon usunięty");
       setReceiptToDelete(null);
+      if (paginatedReceipts.length === 1 && currentPage > 1) {
+          setCurrentPage(prev => prev - 1);
+      }
     },
     onError: () => toast.error("Nie udało się usunąć paragonu"),
   });
@@ -89,9 +95,40 @@ export function ReceiptsTable({
 
   return (
     <>
-      <Card className="rounded-2xl border-0 shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">Paragony</CardTitle>
+      <Card className="rounded-2xl border border-border/50 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-lg font-semibold">Paragony</CardTitle>
+            <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] font-bold">
+                {receipts.length}
+            </Badge>
+          </div>
+
+          <div className="flex items-center gap-3">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  Strona {currentPage} z {totalPages}
+              </span>
+              <div className="flex gap-1">
+                  <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                  >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages || totalPages === 1}
+                  >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+              </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -99,7 +136,7 @@ export function ReceiptsTable({
               <TableRow className="border-b border-muted">
                 <TableHead className="text-muted-foreground">Sklep</TableHead>
                 <TableHead className="text-muted-foreground">Data</TableHead>
-                <TableHead className="text-muted-foreground">Status</TableHead>
+                <TableHead className="text-muted-foreground w-[140px]">Status</TableHead>
                 <TableHead className="text-right text-muted-foreground">
                   Kwota
                 </TableHead>
@@ -117,7 +154,6 @@ export function ReceiptsTable({
                   </TableCell>
                 </TableRow>
               ) : receipts.length === 0 ? (
-                // Stan pusty (Empty State)
                 <TableRow>
                   <TableCell
                     colSpan={5}
@@ -127,22 +163,23 @@ export function ReceiptsTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                receipts.map((receipt) => {
+                paginatedReceipts.map((receipt) => {
                   const isDone = receipt.status === "done";
                   const isError = receipt.status === "error";
-
-                  let statusColor =
-                    "bg-amber-50/50 text-amber-600 border-amber-100";
-                  if (isDone)
-                    statusColor =
-                      "bg-emerald-50/50 text-emerald-600 border-emerald-100";
-                  if (isError)
-                    statusColor = "bg-red-50/50 text-red-600 border-red-100";
+                  
+                  let statusColor = "bg-amber-50/50 text-amber-600 border-amber-100";
+                  if (isDone) statusColor = "bg-emerald-50/50 text-emerald-600 border-emerald-100";
+                  if (isError) statusColor = "bg-red-50/50 text-red-600 border-red-100";
 
                   return (
                     <TableRow
                       key={receipt.id}
-                      className="border-b border-muted/50"
+                      className="border-b border-muted/50 cursor-pointer lg:cursor-default hover:bg-muted/30 lg:hover:bg-transparent transition-colors"
+                      onClick={() => {
+                        if (window.innerWidth < 1024) {
+                          handleOpenModal(receipt);
+                        }
+                      }}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -155,28 +192,43 @@ export function ReceiptsTable({
                         </div>
                       </TableCell>
                       <TableCell className="text-gray-500">
-                        {new Date(receipt.date).toLocaleDateString("pl-PL")}
+                        {receipt.date 
+                          ? new Date(receipt.date).toLocaleDateString("pl-PL")
+                          : "-"}
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant="outline"
-                          className={cn("rounded-md capitalize", statusColor)}
-                        >
-                          {receipt.status}
-                        </Badge>
+                        {(() => {
+                          const isDone = receipt.status === "done";
+                          const isError = receipt.status === "error";
+                          
+                          let colors = "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/20";
+                          if (isDone) colors = "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-400/20";
+                          if (isError) colors = "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-400/20";
+
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={cn("rounded-md capitalize w-24 justify-center font-semibold", colors)}
+                            >
+                              {receipt.status}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         {receipt.total_amount.toFixed(2)} {receipt.currency}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Przycisk Retry (tylko dla błędów) */}
                           {receipt.status === "error" && (
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-8 w-8 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-                              onClick={() => retryMutation.mutate(receipt.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                retryMutation.mutate(receipt.id);
+                              }}
                               disabled={retryMutation.isPending}
                               title="Błąd przetwarzania - Spróbuj ponownie"
                             >
@@ -189,23 +241,27 @@ export function ReceiptsTable({
                             </Button>
                           )}
 
-                          {/* Przycisk Szczegóły/Edycja */}
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-gray-500 hover:text-primary hover:bg-primary/10"
-                            onClick={() => handleOpenModal(receipt)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenModal(receipt);
+                            }}
                             title="Szczegóły / Edycja"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
 
-                          {/* Przycisk Usuń */}
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            onClick={() => setReceiptToDelete(receipt.id)}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setReceiptToDelete(receipt.id);
+                            }}
                             title="Usuń paragon"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -221,14 +277,12 @@ export function ReceiptsTable({
         </CardContent>
       </Card>
 
-      {/* Modal Szczegółów */}
       <ReceiptDetailModal
         receipt={selectedReceipt}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />
 
-      {/* Modal Potwierdzenia Usunięcia */}
       <AlertDialog
         open={!!receiptToDelete}
         onOpenChange={(open) => !open && setReceiptToDelete(null)}

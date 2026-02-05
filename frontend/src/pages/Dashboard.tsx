@@ -3,20 +3,34 @@ import { KPICard } from "@/components/dashboard/KpiCard";
 import { ReceiptsTable } from "@/components/dashboard/ReceiptsTable";
 import { SpendingChart } from "@/components/dashboard/SpendingChart";
 import { UploadBox } from "@/components/dashboard/UploadBox";
-import { Wallet, PiggyBank, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Wallet,
+  PiggyBank,
+  TrendingUp,
+  CalendarDays,
+  PlusCircle,
+  Pencil,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
-
-const monthsLocative = [
-  "styczniu", "lutym", "marcu", "kwietniu", "maju", "czerwcu",
-  "lipcu", "sierpniu", "wrześniu", "październiku", "listopadzie", "grudniu"
-];
+import { useState } from "react";
+import { MonthlySummaryModal } from "@/components/dashboard/MonthlySummaryModal";
+import { ReceiptDetailModal } from "@/components/dashboard/ReceiptDetailModal";
+import { BudgetModal } from "@/components/dashboard/BudgetModal";
 
 export function Dashboard() {
+  const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+
+  const now = new Date();
+  const curMonth = now.getMonth();
+  const curYear = now.getFullYear();
+
   const {
     data: receipts = [],
-    isLoading,
+    isLoading: isReceiptsLoading,
     error,
   } = useQuery({
     queryKey: ["receipts"],
@@ -24,8 +38,30 @@ export function Dashboard() {
     refetchInterval: 5000,
   });
 
-  // Obliczenia statystyk
-  const totalSpent = receipts.reduce((sum, r) => sum + r.total_amount, 0);
+  const { data: budgetData, isLoading: isBudgetLoading } = useQuery({
+    queryKey: ["budget", curYear, curMonth + 1],
+    queryFn: () => api.getBudget(curYear, curMonth + 1),
+  });
+
+  // --- STATYSTYKI ---
+  const totalSpent = receipts.reduce((sum, r) => {
+    if (!r.date) return sum;
+    const rDate = new Date(r.date);
+    if (
+      r.status === "done" &&
+      rDate.getMonth() === curMonth &&
+      rDate.getFullYear() === curYear
+    ) {
+      return sum + r.total_amount;
+    }
+    return sum;
+  }, 0);
+
+  const budgetAmount = budgetData?.amount || 0;
+  const remainingBudget = budgetAmount - totalSpent;
+  const budgetProgress =
+    budgetAmount > 0 ? Math.min((totalSpent / budgetAmount) * 100, 100) : 0;
+
   const receiptsCount = receipts.length;
   const processingCount = receipts.filter(
     (r) =>
@@ -34,26 +70,25 @@ export function Dashboard() {
       r.status === "error",
   ).length;
 
-  const currentMonthIndex = new Date(Date.now()).getMonth();
-  const monthName = monthsLocative[currentMonthIndex];
+  const currentMonthRaw = new Date().toLocaleString("pl-PL", { month: "long" });
+  const monthName =
+    currentMonthRaw.charAt(0).toUpperCase() + currentMonthRaw.slice(1);
 
-  // Logika Top Kategorii
   const categoryTotals: Record<string, number> = {};
   receipts.forEach((receipt) => {
-    if (receipt.items && receipt.items.length > 0) {
-      receipt.items.forEach((item) => {
+    if (!receipt.date) return;
+    const rDate = new Date(receipt.date);
+    if (rDate.getMonth() === curMonth && rDate.getFullYear() === curYear) {
+      receipt.items?.forEach((item) => {
         const cat = item.category || "Other";
-        const val = item.price; 
-        if (val > 0) categoryTotals[cat] = (categoryTotals[cat] || 0) + val;
+        if (item.price > 0)
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + item.price;
       });
-    } else if (receipt.total_amount > 0) {
-      categoryTotals["Other"] = (categoryTotals["Other"] || 0) + receipt.total_amount;
     }
   });
 
   let topCategoryName = "Brak";
   let topCategoryValue = 0;
-
   Object.entries(categoryTotals).forEach(([cat, val]) => {
     if (val > topCategoryValue) {
       topCategoryValue = val;
@@ -61,7 +96,7 @@ export function Dashboard() {
     }
   });
 
-  if (isLoading) {
+  if (isReceiptsLoading || isBudgetLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-lg animate-pulse">
@@ -70,14 +105,15 @@ export function Dashboard() {
       </div>
     );
   }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="px-6 pb-8">
-        {/* KPI Section */}
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <main className="px-4 lg:px-6 pb-8">
+        {/* KPI Section - 2x2 on mobile, 1x4 on desktop */}
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           <KPICard
-            title={`Suma Wydatków w ${monthName}`}
+            title={`Suma Wydatków - ${monthName}`}
             value={totalSpent.toLocaleString(undefined, {
               style: "currency",
               currency: "PLN",
@@ -85,6 +121,11 @@ export function Dashboard() {
             icon={Wallet}
             iconBgColor="bg-blue-100"
             iconColor="text-blue-600"
+            action={{
+              label: "Historia wydatków",
+              icon: CalendarDays,
+              onClick: () => setIsMonthlyModalOpen(true),
+            }}
           />
 
           <UploadBox
@@ -93,13 +134,37 @@ export function Dashboard() {
           />
 
           <KPICard
-            title="Pozostały Budżet"
-            value="45%"
+            title={`BUDŻET - ${monthName.toUpperCase()}`}
+            value={
+              <div className="flex items-center gap-1 lg:gap-2">
+                <span className="truncate">
+                  {budgetAmount > 0
+                    ? remainingBudget.toLocaleString(undefined, {
+                        style: "currency",
+                        currency: "PLN",
+                      })
+                    : "Brak"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 lg:h-6 lg:w-6 rounded-full hover:bg-muted"
+                  onClick={() => setIsBudgetModalOpen(true)}
+                >
+                  {budgetAmount > 0 ? (
+                    <Pencil className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                  ) : (
+                    <PlusCircle className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                  )}
+                </Button>
+              </div>
+            }
             icon={PiggyBank}
             iconBgColor="bg-pink-100"
             iconColor="text-pink-600"
-            showProgress
-            progressValue={45}
+            showProgress={budgetAmount > 0}
+            progressValue={budgetProgress}
+            highlight={budgetAmount > 0 && remainingBudget < 0}
           />
 
           <KPICard
@@ -113,21 +178,31 @@ export function Dashboard() {
 
         {/* Main Content */}
         <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-          {/* Left Column - Receipts Table */}
           <div className="lg:col-span-3">
             <ReceiptsTable
               receipts={receipts}
-              isLoading={isLoading}
+              isLoading={isReceiptsLoading}
               error={error}
             />
           </div>
-
-          {/* Right Column - Spending Overview */}
           <div className="lg:col-span-2 h-full">
             <SpendingChart />
           </div>
         </section>
       </main>
+
+      <MonthlySummaryModal
+        receipts={receipts}
+        isOpen={isMonthlyModalOpen}
+        onClose={() => setIsMonthlyModalOpen(false)}
+      />
+      <BudgetModal
+        isOpen={isBudgetModalOpen}
+        onClose={() => setIsBudgetModalOpen(false)}
+        currentAmount={budgetAmount}
+        year={curYear}
+        month={curMonth + 1}
+      />
     </div>
   );
 }

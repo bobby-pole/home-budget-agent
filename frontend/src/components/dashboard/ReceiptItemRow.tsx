@@ -74,34 +74,34 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
     const badgeColor = CATEGORY_COLORS[item.category] || CATEGORY_COLORS["Other"];
 
     return (
-      <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors">
+      <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors min-w-[450px]">
         <div className="flex items-center flex-1 min-w-0 mr-2 gap-3">
-          <span className="font-medium truncate" title={item.name}>
+          <span className="font-medium truncate shrink" title={item.name}>
             {item.name}
           </span>
           
-          <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
             <span className={cn("px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium", badgeColor)}>
                 {CATEGORY_LABELS[item.category] || item.category}
             </span>
-            <span>
+            <span className="w-12 text-right">
                 {item.quantity} szt.
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 ml-2">
           <span className="font-semibold whitespace-nowrap min-w-[70px] text-right">
             {item.price.toFixed(2)} {currency}
           </span>
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="h-8 w-8 opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
             onClick={() => setIsEditing(true)}
             title="Edytuj pozycję"
           >
-            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            <Pencil className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </div>
@@ -109,7 +109,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   }
 
   return (
-    <div className="py-2 px-2 border-b last:border-0 h-[52px] flex items-center bg-muted/30">
+    <div className="py-2 px-2 border-b last:border-0 h-[52px] flex items-center bg-muted/30 min-w-[450px]">
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-center gap-2 w-full">
           {/* 1. Nazwa */}

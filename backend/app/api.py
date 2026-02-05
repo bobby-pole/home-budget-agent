@@ -5,7 +5,7 @@ import hashlib
 from uuid import uuid4
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc
-from .models import Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate
+from .models import Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate, Budget, BudgetUpdate
 from .database import get_session
 from .services import AIService
 from typing import List
@@ -52,6 +52,15 @@ def process_receipt_in_background(receipt_id: int, image_path: str, session: Ses
     receipt.total_amount = total
     receipt.currency = data.get("currency", "PLN")
     receipt.status = "done"
+    
+    # Update date from AI if available
+    ai_date_str = data.get("date")
+    if ai_date_str:
+        try:
+            from datetime import datetime
+            receipt.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
+        except (ValueError, TypeError):
+            print(f"⚠️ Could not parse AI date: {ai_date_str}")
     
     # 3. Add positions
     items_data = data.get("items", [])
@@ -228,3 +237,28 @@ async def delete_receipt(
     session.delete(receipt)
     session.commit()
     return None
+
+@router.get("/budget/{year}/{month}", response_model=Budget)
+async def get_budget(year: int, month: int, session: Session = Depends(get_session)):
+    statement = select(Budget).where(Budget.year == year).where(Budget.month == month)
+    budget = session.exec(statement).first()
+    if not budget:
+        return Budget(year=year, month=month, amount=0.0)
+    return budget
+
+@router.post("/budget", response_model=Budget)
+async def set_budget(budget_data: Budget, session: Session = Depends(get_session)):
+    statement = select(Budget).where(Budget.year == budget_data.year).where(Budget.month == budget_data.month)
+    existing = session.exec(statement).first()
+    
+    if existing:
+        existing.amount = budget_data.amount
+        session.add(existing)
+        session.commit()
+        session.refresh(existing)
+        return existing
+    
+    session.add(budget_data)
+    session.commit()
+    session.refresh(budget_data)
+    return budget_data
