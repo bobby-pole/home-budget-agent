@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc
 from .models import Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate, Budget, BudgetUpdate
-from .database import get_session
+from .database import get_session, engine
 from .services import AIService
 from typing import List
 
@@ -14,82 +14,84 @@ router = APIRouter()
 UPLOAD_DIR = "static/uploads"
 
 # --- TASK IN BACKGROUND ---
-def process_receipt_in_background(receipt_id: int, image_path: str, session: Session):
+def process_receipt_in_background(receipt_id: int, image_path: str):
     print(f"🤖 AI Processing started for receipt #{receipt_id}...")
     
-    # 1. Call AI to parse receipt
-    data = AIService.parse_receipt(image_path)
-    
-    # Load receipt from DB
-    receipt = session.get(Receipt, receipt_id)
-    
-    if not data or not receipt:
-        print("❌ AI Failed or Receipt not found")
-        if receipt:
-            receipt.status = "error"
-            session.add(receipt)
-            session.commit()
-        return
+    # Tworzymy nową sesję dla zadania w tle, aby uniknąć problemu z zamkniętym połączeniem
+    with Session(engine) as session:
+        # 1. Call AI to parse receipt
+        data = AIService.parse_receipt(image_path)
+        
+        # Load receipt from DB
+        receipt = session.get(Receipt, receipt_id)
+        
+        if not data or not receipt:
+            print("❌ AI Failed or Receipt not found")
+            if receipt:
+                receipt.status = "error"
+                session.add(receipt)
+                session.commit()
+            return
 
-    # Validate business data (AI might return JSON with empty values)
-    merchant = data.get("merchant_name")
-    total = data.get("total_amount", 0.0)
+        # Validate business data (AI might return JSON with empty values)
+        merchant = data.get("merchant_name")
+        total = data.get("total_amount", 0.0)
 
-    if not merchant or merchant == "Unknown" or total <= 0:
-        print(f"⚠️ AI Validation Failed: Merchant='{merchant}', Total={total}")
-        if receipt:
-            receipt.status = "error"
-            # Save partial data so user can see it
-            receipt.merchant_name = merchant or "Unknown"
-            receipt.total_amount = total
-            receipt.currency = data.get("currency", "PLN")
-            session.add(receipt)
-            session.commit()
-        return
+        if not merchant or merchant == "Unknown" or total <= 0:
+            print(f"⚠️ AI Validation Failed: Merchant='{merchant}', Total={total}")
+            if receipt:
+                receipt.status = "error"
+                # Save partial data so user can see it
+                receipt.merchant_name = merchant or "Unknown"
+                receipt.total_amount = total
+                receipt.currency = data.get("currency", "PLN")
+                session.add(receipt)
+                session.commit()
+            return
 
-    # 2. Update receipt details (Success path)
-    receipt.merchant_name = merchant
-    receipt.total_amount = total
-    receipt.currency = data.get("currency", "PLN")
-    receipt.status = "done"
-    
-    # Update date from AI if available
-    ai_date_str = data.get("date")
-    if ai_date_str:
-        try:
-            from datetime import datetime
-            receipt.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
-        except (ValueError, TypeError):
-            print(f"⚠️ Could not parse AI date: {ai_date_str}")
-    
-    # 3. Add positions
-    items_data = data.get("items", [])
-    for item_raw in items_data:
-        new_item = Item(
-            name=item_raw["name"],
-            price=item_raw["price"],
-            quantity=item_raw.get("quantity", 1),
-            category=item_raw.get("category", "Other"),
-            receipt_id=receipt.id
-        )
-        session.add(new_item)
-    
-    session.add(receipt)
-    session.commit()
-    print(f"✅ AI Processing finished for receipt #{receipt_id}")
+        # 2. Update receipt details (Success path)
+        receipt.merchant_name = merchant
+        receipt.total_amount = total
+        receipt.currency = data.get("currency", "PLN")
+        receipt.status = "done"
+        
+        # Update date from AI if available
+        ai_date_str = data.get("date")
+        if ai_date_str:
+            try:
+                from datetime import datetime
+                receipt.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                print(f"⚠️ Could not parse AI date: {ai_date_str}")
+        
+        # 3. Add positions
+        items_data = data.get("items", [])
+        for item_raw in items_data:
+            new_item = Item(
+                name=item_raw["name"],
+                price=item_raw["price"],
+                quantity=item_raw.get("quantity", 1),
+                category=item_raw.get("category", "Other"),
+                receipt_id=receipt.id
+            )
+            session.add(new_item)
+        
+        session.add(receipt)
+        session.commit()
+        print(f"✅ AI Processing finished for receipt #{receipt_id}")
 
-    # 4. OPTIMIZATION: Delete image file after success
-    if receipt.status == "done" and image_path and os.path.exists(image_path):
-        try:
-            os.remove(image_path)
-            print(f"🗑️  Deleted processed image: {image_path}")
-            
-            # Update DB to reflect deletion
-            receipt.image_path = None
-            session.add(receipt)
-            session.commit()
-        except Exception as e:
-            print(f"⚠️  Failed to delete image {image_path}: {e}")
+        # 4. OPTIMIZATION: Delete image file after success
+        if receipt.status == "done" and image_path and os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+                print(f"🗑️  Deleted processed image: {image_path}")
+                
+                # Update DB to reflect deletion
+                receipt.image_path = None
+                session.add(receipt)
+                session.commit()
+            except Exception as e:
+                print(f"⚠️  Failed to delete image {image_path}: {e}")
 
 
 # --- ENDPOINT ---
@@ -138,7 +140,7 @@ async def upload_receipt(
     session.refresh(new_receipt)
     
     # AI agent works in background
-    background_tasks.add_task(process_receipt_in_background, new_receipt.id, file_path, session)
+    background_tasks.add_task(process_receipt_in_background, new_receipt.id, file_path)
     
     return new_receipt
 
@@ -165,7 +167,7 @@ async def retry_receipt(
     session.refresh(receipt)
 
     # Restart AI task
-    background_tasks.add_task(process_receipt_in_background, receipt.id, receipt.image_path, session)
+    background_tasks.add_task(process_receipt_in_background, receipt.id, receipt.image_path)
     
     return receipt
 
