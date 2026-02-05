@@ -36,6 +36,8 @@ interface BudgetModalProps {
   month: number;
 }
 
+type FormValues = z.infer<typeof formSchema>;
+
 export function BudgetModal({
   isOpen,
   onClose,
@@ -44,8 +46,8 @@ export function BudgetModal({
   month,
 }: BudgetModalProps) {
   const queryClient = useQueryClient();
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema) as any,
     defaultValues: { amount: currentAmount },
   });
 
@@ -54,7 +56,7 @@ export function BudgetModal({
   }, [isOpen, currentAmount, form]);
 
   const mutation = useMutation({
-    mutationFn: (values: z.infer<typeof formSchema>) =>
+    mutationFn: (values: FormValues) =>
       api.setBudget({ year, month, amount: values.amount }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget", year, month] });
@@ -73,7 +75,7 @@ export function BudgetModal({
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             <FormField
-              control={form.control}
+              control={form.control as any}
               name="amount"
               render={({ field }) => (
                 <FormItem>

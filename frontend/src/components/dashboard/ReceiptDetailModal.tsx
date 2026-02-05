@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Save, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -36,6 +35,8 @@ const formSchema = z.object({
   currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
 interface ReceiptDetailModalProps {
   receipt: Receipt | null;
   isOpen: boolean;
@@ -50,8 +51,8 @@ export function ReceiptDetailModal({
   const queryClient = useQueryClient();
   const [isEditingHeader, setIsEditingHeader] = useState(false);
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
       merchant_name: "",
       date: "",
@@ -64,7 +65,7 @@ export function ReceiptDetailModal({
     if (receipt) {
       form.reset({
         merchant_name: receipt.merchant_name,
-        date: new Date(receipt.date).toISOString().split("T")[0],
+        date: receipt.date ? new Date(receipt.date).toISOString().split("T")[0] : "",
         total_amount: receipt.total_amount,
         currency: receipt.currency,
       });
@@ -75,7 +76,7 @@ export function ReceiptDetailModal({
   }, [receipt, form, isOpen]);
 
   const updateMutation = useMutation({
-    mutationFn: (values: z.infer<typeof formSchema>) => {
+    mutationFn: (values: FormValues) => {
       if (!receipt) throw new Error("No receipt selected");
       return api.updateReceipt(receipt.id, {
         ...values,
@@ -93,7 +94,7 @@ export function ReceiptDetailModal({
     },
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  function onSubmit(values: FormValues) {
     updateMutation.mutate(values);
   }
 
@@ -109,11 +110,11 @@ export function ReceiptDetailModal({
         <div className="flex-1 overflow-y-auto p-1 space-y-6">
           {/* SEKCJA NAGŁÓWKA */}
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit as any)} className="space-y-4">
               <div className="grid grid-cols-2 gap-6 p-4 border rounded-lg bg-muted/20">
                 {/* Sklep */}
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="merchant_name"
                   render={({ field }) => (
                     <FormItem>
@@ -138,7 +139,7 @@ export function ReceiptDetailModal({
 
                 {/* Data */}
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="date"
                   render={({ field }) => (
                     <FormItem>
@@ -154,7 +155,7 @@ export function ReceiptDetailModal({
                         </>
                       ) : (
                         <div className="text-lg font-medium">
-                          {field.value}
+                          {field.value || "-"}
                         </div>
                       )}
                     </FormItem>
@@ -163,7 +164,7 @@ export function ReceiptDetailModal({
 
                 {/* Kwota */}
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="total_amount"
                   render={({ field }) => (
                     <FormItem>
@@ -188,7 +189,7 @@ export function ReceiptDetailModal({
 
                 {/* Waluta */}
                 <FormField
-                  control={form.control}
+                  control={form.control as any}
                   name="currency"
                   render={({ field }) => (
                     <FormItem>
@@ -216,11 +217,11 @@ export function ReceiptDetailModal({
               <div className="flex justify-end gap-2 pb-2 border-b">
                 {!isEditingHeader ? (
                   <Button
-                    type="button" // Ważne: type="button" zapobiega submitowi
+                    type="button"
                     variant="outline"
                     size="sm"
                     onClick={(e) => {
-                      e.preventDefault(); // Dodatkowe zabezpieczenie
+                      e.preventDefault();
                       setIsEditingHeader(true);
                     }}
                   >
@@ -271,7 +272,7 @@ export function ReceiptDetailModal({
                   {receipt.items.map((item) => (
                     <ReceiptItemRow
                       key={item.id}
-                      item={item}
+                      item={item as any}
                       currency={receipt.currency}
                     />
                   ))}
@@ -285,7 +286,6 @@ export function ReceiptDetailModal({
           </div>
         </div>
 
-        {/* STOPKA MODALA */}
         <DialogFooter className="mt-4 pt-2 border-t">
           <Button type="button" variant="secondary" onClick={onClose}>
             Zamknij

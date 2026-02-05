@@ -1,0 +1,32 @@
+# Dockerfile.vps
+# Ten obraz jest zoptymalizowany pod serwery z małą ilością RAM (np. 1GB)
+# Zakłada, że frontend został zbudowany lokalnie do folderu frontend/dist
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalacja niezbędnych zależności systemowych
+RUN apt-get update && apt-get install -y --no-install-recommends 
+    curl 
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalacja zależności Pythona
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Kopiowanie kodu backendu
+COPY backend/ ./
+
+# Kopiowanie ZBUDOWANEGO LOKALNIE frontendu
+# Musisz uruchomić 'npm run build' w folderze frontend przed budowaniem tego obrazu!
+COPY frontend/dist /app/static
+
+# Ustawienia środowiska
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV ENVIRONMENT=production
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

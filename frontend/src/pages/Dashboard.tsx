@@ -17,7 +17,6 @@ import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { useState } from "react";
 import { MonthlySummaryModal } from "@/components/dashboard/MonthlySummaryModal";
-import { ReceiptDetailModal } from "@/components/dashboard/ReceiptDetailModal";
 import { BudgetModal } from "@/components/dashboard/BudgetModal";
 
 export function Dashboard() {

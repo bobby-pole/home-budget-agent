@@ -164,13 +164,6 @@ export function ReceiptsTable({
                 </TableRow>
               ) : (
                 paginatedReceipts.map((receipt) => {
-                  const isDone = receipt.status === "done";
-                  const isError = receipt.status === "error";
-                  
-                  let statusColor = "bg-amber-50/50 text-amber-600 border-amber-100";
-                  if (isDone) statusColor = "bg-emerald-50/50 text-emerald-600 border-emerald-100";
-                  if (isError) statusColor = "bg-red-50/50 text-red-600 border-red-100";
-
                   return (
                     <TableRow
                       key={receipt.id}

@@ -26,6 +26,8 @@ const itemSchema = z.object({
   category: z.string(),
 });
 
+type FormValues = z.infer<typeof itemSchema>;
+
 interface ItemType {
   id: number;
   name: string;
@@ -43,8 +45,8 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
 
-  const form = useForm<z.infer<typeof itemSchema>>({
-    resolver: zodResolver(itemSchema),
+  const form = useForm<FormValues>({
+    resolver: zodResolver(itemSchema) as any,
     defaultValues: {
       name: item.name,
       price: item.price,
@@ -54,7 +56,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   });
 
   const mutation = useMutation({
-    mutationFn: (values: z.infer<typeof itemSchema>) => 
+    mutationFn: (values: FormValues) => 
       api.updateItem(item.id, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
@@ -66,7 +68,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
     },
   });
 
-  const onSubmit = (values: z.infer<typeof itemSchema>) => {
+  const onSubmit = (values: FormValues) => {
     mutation.mutate(values);
   };
 
@@ -111,11 +113,11 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   return (
     <div className="py-2 px-2 border-b last:border-0 h-[52px] flex items-center bg-muted/30 min-w-[450px]">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-center gap-2 w-full">
+        <form onSubmit={form.handleSubmit(onSubmit as any)} className="flex items-center gap-2 w-full">
           {/* 1. Nazwa */}
           <div className="flex-1 min-w-0">
              <FormField
-              control={form.control}
+              control={form.control as any}
               name="name"
               render={({ field }) => (
                 <FormItem className="space-y-0">
@@ -129,7 +131,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
 
           {/* 2. Kategoria */}
            <FormField
-              control={form.control}
+              control={form.control as any}
               name="category"
               render={({ field }) => (
                 <FormItem className="w-28 space-y-0">
@@ -153,7 +155,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
 
           {/* 3. Ilość */}
            <FormField
-              control={form.control}
+              control={form.control as any}
               name="quantity"
               render={({ field }) => (
                 <FormItem className="w-14 space-y-0">
@@ -166,7 +168,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
 
           {/* 4. Cena */}
            <FormField
-              control={form.control}
+              control={form.control as any}
               name="price"
               render={({ field }) => (
                 <FormItem className="w-20 space-y-0">

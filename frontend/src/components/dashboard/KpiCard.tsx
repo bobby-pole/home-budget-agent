@@ -2,7 +2,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import type { LucideIcon } from "lucide-react"
-import { ReactNode } from "react"
+import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
 interface KPICardProps {
