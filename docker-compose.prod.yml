@@ -1,12 +1,10 @@
 services:
   app:
-    container_name: smart-budget-app-prod
+    container_name: home-budget-agent-prod
     build:
       context: .
       dockerfile: Dockerfile
       target: production
-    ports:
-      - "8080:8000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped
@@ -14,9 +12,15 @@ services:
       - ENVIRONMENT=production
     env_file:
       - .env
+    networks:
+      - app_network
     deploy:
       resources:
         limits:
           memory: 1500M
         reservations:
           memory: 256M
+
+networks:
+  app_network:
+    external: true
