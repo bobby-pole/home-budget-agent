@@ -3,20 +3,20 @@ services:
     container_name: smart-budget-app-prod
     build:
       context: .
-      dockerfile: Dockerfile.vps
+      dockerfile: Dockerfile
+      target: production
     ports:
       - "8080:8000"
     volumes:
-      - ./data:/app/data  # Przechowywanie bazy danych SQLite
+      - ./data:/app/data
     restart: unless-stopped
     environment:
       - ENVIRONMENT=production
     env_file:
       - .env
-    # Optymalizacja zasobów dla VPS 1GB RAM
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1500M
         reservations:
-          memory: 128M
+          memory: 256M
