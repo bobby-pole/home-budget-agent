@@ -5,7 +5,7 @@ import hashlib
 from uuid import uuid4
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc
-from .models import Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate, Budget, BudgetUpdate
+from .models import Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate, MonthlyBudget, MonthlyBudgetUpdate
 from .database import get_session, engine
 from .services import AIService
 from typing import List
@@ -240,26 +240,26 @@ async def delete_receipt(
     session.commit()
     return None
 
-@router.get("/budget/{year}/{month}", response_model=Budget)
+@router.get("/budget/{year}/{month}", response_model=MonthlyBudget)
 async def get_budget(year: int, month: int, session: Session = Depends(get_session)):
-    statement = select(Budget).where(Budget.year == year).where(Budget.month == month)
+    statement = select(MonthlyBudget).where(MonthlyBudget.year == year).where(MonthlyBudget.month == month)
     budget = session.exec(statement).first()
     if not budget:
-        return Budget(year=year, month=month, amount=0.0)
+        return MonthlyBudget(year=year, month=month, amount=0.0)
     return budget
 
-@router.post("/budget", response_model=Budget)
-async def set_budget(budget_data: Budget, session: Session = Depends(get_session)):
-    statement = select(Budget).where(Budget.year == budget_data.year).where(Budget.month == budget_data.month)
+@router.post("/budget", response_model=MonthlyBudget)
+async def set_budget(budget_data: MonthlyBudget, session: Session = Depends(get_session)):
+    statement = select(MonthlyBudget).where(MonthlyBudget.year == budget_data.year).where(MonthlyBudget.month == budget_data.month)
     existing = session.exec(statement).first()
-    
+
     if existing:
         existing.amount = budget_data.amount
         session.add(existing)
         session.commit()
         session.refresh(existing)
         return existing
-    
+
     session.add(budget_data)
     session.commit()
     session.refresh(budget_data)
