@@ -1,6 +1,6 @@
 # backend/app/models.py
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -10,7 +10,7 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     owned_budgets: List["Budget"] = Relationship(back_populates="owner")
     memberships: List["BudgetMember"] = Relationship(back_populates="user")
@@ -23,7 +23,7 @@ class Budget(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     owner: Optional[User] = Relationship(back_populates="owned_budgets")
     members: List["BudgetMember"] = Relationship(back_populates="budget")
