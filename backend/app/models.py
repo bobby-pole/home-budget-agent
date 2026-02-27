@@ -128,3 +128,22 @@ class ItemUpdate(SQLModel):
 
 class MonthlyBudgetUpdate(SQLModel):
     amount: float
+
+
+# ─── Auth DTOs ────────────────────────────────────────────────────────────────
+
+class UserCreate(SQLModel):
+    email: str
+    password: str
+
+
+class UserRead(SQLModel):
+    id: int
+    email: str
+    created_at: datetime
+
+
+class Token(SQLModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserRead
