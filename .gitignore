@@ -24,3 +24,6 @@ __pycache__/
 
 .vscode/
 .DS_Store
+
+# Local Claude Code cache (not committed)
+.claude/
