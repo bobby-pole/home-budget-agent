@@ -4,3 +4,6 @@ sqlmodel>=0.0.14
 python-multipart
 python-dotenv
 openai>=1.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=3.0.0,<4.0.0
