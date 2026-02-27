@@ -73,8 +73,8 @@ jobs:
 
             cd /home/deploy/home-budget-agent
 
-            # Ensure data directory exists for SQLite volume
-            mkdir -p data
+            # Ensure data directory exists and is writable by container user (UID 1001)
+            mkdir -p data && chmod 777 data
 
             # Write .env from secrets (printf handles special chars safely)
             printf 'OPENAI_API_KEY=%s\nSECRET_KEY=%s\nENVIRONMENT=production\n' \
