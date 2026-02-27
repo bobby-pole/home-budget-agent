@@ -6,8 +6,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlmodel import SQLModel
 
-# 1. Importujemy silnik bazy danych
-from .database import engine
+# 1. Importujemy silniki bazy danych
+# identity_engine — dane tożsamości (User, auth)
+# operations_engine — dane operacyjne (Receipt, Item, Budget)
+# Przy przyszłym splicie: zmienić URL w database.py i dodać migration script.
+from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele. 
 # Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Receipt' i 'Item'!
@@ -19,8 +22,9 @@ from .api import router as api_router
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tworzy tabele w bazie danych
-    SQLModel.metadata.create_all(engine)
+    # Tworzy tabele na obu silnikach (bezpieczne — ta sama baza, idempotentne).
+    SQLModel.metadata.create_all(identity_engine)
+    SQLModel.metadata.create_all(operations_engine)
     print("✅ Database tables created (if not existed).")
     yield
 
