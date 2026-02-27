@@ -10,7 +10,7 @@ from .models import (
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
 )
-from .database import get_session, engine
+from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
 from .auth import get_current_user, hash_password, verify_password, create_access_token
 from typing import List
@@ -53,7 +53,7 @@ def process_receipt_in_background(receipt_id: int, image_path: str):
     print(f"🤖 AI Processing started for receipt #{receipt_id}...")
 
     # Tworzymy nową sesję dla zadania w tle, aby uniknąć problemu z zamkniętym połączeniem
-    with Session(engine) as session:
+    with Session(operations_engine) as session:
         # 1. Call AI to parse receipt
         data = AIService.parse_receipt(image_path)
 
@@ -136,7 +136,7 @@ async def upload_receipt(
     background_tasks: BackgroundTasks,
     force: bool = False,
     file: UploadFile = File(...),
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     # 1. Calculate SHA256 hash to detect duplicates
@@ -187,7 +187,7 @@ async def upload_receipt(
 async def retry_receipt(
     receipt_id: int,
     background_tasks: BackgroundTasks,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     receipt = session.get(Receipt, receipt_id)
@@ -214,7 +214,7 @@ async def retry_receipt(
 
 @router.get("/receipts", response_model=List[ReceiptRead])
 async def get_receipts(
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     statement = select(Receipt).order_by(desc(Receipt.date))
@@ -226,7 +226,7 @@ async def get_receipts(
 async def update_receipt(
     receipt_id: int,
     receipt_update: ReceiptUpdate,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     db_receipt = session.get(Receipt, receipt_id)
@@ -247,7 +247,7 @@ async def update_receipt(
 async def update_item(
     item_id: int,
     item_update: ItemUpdate,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     db_item = session.get(Item, item_id)
@@ -267,7 +267,7 @@ async def update_item(
 @router.delete("/receipts/{receipt_id}", status_code=204)
 async def delete_receipt(
     receipt_id: int,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     receipt = session.get(Receipt, receipt_id)
@@ -296,7 +296,7 @@ async def delete_receipt(
 async def get_budget(
     year: int,
     month: int,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     statement = select(MonthlyBudget).where(MonthlyBudget.year == year).where(MonthlyBudget.month == month)
@@ -309,7 +309,7 @@ async def get_budget(
 @router.post("/budget", response_model=MonthlyBudget)
 async def set_budget(
     budget_data: MonthlyBudget,
-    session: Session = Depends(get_session),
+    session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     statement = select(MonthlyBudget).where(MonthlyBudget.year == budget_data.year).where(MonthlyBudget.month == budget_data.month)
