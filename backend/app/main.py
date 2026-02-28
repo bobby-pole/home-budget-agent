@@ -43,12 +43,12 @@ def seed_default_categories():
         existing = session.exec(select(Category).where(Category.is_system)).first()
         if not existing:
             defaults = [
-                {"name": "Food", "icon": "🍔", "color": "#f87171"},
+                {"name": "Jedzenie", "icon": "🍔", "color": "#f87171"},
                 {"name": "Transport", "icon": "🚗", "color": "#60a5fa"},
-                {"name": "Utilities", "icon": "💡", "color": "#facc15"},
-                {"name": "Entertainment", "icon": "🎬", "color": "#c084fc"},
-                {"name": "Health", "icon": "⚕️", "color": "#4ade80"},
-                {"name": "Other", "icon": "📦", "color": "#9ca3af"},
+                {"name": "Rachunki", "icon": "💡", "color": "#facc15"},
+                {"name": "Rozrywka", "icon": "🎬", "color": "#c084fc"},
+                {"name": "Zdrowie", "icon": "⚕️", "color": "#4ade80"},
+                {"name": "Inne", "icon": "📦", "color": "#9ca3af"},
             ]
             for cat_data in defaults:
                 cat = Category(
@@ -78,6 +78,11 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE receipt ADD COLUMN category_id INTEGER REFERENCES category(id)",
         "ALTER TABLE category ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE monthly_budget ADD COLUMN user_id INTEGER REFERENCES user(id)",
+        "UPDATE category SET name = 'Jedzenie' WHERE name = 'Food' AND is_system = 1",
+        "UPDATE category SET name = 'Rachunki' WHERE name = 'Utilities' AND is_system = 1",
+        "UPDATE category SET name = 'Rozrywka' WHERE name = 'Entertainment' AND is_system = 1",
+        "UPDATE category SET name = 'Zdrowie' WHERE name = 'Health' AND is_system = 1",
+        "UPDATE category SET name = 'Inne' WHERE name = 'Other' AND is_system = 1",
     ]
     with operations_engine.connect() as conn:
         for sql in migrations:
