@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Nazwa wymagana"),
-  price: z.coerce.number().min(0.01),
-  quantity: z.coerce.number().min(0.1),
+  price: z.number().min(0.01),
+  quantity: z.number().min(0.1),
   category: z.string(),
 });
 
@@ -46,7 +46,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   const queryClient = useQueryClient();
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(itemSchema) as any,
+    resolver: zodResolver(itemSchema),
     defaultValues: {
       name: item.name,
       price: item.price,
@@ -56,7 +56,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   });
 
   const mutation = useMutation({
-    mutationFn: (values: FormValues) => 
+    mutationFn: (values: FormValues) =>
       api.updateItem(item.id, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["receipts"] });
@@ -81,13 +81,13 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
           <span className="font-medium truncate shrink" title={item.name}>
             {item.name}
           </span>
-          
+
           <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
             <span className={cn("px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium", badgeColor)}>
-                {CATEGORY_LABELS[item.category] || item.category}
+              {CATEGORY_LABELS[item.category] || item.category}
             </span>
             <span className="w-12 text-right">
-                {item.quantity} szt.
+              {item.quantity} szt.
             </span>
           </div>
         </div>
@@ -113,11 +113,11 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   return (
     <div className="py-2 px-2 border-b last:border-0 h-[52px] flex items-center bg-muted/30 min-w-[450px]">
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit as any)} className="flex items-center gap-2 w-full">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex items-center gap-2 w-full">
           {/* 1. Nazwa */}
           <div className="flex-1 min-w-0">
-             <FormField
-              control={form.control as any}
+            <FormField
+              control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem className="space-y-0">
@@ -130,64 +130,64 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
           </div>
 
           {/* 2. Kategoria */}
-           <FormField
-              control={form.control as any}
-              name="category"
-              render={({ field }) => (
-                <FormItem className="w-28 space-y-0">
-                  <FormControl>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <SelectTrigger className="h-8 text-xs px-2 bg-background">
-                            <SelectValue placeholder="Kat." />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {CATEGORIES.map(cat => (
-                                <SelectItem key={cat} value={cat}>
-                                    {CATEGORY_LABELS[cat] || cat}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="category"
+            render={({ field }) => (
+              <FormItem className="w-28 space-y-0">
+                <FormControl>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <SelectTrigger className="h-8 text-xs px-2 bg-background">
+                      <SelectValue placeholder="Kat." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CATEGORIES.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {CATEGORY_LABELS[cat] || cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
           {/* 3. Ilość */}
-           <FormField
-              control={form.control as any}
-              name="quantity"
-              render={({ field }) => (
-                <FormItem className="w-14 space-y-0">
-                  <FormControl>
-                    <Input {...field} type="number" step="0.1" className="h-8 text-xs px-1 text-center bg-background" placeholder="Il." title="Ilość" />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="quantity"
+            render={({ field }) => (
+              <FormItem className="w-14 space-y-0">
+                <FormControl>
+                  <Input {...field} type="number" step="0.1" className="h-8 text-xs px-1 text-center bg-background" placeholder="Il." title="Ilość" />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
           {/* 4. Cena */}
-           <FormField
-              control={form.control as any}
-              name="price"
-              render={({ field }) => (
-                <FormItem className="w-20 space-y-0">
-                  <FormControl>
-                    <Input {...field} type="number" step="0.01" className="h-8 text-xs px-1 text-right bg-background" placeholder="Cena" />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={form.control}
+            name="price"
+            render={({ field }) => (
+              <FormItem className="w-20 space-y-0">
+                <FormControl>
+                  <Input {...field} type="number" step="0.01" className="h-8 text-xs px-1 text-right bg-background" placeholder="Cena" />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-            {/* Akcje */}
-            <div className="flex gap-1 shrink-0">
-                <Button type="submit" size="icon" variant="default" className="h-8 w-8" disabled={mutation.isPending}>
-                    {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                </Button>
-                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive" onClick={() => setIsEditing(false)}>
-                    <X className="h-3.5 w-3.5" />
-                </Button>
-            </div>
+          {/* Akcje */}
+          <div className="flex gap-1 shrink-0">
+            <Button type="submit" size="icon" variant="default" className="h-8 w-8" disabled={mutation.isPending}>
+              {mutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            </Button>
+            <Button type="button" size="icon" variant="ghost" className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive" onClick={() => setIsEditing(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </form>
       </Form>
     </div>

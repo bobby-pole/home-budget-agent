@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { useEffect } from "react";
 
 const formSchema = z.object({
-  amount: z.coerce.number().min(0, "Kwota musi być dodatnia"),
+  amount: z.number().min(0, "Kwota musi być dodatnia"),
 });
 
 interface BudgetModalProps {
@@ -47,7 +47,7 @@ export function BudgetModal({
 }: BudgetModalProps) {
   const queryClient = useQueryClient();
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema),
     defaultValues: { amount: currentAmount },
   });
 
@@ -75,13 +75,13 @@ export function BudgetModal({
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             <FormField
-              control={form.control as any}
+              control={form.control}
               name="amount"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Miesięczny przychód netto (PLN)</FormLabel>
                   <FormControl>
-                    <Input type="number" step="0.01" {...field} placeholder="np. 5000" />
+                    <Input type="number" step="0.01" {...field} onChange={(e) => field.onChange(e.target.valueAsNumber)} placeholder="np. 5000" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

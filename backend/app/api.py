@@ -3,10 +3,12 @@ import shutil
 import os
 import hashlib
 from uuid import uuid4
+from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc
 from .models import (
     Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate,
+    ManualReceiptCreate,
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
 )
@@ -94,7 +96,6 @@ def process_receipt_in_background(receipt_id: int, image_path: str):
         ai_date_str = data.get("date")
         if ai_date_str:
             try:
-                from datetime import datetime
                 receipt.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
             except (ValueError, TypeError):
                 print(f"⚠️ Could not parse AI date: {ai_date_str}")
@@ -131,6 +132,54 @@ def process_receipt_in_background(receipt_id: int, image_path: str):
 
 # --- RECEIPTS ---
 
+@router.post("/receipts/manual", response_model=ReceiptRead)
+def create_manual_receipt(
+    data: ManualReceiptCreate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    total = (
+        sum(i.price * i.quantity for i in data.items)
+        if data.items
+        else data.total_amount
+    )
+
+    receipt = Receipt(
+        merchant_name=data.merchant_name,
+        total_amount=total,
+        currency=data.currency,
+        date=data.date or datetime.now(timezone.utc),
+        status="done",
+        is_manual=True,
+        uploaded_by=current_user.id,
+    )
+    session.add(receipt)
+    session.commit()
+    session.refresh(receipt)
+
+    if data.items:
+        for item_data in data.items:
+            session.add(Item(
+                name=item_data.name,
+                price=item_data.price,
+                quantity=item_data.quantity,
+                category=item_data.category,
+                receipt_id=receipt.id,
+            ))
+    else:
+        session.add(Item(
+            name=data.note or "Wpis ręczny",
+            price=data.total_amount,
+            quantity=1.0,
+            category=data.category or "Other",
+            receipt_id=receipt.id,
+        ))
+
+    session.commit()
+    session.refresh(receipt)
+    return receipt
+
+
 @router.post("/upload", response_model=Receipt)
 async def upload_receipt(
     background_tasks: BackgroundTasks,
@@ -146,9 +195,12 @@ async def upload_receipt(
     # Reset cursor so we can save it later
     await file.seek(0)
 
-    # 2. Check for duplicates (if not forced)
+    # 2. Check for duplicates (if not forced) — scoped to the current user
     if not force:
-        statement = select(Receipt).where(Receipt.content_hash == file_hash)
+        statement = select(Receipt).where(
+            Receipt.content_hash == file_hash,
+            Receipt.uploaded_by == current_user.id,
+        )
         existing_receipt = session.exec(statement).first()
         if existing_receipt:
             raise HTTPException(
@@ -194,6 +246,9 @@ async def retry_receipt(
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
 
+    if receipt.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to retry this receipt")
+
     if receipt.status != "error":
         raise HTTPException(status_code=400, detail="Only failed receipts can be retried")
 
@@ -217,7 +272,11 @@ async def get_receipts(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    statement = select(Receipt).order_by(desc(Receipt.date))
+    statement = (
+        select(Receipt)
+        .where(Receipt.uploaded_by == current_user.id)
+        .order_by(desc(Receipt.date))
+    )
     results = session.exec(statement).all()
     return results
 
@@ -232,6 +291,9 @@ async def update_receipt(
     db_receipt = session.get(Receipt, receipt_id)
     if not db_receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
+
+    if db_receipt.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this receipt")
 
     receipt_data = receipt_update.model_dump(exclude_unset=True)
     for key, value in receipt_data.items():
@@ -254,6 +316,10 @@ async def update_item(
     if not db_item:
         raise HTTPException(status_code=404, detail="Item not found")
 
+    parent_receipt = session.get(Receipt, db_item.receipt_id)
+    if not parent_receipt or parent_receipt.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this item")
+
     item_data = item_update.model_dump(exclude_unset=True)
     for key, value in item_data.items():
         setattr(db_item, key, value)
@@ -273,6 +339,9 @@ async def delete_receipt(
     receipt = session.get(Receipt, receipt_id)
     if not receipt:
         raise HTTPException(status_code=404, detail="Receipt not found")
+
+    if receipt.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this receipt")
 
     # Delete file if exists (e.g. pending/error status)
     if receipt.image_path and os.path.exists(receipt.image_path):
@@ -299,20 +368,32 @@ async def get_budget(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    statement = select(MonthlyBudget).where(MonthlyBudget.year == year).where(MonthlyBudget.month == month)
+    statement = (
+        select(MonthlyBudget)
+        .where(MonthlyBudget.year == year)
+        .where(MonthlyBudget.month == month)
+        .where(MonthlyBudget.user_id == current_user.id)
+    )
     budget = session.exec(statement).first()
     if not budget:
-        return MonthlyBudget(year=year, month=month, amount=0.0)
+        return MonthlyBudget(year=year, month=month, amount=0.0, user_id=current_user.id)
     return budget
 
 
-@router.post("/budget", response_model=MonthlyBudget)
+@router.post("/budget/{year}/{month}", response_model=MonthlyBudget)
 async def set_budget(
-    budget_data: MonthlyBudget,
+    year: int,
+    month: int,
+    budget_data: MonthlyBudgetUpdate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    statement = select(MonthlyBudget).where(MonthlyBudget.year == budget_data.year).where(MonthlyBudget.month == budget_data.month)
+    statement = (
+        select(MonthlyBudget)
+        .where(MonthlyBudget.year == year)
+        .where(MonthlyBudget.month == month)
+        .where(MonthlyBudget.user_id == current_user.id)
+    )
     existing = session.exec(statement).first()
 
     if existing:
@@ -322,7 +403,8 @@ async def set_budget(
         session.refresh(existing)
         return existing
 
-    session.add(budget_data)
+    new_budget = MonthlyBudget(year=year, month=month, amount=budget_data.amount, user_id=current_user.id)
+    session.add(new_budget)
     session.commit()
-    session.refresh(budget_data)
-    return budget_data
+    session.refresh(new_budget)
+    return new_budget

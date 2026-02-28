@@ -9,23 +9,37 @@ import {
   PiggyBank,
   TrendingUp,
   CalendarDays,
-  PlusCircle,
   Pencil,
+  PlusCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MonthlySummaryModal } from "@/components/dashboard/MonthlySummaryModal";
 import { BudgetModal } from "@/components/dashboard/BudgetModal";
+import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal";
 
 export function Dashboard() {
   const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [addTxOpen, setAddTxOpen] = useState(false);
 
   const now = new Date();
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "n" || e.key === "N") {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        setAddTxOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const {
     data: receipts = [],
@@ -75,6 +89,7 @@ export function Dashboard() {
 
   const categoryTotals: Record<string, number> = {};
   receipts.forEach((receipt) => {
+    if (receipt.status !== "done") return;
     if (!receipt.date) return;
     const rDate = new Date(receipt.date);
     if (rDate.getMonth() === curMonth && rDate.getFullYear() === curYear) {
@@ -130,6 +145,7 @@ export function Dashboard() {
           <UploadBox
             totalCount={receiptsCount}
             processingCount={processingCount}
+            onAddManual={() => setAddTxOpen(true)}
           />
 
           <KPICard
@@ -202,6 +218,7 @@ export function Dashboard() {
         year={curYear}
         month={curMonth + 1}
       />
+      <AddTransactionModal open={addTxOpen} onOpenChange={setAddTxOpen} />
     </div>
   );
 }

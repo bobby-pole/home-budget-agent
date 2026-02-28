@@ -80,6 +80,19 @@ export const api = {
     await apiClient.delete(`/receipts/${id}`);
   },
 
+  createManualTransaction: async (data: {
+    merchant_name: string;
+    total_amount: number;
+    currency: string;
+    date?: string;
+    category?: string;
+    note?: string;
+    items?: Array<{ name: string; price: number; quantity: number; category: string }>;
+  }): Promise<Receipt> => {
+    const response = await apiClient.post<Receipt>("/receipts/manual", data);
+    return response.data;
+  },
+
   // --- BUDGET ---
 
   getBudget: async (year: number, month: number) => {
@@ -88,7 +101,7 @@ export const api = {
   },
 
   setBudget: async (data: { year: number; month: number; amount: number }) => {
-    const response = await apiClient.post(`/budget`, data);
+    const response = await apiClient.post(`/budget/${data.year}/${data.month}`, { amount: data.amount });
     return response.data;
   },
 };

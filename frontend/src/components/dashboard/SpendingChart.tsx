@@ -36,29 +36,20 @@ export function SpendingChart() {
   const curYear = now.getFullYear();
 
   receipts?.forEach((receipt) => {
-    // Filter by current month
+    if (receipt.status !== "done") return;
     if (!receipt.date) return;
     const rDate = new Date(receipt.date);
     if (rDate.getMonth() !== curMonth || rDate.getFullYear() !== curYear)
       return;
 
-    if (receipt.items && receipt.items.length > 0) {
-      receipt.items.forEach((item) => {
-        const rawCategory = item.category || "Other";
-        // Map the raw category to its display name (Polish) first
-        const displayName = CATEGORY_LABELS[rawCategory] || rawCategory;
-
-        const amount = item.price;
-        if (amount > 0) {
-          categoryTotals[displayName] =
-            (categoryTotals[displayName] || 0) + amount;
-        }
-      });
-    } else if (receipt.total_amount > 0) {
-      const displayName = CATEGORY_LABELS["Other"];
-      categoryTotals[displayName] =
-        (categoryTotals[displayName] || 0) + receipt.total_amount;
-    }
+    receipt.items.forEach((item) => {
+      const rawCategory = item.category || "Other";
+      const displayName = CATEGORY_LABELS[rawCategory] || rawCategory;
+      if (item.price > 0) {
+        categoryTotals[displayName] =
+          (categoryTotals[displayName] || 0) + item.price;
+      }
+    });
   });
 
   // Convert to array and sort

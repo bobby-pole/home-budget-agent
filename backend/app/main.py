@@ -10,14 +10,33 @@ from sqlmodel import SQLModel
 # identity_engine — dane tożsamości (User, auth)
 # operations_engine — dane operacyjne (Receipt, Item, Budget)
 # Przy przyszłym splicie: zmienić URL w database.py i dodać migration script.
+from sqlmodel import Session, select
 from .database import identity_engine, operations_engine
 
-# 2. ### WAŻNE ### Importujemy modele. 
+# 2. ### WAŻNE ### Importujemy modele.
 # Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Receipt' i 'Item'!
 from .models import User, Budget, BudgetMember, Receipt, Item, MonthlyBudget
 
 # 3. ### WAŻNE ### Importujemy router z api.py
 from .api import router as api_router
+
+TEST_USER_EMAIL = "test@local.dev"
+TEST_USER_PASSWORD = "test123"
+
+
+def seed_dev_user():
+    """Create a test user on first start in development mode."""
+    from .auth import hash_password
+    with Session(identity_engine) as session:
+        existing = session.exec(select(User).where(User.email == TEST_USER_EMAIL)).first()
+        if not existing:
+            user = User(email=TEST_USER_EMAIL, hashed_password=hash_password(TEST_USER_PASSWORD))
+            session.add(user)
+            session.commit()
+            print(f"🧪 Dev seed: created test user [{TEST_USER_EMAIL} / {TEST_USER_PASSWORD}]")
+        else:
+            print(f"🧪 Dev seed: test user already exists [{TEST_USER_EMAIL}]")
+
 
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
@@ -26,6 +45,25 @@ async def lifespan(app: FastAPI):
     SQLModel.metadata.create_all(identity_engine)
     SQLModel.metadata.create_all(operations_engine)
     print("✅ Database tables created (if not existed).")
+
+    # Inline migrations for columns added after initial schema creation
+    # (SQLite's create_all does not add new columns to existing tables)
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE receipt ADD COLUMN is_manual BOOLEAN NOT NULL DEFAULT 0",
+    ]
+    with operations_engine.connect() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+                print(f"✅ Migration applied: {sql}")
+            except Exception:
+                pass  # Column already exists — safe to ignore
+
+    if os.getenv("ENVIRONMENT") == "development":
+        seed_dev_user()
+
     yield
 
 app = FastAPI(title="Smart Budget AI", lifespan=lifespan)

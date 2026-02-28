@@ -53,6 +53,7 @@ class ReceiptBase(SQLModel):
     image_path: Optional[str] = None
     status: str = Field(default="pending")
     content_hash: Optional[str] = Field(default=None, index=True)
+    is_manual: bool = Field(default=False)
 
 
 class Receipt(ReceiptBase, table=True):
@@ -90,6 +91,7 @@ class MonthlyBudget(SQLModel, table=True):
     year: int = Field(index=True)
     amount: float = Field(default=0.0)
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
 
     budget: Optional[Budget] = Relationship(back_populates="monthly_budgets")
 
@@ -117,6 +119,23 @@ class ReceiptUpdate(SQLModel):
     total_amount: Optional[float] = None
     currency: Optional[str] = None
     status: Optional[str] = None
+
+
+class ManualItemCreate(SQLModel):
+    name: str
+    price: float
+    quantity: float = 1.0
+    category: str = "Other"
+
+
+class ManualReceiptCreate(SQLModel):
+    merchant_name: str
+    total_amount: float
+    currency: str = "PLN"
+    date: Optional[datetime] = None
+    category: Optional[str] = None
+    note: Optional[str] = None
+    items: List[ManualItemCreate] = Field(default_factory=list)
 
 
 class ItemUpdate(SQLModel):
