@@ -28,5 +28,6 @@ export interface Receipt {
   currency: string;
   image_path?: string;
   status: 'pending' | 'processing' | 'done' | 'error';
+  is_manual?: boolean;
   items: Item[];        // To jest ta tablica, którą dodaliśmy przed chwilą w backendzie
 }
