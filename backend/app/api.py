@@ -5,7 +5,7 @@ import hashlib
 from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
-from sqlmodel import Session, select, desc
+from sqlmodel import Session, select, desc, col
 from .models import (
     Receipt, Item, ReceiptRead, ReceiptUpdate, ItemUpdate,
     ManualReceiptCreate,
@@ -159,8 +159,8 @@ def create_manual_receipt(
     )
     
     if data.tag_ids:
-        tags = session.exec(select(Tag).where(Tag.id.in_(data.tag_ids))).all()
-        receipt.tags = tags
+        tags = session.exec(select(Tag).where(col(Tag.id).in_(data.tag_ids))).all()
+        receipt.tags = list(tags)
 
     session.add(receipt)
     session.commit()
@@ -180,7 +180,7 @@ def create_manual_receipt(
             name=data.note or "Wpis ręczny",
             price=data.total_amount,
             quantity=1.0,
-            category=data.category or "Other",
+            category="Other",
             receipt_id=receipt.id,
         ))
 
@@ -312,8 +312,8 @@ async def update_receipt(
         setattr(db_receipt, key, value)
 
     if receipt_update.tag_ids is not None:
-        tags = session.exec(select(Tag).where(Tag.id.in_(receipt_update.tag_ids))).all()
-        db_receipt.tags = tags
+        tags = session.exec(select(Tag).where(col(Tag.id).in_(receipt_update.tag_ids))).all()
+        db_receipt.tags = list(tags)
 
     session.add(db_receipt)
     session.commit()
