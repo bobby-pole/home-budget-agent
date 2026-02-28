@@ -13,13 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, Pencil } from "lucide-react";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Receipt } from "@/types";
 import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { TagPicker } from "../shared/TagPicker";
 
 const formSchema = z.object({
   merchant_name: z.string().min(1, "Nazwa sklepu jest wymagana"),
@@ -40,11 +40,6 @@ interface ReceiptHeaderFormProps {
 export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
-
-  const { data: tags } = useQuery({
-    queryKey: ["tags"],
-    queryFn: api.getTags,
-  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as Resolver<FormValues>,
@@ -191,39 +186,19 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
                   Tagi
                 </FormLabel>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {isEditing ? (
-                    tags?.map((tag) => {
-                      const isSelected = field.value?.includes(tag.id);
-                      return (
-                        <Badge
-                          key={tag.id}
-                          variant={isSelected ? "default" : "outline"}
-                          className={cn(
-                            "cursor-pointer transition-all hover:opacity-80",
-                            !isSelected && "text-muted-foreground"
-                          )}
-                          onClick={() => {
-                            const newValue = isSelected
-                              ? field.value?.filter((id: number) => id !== tag.id)
-                              : [...(field.value || []), tag.id];
-                            field.onChange(newValue);
-                          }}
-                        >
-                          #{tag.name}
-                        </Badge>
-                      );
-                    })
-                  ) : (
-                    receipt.tags && receipt.tags.length > 0 ? (
+                {isEditing ? (
+                  <TagPicker value={field.value || []} onChange={field.onChange} />
+                ) : (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {receipt.tags && receipt.tags.length > 0 ? (
                       receipt.tags.map(tag => (
                         <Badge key={tag.id} variant="secondary">#{tag.name}</Badge>
                       ))
                     ) : (
                       <span className="text-xs text-muted-foreground italic">Brak tagów</span>
-                    )
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </FormItem>
             )}
           />

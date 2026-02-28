@@ -19,8 +19,7 @@ import { Input } from "@/components/ui/input";
 import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
 import { CATEGORY_LABELS } from "@/lib/constants";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { TagPicker } from "../shared/TagPicker";
 
 interface TransactionMetaSectionProps {
   control: Control<TransactionFormInput>;
@@ -30,11 +29,6 @@ export function TransactionMetaSection({ control }: TransactionMetaSectionProps)
   const { data: categories } = useQuery({
     queryKey: ["categories"],
     queryFn: api.getCategories,
-  });
-
-  const { data: tags } = useQuery({
-    queryKey: ["tags"],
-    queryFn: api.getTags,
   });
 
   return (
@@ -93,34 +87,7 @@ export function TransactionMetaSection({ control }: TransactionMetaSectionProps)
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
               Tagi
             </FormLabel>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {tags?.map((tag) => {
-                const isSelected = field.value?.includes(tag.id);
-                return (
-                  <Badge
-                    key={tag.id}
-                    variant={isSelected ? "default" : "outline"}
-                    className={cn(
-                      "cursor-pointer transition-all hover:opacity-80",
-                      !isSelected && "text-muted-foreground"
-                    )}
-                    onClick={() => {
-                      const newValue = isSelected
-                        ? field.value?.filter((id: number) => id !== tag.id)
-                        : [...(field.value || []), tag.id];
-                      field.onChange(newValue);
-                    }}
-                  >
-                    #{tag.name}
-                  </Badge>
-                );
-              })}
-              {(!tags || tags.length === 0) && (
-                <p className="text-xs text-muted-foreground italic">
-                  Brak zdefiniowanych tagów. Możesz je dodać w Ustawieniach.
-                </p>
-              )}
-            </div>
+            <TagPicker value={field.value || []} onChange={field.onChange} />
             <FormMessage />
           </FormItem>
         )}
