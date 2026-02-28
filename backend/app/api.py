@@ -7,11 +7,12 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc, col
 from .models import (
-    Receipt, Item, ReceiptRead, ReceiptUpdate, ItemUpdate,
-    ManualReceiptCreate,
+    Transaction, TransactionLine, TransactionRead, TransactionUpdate,
+    TransactionLineUpdate, ManualTransactionCreate,
+    ReceiptScan,
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
-    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, ReceiptTagLink
+    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -53,143 +54,145 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-# --- TASK IN BACKGROUND ---
-def process_receipt_in_background(receipt_id: int, image_path: str):
-    print(f"🤖 AI Processing started for receipt #{receipt_id}...")
+# --- BACKGROUND TASK ---
 
-    # Tworzymy nową sesję dla zadania w tle, aby uniknąć problemu z zamkniętym połączeniem
+def process_transaction_in_background(transaction_id: int, scan_id: int, image_path: str):
+    print(f"🤖 AI Processing started for transaction #{transaction_id}...")
+
     with Session(operations_engine) as session:
-        # 1. Call AI to parse receipt
-        data = AIService.parse_receipt(image_path)
+        transaction = session.get(Transaction, transaction_id)
+        scan = session.get(ReceiptScan, scan_id)
 
-        # Load receipt from DB
-        receipt = session.get(Receipt, receipt_id)
-
-        if not data or not receipt:
-            print("❌ AI Failed or Receipt not found")
-            if receipt:
-                receipt.status = "error"
-                session.add(receipt)
+        if not transaction or not scan:
+            print("❌ Transaction or ReceiptScan not found")
+            if scan:
+                scan.status = "error"
+                session.add(scan)
                 session.commit()
             return
 
-        # Validate business data (AI might return JSON with empty values)
+        data = AIService.parse_receipt(image_path)
+
+        if not data:
+            print("❌ AI Failed to parse receipt")
+            scan.status = "error"
+            session.add(scan)
+            session.commit()
+            return
+
         merchant = data.get("merchant_name")
         total = data.get("total_amount", 0.0)
 
         if not merchant or merchant == "Unknown" or total <= 0:
             print(f"⚠️ AI Validation Failed: Merchant='{merchant}', Total={total}")
-            if receipt:
-                receipt.status = "error"
-                # Save partial data so user can see it
-                receipt.merchant_name = merchant or "Unknown"
-                receipt.total_amount = total
-                receipt.currency = data.get("currency", "PLN")
-                session.add(receipt)
-                session.commit()
+            scan.status = "error"
+            transaction.merchant_name = merchant or "Unknown"
+            transaction.total_amount = total
+            transaction.currency = data.get("currency", "PLN")
+            session.add(scan)
+            session.add(transaction)
+            session.commit()
             return
 
-        # 2. Update receipt details (Success path)
-        receipt.merchant_name = merchant
-        receipt.total_amount = total
-        receipt.currency = data.get("currency", "PLN")
-        receipt.status = "done"
+        transaction.merchant_name = merchant
+        transaction.total_amount = total
+        transaction.currency = data.get("currency", "PLN")
+        scan.status = "done"
 
-        # Update date from AI if available
         ai_date_str = data.get("date")
         if ai_date_str:
             try:
-                receipt.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
+                transaction.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
             except (ValueError, TypeError):
                 print(f"⚠️ Could not parse AI date: {ai_date_str}")
 
-        # 3. Add positions
         items_data = data.get("items", [])
         for item_raw in items_data:
-            new_item = Item(
+            category_name = item_raw.get("category", "Other")
+            category = session.exec(
+                select(Category).where(Category.name == category_name)
+            ).first()
+            session.add(TransactionLine(
                 name=item_raw["name"],
                 price=item_raw["price"],
                 quantity=item_raw.get("quantity", 1),
-                category=item_raw.get("category", "Other"),
-                receipt_id=receipt.id
-            )
-            session.add(new_item)
+                category_id=category.id if category else None,
+                transaction_id=transaction.id,
+            ))
 
-        session.add(receipt)
+        session.add(transaction)
+        session.add(scan)
         session.commit()
-        print(f"✅ AI Processing finished for receipt #{receipt_id}")
+        print(f"✅ AI Processing finished for transaction #{transaction_id}")
 
-        # 4. OPTIMIZATION: Delete image file after success
-        if receipt.status == "done" and image_path and os.path.exists(image_path):
+        if image_path and os.path.exists(image_path):
             try:
                 os.remove(image_path)
                 print(f"🗑️  Deleted processed image: {image_path}")
-
-                # Update DB to reflect deletion
-                receipt.image_path = None
-                session.add(receipt)
+                scan.image_path = None
+                session.add(scan)
                 session.commit()
             except Exception as e:
                 print(f"⚠️  Failed to delete image {image_path}: {e}")
 
 
-# --- RECEIPTS ---
+# --- TRANSACTIONS ---
 
-@router.post("/receipts/manual", response_model=ReceiptRead)
-def create_manual_receipt(
-    data: ManualReceiptCreate,
+@router.post("/transactions/manual", response_model=TransactionRead)
+def create_manual_transaction(
+    data: ManualTransactionCreate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     total = (
-        sum(i.price * i.quantity for i in data.items)
-        if data.items
+        sum(line.price * line.quantity for line in data.lines)
+        if data.lines
         else data.total_amount
     )
 
-    receipt = Receipt(
+    transaction = Transaction(
         merchant_name=data.merchant_name,
         total_amount=total,
         currency=data.currency,
         date=data.date or datetime.now(timezone.utc),
-        status="done",
         is_manual=True,
+        type=data.type,
         uploaded_by=current_user.id,
         category_id=data.category_id,
     )
-    
+
     if data.tag_ids:
         tags = session.exec(select(Tag).where(col(Tag.id).in_(data.tag_ids))).all()
-        receipt.tags = list(tags)
+        transaction.tags = list(tags)
 
-    session.add(receipt)
+    session.add(transaction)
     session.commit()
-    session.refresh(receipt)
+    session.refresh(transaction)
 
-    if data.items:
-        for item_data in data.items:
-            session.add(Item(
-                name=item_data.name,
-                price=item_data.price,
-                quantity=item_data.quantity,
-                category=item_data.category,
-                receipt_id=receipt.id,
+    if data.lines:
+        for line_data in data.lines:
+            session.add(TransactionLine(
+                name=line_data.name,
+                price=line_data.price,
+                quantity=line_data.quantity,
+                category_id=line_data.category_id,
+                transaction_id=transaction.id,
             ))
     else:
-        session.add(Item(
+        session.add(TransactionLine(
             name=data.note or "Wpis ręczny",
             price=data.total_amount,
             quantity=1.0,
-            category="Other",
-            receipt_id=receipt.id,
+            category_id=data.category_id,
+            transaction_id=transaction.id,
         ))
 
     session.commit()
-    session.refresh(receipt)
-    return receipt
+    session.refresh(transaction)
+    return transaction
 
 
-@router.post("/upload", response_model=Receipt)
+@router.post("/transactions/upload", response_model=TransactionRead)
 async def upload_receipt(
     background_tasks: BackgroundTasks,
     force: bool = False,
@@ -197,27 +200,26 @@ async def upload_receipt(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Calculate SHA256 hash to detect duplicates
     file_content = await file.read()
     file_hash = hashlib.sha256(file_content).hexdigest()
 
-    # Reset cursor so we can save it later
     await file.seek(0)
 
-    # 2. Check for duplicates (if not forced) — scoped to the current user
     if not force:
-        statement = select(Receipt).where(
-            Receipt.content_hash == file_hash,
-            Receipt.uploaded_by == current_user.id,
-        )
-        existing_receipt = session.exec(statement).first()
-        if existing_receipt:
+        existing_scan = session.exec(
+            select(ReceiptScan).where(
+                ReceiptScan.content_hash == file_hash,
+                ReceiptScan.transaction_id.in_(  # type: ignore
+                    select(Transaction.id).where(Transaction.uploaded_by == current_user.id)
+                ),
+            )
+        ).first()
+        if existing_scan:
             raise HTTPException(
                 status_code=409,
                 detail="Duplicate receipt detected. Use force=true to upload anyway."
             )
 
-    # File saving
     filename = file.filename or "upload.jpg"
     file_extension = filename.split(".")[-1]
     unique_filename = f"{uuid4()}.{file_extension}"
@@ -226,151 +228,166 @@ async def upload_receipt(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Create initial Receipt entry with status "processing"
-    new_receipt = Receipt(
+    new_transaction = Transaction(
         merchant_name="Processing...",
+        uploaded_by=current_user.id,
+    )
+    session.add(new_transaction)
+    session.commit()
+    session.refresh(new_transaction)
+
+    assert new_transaction.id is not None
+    scan = ReceiptScan(
+        transaction_id=new_transaction.id,
         image_path=file_path,
         status="processing",
         content_hash=file_hash,
-        uploaded_by=current_user.id,
     )
-
-    session.add(new_receipt)
+    session.add(scan)
     session.commit()
-    session.refresh(new_receipt)
+    session.refresh(scan)
 
-    # AI agent works in background
-    assert new_receipt.id is not None
-    background_tasks.add_task(process_receipt_in_background, new_receipt.id, file_path)
+    assert scan.id is not None
+    background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
-    return new_receipt
+    session.refresh(new_transaction)
+    return new_transaction
 
 
-@router.post("/receipts/{receipt_id}/retry", response_model=Receipt)
-async def retry_receipt(
-    receipt_id: int,
+@router.post("/transactions/{transaction_id}/retry", response_model=TransactionRead)
+async def retry_transaction(
+    transaction_id: int,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    receipt = session.get(Receipt, receipt_id)
-    if not receipt:
-        raise HTTPException(status_code=404, detail="Receipt not found")
+    transaction = session.get(Transaction, transaction_id)
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if receipt.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to retry this receipt")
+    if transaction.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to retry this transaction")
 
-    if receipt.status != "error":
-        raise HTTPException(status_code=400, detail="Only failed receipts can be retried")
+    scan = session.exec(
+        select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
+    ).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="No receipt scan found for this transaction")
 
-    if not receipt.image_path or not os.path.exists(receipt.image_path):
+    if scan.status != "error":
+        raise HTTPException(status_code=400, detail="Only failed scans can be retried")
+
+    if not scan.image_path or not os.path.exists(scan.image_path):
         raise HTTPException(status_code=404, detail="Original image file not found. Please re-upload.")
 
-    # Reset status
-    receipt.status = "processing"
-    session.add(receipt)
+    scan.status = "processing"
+    session.add(scan)
     session.commit()
-    session.refresh(receipt)
+    session.refresh(transaction)
 
-    # Restart AI task
-    assert receipt.id is not None
-    background_tasks.add_task(process_receipt_in_background, receipt.id, receipt.image_path)
+    assert transaction.id is not None
+    assert scan.id is not None
+    background_tasks.add_task(process_transaction_in_background, transaction.id, scan.id, scan.image_path)
 
-    return receipt
+    return transaction
 
 
-@router.get("/receipts", response_model=List[ReceiptRead])
-async def get_receipts(
+@router.get("/transactions", response_model=List[TransactionRead])
+async def get_transactions(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
     statement = (
-        select(Receipt)
-        .where(Receipt.uploaded_by == current_user.id)
-        .order_by(desc(Receipt.date))
+        select(Transaction)
+        .where(Transaction.uploaded_by == current_user.id)
+        .order_by(desc(Transaction.date))
     )
     results = session.exec(statement).all()
     return results
 
 
-@router.patch("/receipts/{receipt_id}", response_model=Receipt)
-async def update_receipt(
-    receipt_id: int,
-    receipt_update: ReceiptUpdate,
+@router.patch("/transactions/{transaction_id}", response_model=TransactionRead)
+async def update_transaction(
+    transaction_id: int,
+    transaction_update: TransactionUpdate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    db_receipt = session.get(Receipt, receipt_id)
-    if not db_receipt:
-        raise HTTPException(status_code=404, detail="Receipt not found")
+    db_transaction = session.get(Transaction, transaction_id)
+    if not db_transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if db_receipt.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to modify this receipt")
+    if db_transaction.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this transaction")
 
-    receipt_data = receipt_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
-    for key, value in receipt_data.items():
-        setattr(db_receipt, key, value)
+    transaction_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
+    for key, value in transaction_data.items():
+        setattr(db_transaction, key, value)
 
-    if receipt_update.tag_ids is not None:
-        tags = session.exec(select(Tag).where(col(Tag.id).in_(receipt_update.tag_ids))).all()
-        db_receipt.tags = list(tags)
+    if transaction_update.tag_ids is not None:
+        tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
+        db_transaction.tags = list(tags)
 
-    session.add(db_receipt)
+    session.add(db_transaction)
     session.commit()
-    session.refresh(db_receipt)
-    return db_receipt
+    session.refresh(db_transaction)
+    return db_transaction
 
 
-@router.patch("/items/{item_id}", response_model=Item)
-async def update_item(
-    item_id: int,
-    item_update: ItemUpdate,
+@router.patch("/transactions/{transaction_id}/lines/{line_id}", response_model=TransactionLine)
+async def update_line(
+    transaction_id: int,
+    line_id: int,
+    line_update: TransactionLineUpdate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    db_item = session.get(Item, item_id)
-    if not db_item:
-        raise HTTPException(status_code=404, detail="Item not found")
+    db_line = session.get(TransactionLine, line_id)
+    if not db_line or db_line.transaction_id != transaction_id:
+        raise HTTPException(status_code=404, detail="Transaction line not found")
 
-    parent_receipt = session.get(Receipt, db_item.receipt_id)
-    if not parent_receipt or parent_receipt.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to modify this item")
+    parent_transaction = session.get(Transaction, transaction_id)
+    if not parent_transaction or parent_transaction.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this line")
 
-    item_data = item_update.model_dump(exclude_unset=True)
-    for key, value in item_data.items():
-        setattr(db_item, key, value)
+    line_data = line_update.model_dump(exclude_unset=True)
+    for key, value in line_data.items():
+        setattr(db_line, key, value)
 
-    session.add(db_item)
+    session.add(db_line)
     session.commit()
-    session.refresh(db_item)
-    return db_item
+    session.refresh(db_line)
+    return db_line
 
 
-@router.delete("/receipts/{receipt_id}", status_code=204)
-async def delete_receipt(
-    receipt_id: int,
+@router.delete("/transactions/{transaction_id}", status_code=204)
+async def delete_transaction(
+    transaction_id: int,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    receipt = session.get(Receipt, receipt_id)
-    if not receipt:
-        raise HTTPException(status_code=404, detail="Receipt not found")
+    transaction = session.get(Transaction, transaction_id)
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if receipt.uploaded_by != current_user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this receipt")
+    if transaction.uploaded_by != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this transaction")
 
-    # Delete file if exists (e.g. pending/error status)
-    if receipt.image_path and os.path.exists(receipt.image_path):
-        try:
-            os.remove(receipt.image_path)
-        except OSError:
-            pass  # Ignore file errors
+    scan = session.exec(
+        select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
+    ).first()
+    if scan:
+        if scan.image_path and os.path.exists(scan.image_path):
+            try:
+                os.remove(scan.image_path)
+            except OSError:
+                pass
+        session.delete(scan)
 
-    # Delete related items manually (SQLModel/SQLite might need explicit cascade)
-    for item in receipt.items:
-        session.delete(item)
+    for line in transaction.lines:
+        session.delete(line)
 
-    session.delete(receipt)
+    session.delete(transaction)
     session.commit()
     return None
 
@@ -433,7 +450,6 @@ async def get_categories(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
-    # Returns all categories for the user (and system ones)
     statement = select(Category).where(
         (Category.owner_id == current_user.id) | (Category.is_system)
     )
@@ -473,7 +489,7 @@ async def update_category(
     update_data = category_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(category, key, value)
-        
+
     session.add(category)
     session.commit()
     session.refresh(category)
@@ -492,24 +508,20 @@ async def delete_category(
     if category.is_system or category.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this category")
 
-    # Reassign transactions
     target_category_id = reassign_to
     if target_category_id is not None:
         target_category = session.get(Category, target_category_id)
         if not target_category or (target_category.owner_id != current_user.id and not target_category.is_system):
             raise HTTPException(status_code=400, detail="Invalid target category for reassignment")
     else:
-        # Check if parent exists, if yes reassign to parent, else None
         target_category_id = category.parent_id
 
-    # Reassign all receipts
-    receipts_statement = select(Receipt).where(Receipt.category_id == category_id)
-    receipts = session.exec(receipts_statement).all()
-    for r in receipts:
-        r.category_id = target_category_id
-        session.add(r)
-        
-    # Reassign subcategories
+    transactions_statement = select(Transaction).where(Transaction.category_id == category_id)
+    transactions = session.exec(transactions_statement).all()
+    for t in transactions:
+        t.category_id = target_category_id
+        session.add(t)
+
     subcategories_statement = select(Category).where(Category.parent_id == category_id)
     subcategories = session.exec(subcategories_statement).all()
     for sub in subcategories:
@@ -576,9 +588,8 @@ async def delete_tag(
         raise HTTPException(status_code=404, detail="Tag not found")
     if tag.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this tag")
-        
-    # Delete links first (if not cascading)
-    links_statement = select(ReceiptTagLink).where(ReceiptTagLink.tag_id == tag_id)
+
+    links_statement = select(TransactionTagLink).where(TransactionTagLink.tag_id == tag_id)
     links = session.exec(links_statement).all()
     for link in links:
         session.delete(link)
@@ -586,4 +597,3 @@ async def delete_tag(
     session.delete(tag)
     session.commit()
     return None
-
