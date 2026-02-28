@@ -1,5 +1,5 @@
 # backend/app/database.py
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import create_engine, Session
 
 SQLITE_FILE_NAME = "database.db"
 DATABASE_URL = f"sqlite:///./data/{SQLITE_FILE_NAME}"
