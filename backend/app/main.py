@@ -15,7 +15,7 @@ from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
 # Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Transaction' i 'TransactionLine'!
-from .models import User, Category
+from .models import User, Category, Transaction, TransactionLine  # noqa: F401
 
 # 3. ### WAŻNE ### Importujemy router z api.py
 from .api import router as api_router
@@ -89,6 +89,10 @@ async def lifespan(app: FastAPI):
         "UPDATE category SET name = 'Other' WHERE name = 'Inne' AND is_system = 1",
         # Transaction-First refactor: add type column to transaction table (for existing DBs)
         "ALTER TABLE \"transaction\" ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'",
+        # Clean up obsolete columns from transaction table (moved to ReceiptScan)
+        "ALTER TABLE \"transaction\" DROP COLUMN status",
+        "ALTER TABLE \"transaction\" DROP COLUMN image_path",
+        "ALTER TABLE \"transaction\" DROP COLUMN content_hash",
     ]
     with operations_engine.connect() as conn:
         for sql in migrations:
