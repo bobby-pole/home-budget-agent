@@ -78,6 +78,7 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE receipt ADD COLUMN category_id INTEGER REFERENCES category(id)",
         "ALTER TABLE category ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE monthly_budget ADD COLUMN user_id INTEGER REFERENCES user(id)",
+        "ALTER TABLE tag ADD COLUMN color TEXT",
         "UPDATE category SET name = 'Food' WHERE name = 'Jedzenie' AND is_system = 1",
         "UPDATE category SET name = 'Utilities' WHERE name = 'Rachunki' AND is_system = 1",
         "UPDATE category SET name = 'Entertainment' WHERE name = 'Rozrywka' AND is_system = 1",

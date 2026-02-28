@@ -185,7 +185,11 @@ export function ReceiptsTable({
                             </span>
                             <div className="flex flex-wrap gap-1 mt-0.5">
                               {receipt.tags?.map(tag => (
-                                <span key={tag.id} className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0 rounded-sm">
+                                <span 
+                                  key={tag.id} 
+                                  className="text-[9px] text-white px-1.5 py-0 rounded-sm font-bold shadow-xs"
+                                  style={{ backgroundColor: tag.color || "#9ca3af" }}
+                                >
                                   #{tag.name}
                                 </span>
                               ))}

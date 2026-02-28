@@ -16,6 +16,7 @@ interface TagPickerProps {
 export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
   const queryClient = useQueryClient();
   const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#9ca3af");
 
   const { data: tags } = useQuery({
     queryKey: ["tags"],
@@ -23,10 +24,11 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
   });
 
   const createTagMutation = useMutation({
-    mutationFn: (name: string) => api.createTag({ name }),
+    mutationFn: (data: { name: string; color: string }) => api.createTag(data),
     onSuccess: (newTag) => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       setNewTagName("");
+      setNewTagColor("#9ca3af");
       // Automatically select the newly created tag
       onChange([...(value || []), newTag.id]);
       toast.success(`Utworzono tag #${newTag.name}`);
@@ -48,26 +50,34 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
       return;
     }
 
-    createTagMutation.mutate(newTagName.trim());
+    createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
   return (
     <div className="space-y-3 w-full">
       <div className="flex gap-2">
-        <div className="relative flex-1 max-w-[200px]">
+        <div className="relative flex-1 max-w-[200px] flex gap-2">
           <Input
             placeholder="Nowy tag..."
             value={newTagName}
             onChange={(e) => setNewTagName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreateTag(e)}
             disabled={disabled || createTagMutation.isPending}
-            className="h-8 text-xs pr-8"
+            className="h-8 text-xs flex-1"
+          />
+          <input 
+            type="color" 
+            value={newTagColor} 
+            onChange={e => setNewTagColor(e.target.value)}
+            className="w-8 h-8 rounded border border-input cursor-pointer p-0.5 shrink-0"
+            title="Wybierz kolor tagu"
+            disabled={disabled || createTagMutation.isPending}
           />
           <button
             type="button"
             onClick={handleCreateTag}
             disabled={disabled || !newTagName.trim() || createTagMutation.isPending}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary disabled:opacity-30"
+            className="flex items-center justify-center w-8 h-8 rounded-md bg-secondary text-muted-foreground hover:text-primary disabled:opacity-30 border border-input shrink-0"
           >
             {createTagMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
           </button>
@@ -77,16 +87,20 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
       <div className="flex flex-wrap gap-2">
         {tags?.map((tag) => {
           const isSelected = value?.includes(tag.id);
+          const color = tag.color || "#9ca3af";
+          
           return (
             <Badge
               key={tag.id}
               variant={isSelected ? "default" : "outline"}
               className={cn(
-                "transition-all",
+                "transition-all border-0 shadow-sm",
                 !disabled && "cursor-pointer hover:opacity-80",
-                !isSelected && "text-muted-foreground",
+                !isSelected && "bg-muted text-muted-foreground",
+                isSelected && "text-white font-semibold",
                 disabled && !isSelected && "opacity-50"
               )}
+              style={{ backgroundColor: isSelected ? color : undefined }}
               onClick={() => {
                 if (disabled) return;
                 const newValue = isSelected
