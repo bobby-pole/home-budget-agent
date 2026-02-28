@@ -3,10 +3,48 @@
 exports[`App > snapshot — authenticated state (shows dashboard) 1`] = `
 <div>
   <div
-    class="min-h-screen bg-background"
+    class="min-h-screen bg-background font-sans antialiased"
   >
-    <div>
-      Dashboard Page
+    <div
+      class="group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full"
+      data-slot="sidebar-wrapper"
+      style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem;"
+    >
+      <div
+        class="flex min-h-screen w-full"
+      >
+        <div
+          data-testid="mock-sidebar"
+        >
+          Sidebar
+        </div>
+        <main
+          class="bg-background relative flex w-full flex-1 flex-col md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2"
+          data-slot="sidebar-inset"
+        >
+          <div
+            class="flex flex-col flex-1 h-full relative"
+          >
+            <div
+              data-testid="mock-header"
+            >
+              Header
+            </div>
+            <main
+              class="flex-1 pb-20 md:pb-6 overflow-y-auto"
+            >
+              <div>
+                Dashboard Page
+              </div>
+            </main>
+            <div
+              data-testid="mock-bottom-nav"
+            >
+              BottomNav
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   </div>
 </div>
@@ -15,7 +53,7 @@ exports[`App > snapshot — authenticated state (shows dashboard) 1`] = `
 exports[`App > snapshot — unauthenticated state (shows login) 1`] = `
 <div>
   <div
-    class="min-h-screen bg-background"
+    class="min-h-screen bg-background font-sans antialiased"
   >
     <div>
       Login Page

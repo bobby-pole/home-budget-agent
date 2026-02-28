@@ -3,10 +3,6 @@ import { screen, waitFor, fireEvent } from "@testing-library/react";
 import { render } from "@/__tests__/test-utils";
 import { Dashboard } from "@/pages/Dashboard";
 
-vi.mock("@/components/dashboard/Header", () => ({
-  Header: () => <div data-testid="mock-header">Header</div>,
-}));
-
 vi.mock("@/components/dashboard/KpiCard", () => ({
   KPICard: () => <div data-testid="mock-kpi-card">KpiCard</div>,
 }));
@@ -63,11 +59,12 @@ describe("Dashboard", () => {
     expect(screen.getByText(/ładowanie twoich finansów/i)).toBeInTheDocument();
   });
 
-  it("renders Header after data loads", async () => {
+  it("renders KPI Cards and UploadBox after data loads", async () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("mock-header")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
+      expect(screen.getAllByTestId("mock-kpi-card")).toHaveLength(3);
     });
   });
 
@@ -83,7 +80,7 @@ describe("Dashboard", () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("mock-header")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
     });
 
     expect(screen.queryByTestId("mock-add-transaction-modal")).not.toBeInTheDocument();
@@ -97,7 +94,7 @@ describe("Dashboard", () => {
     const { container } = render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("mock-header")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
     });
 
     expect(container).toMatchSnapshot();

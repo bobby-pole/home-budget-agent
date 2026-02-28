@@ -4,10 +4,6 @@ import { render } from "@/__tests__/test-utils";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { MemoryRouter } from "react-router-dom";
 
-vi.mock("@/components/dashboard/Header", () => ({
-  Header: () => <div data-testid="mock-header">Header</div>,
-}));
-
 vi.mock("@/components/settings/CategoriesTab", () => ({
   CategoriesTab: () => <div data-testid="mock-categories-tab">Categories Tab Content</div>,
 }));
@@ -23,7 +19,6 @@ describe("SettingsPage", () => {
         <SettingsPage />
       </MemoryRouter>
     );
-    expect(screen.getByTestId("mock-header")).toBeInTheDocument();
     expect(screen.getByText("Ustawienia")).toBeInTheDocument();
     
     // Default tab is categories
