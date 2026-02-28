@@ -1,7 +1,8 @@
 import { useState, useRef } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import type { AxiosError } from "axios"
 import { Card } from "@/components/ui/card"
-import { Upload, Loader2, CheckCircle2, Clock, Receipt } from "lucide-react"
+import { Upload, Loader2, CheckCircle2, Clock, Receipt, Pencil } from "lucide-react"
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -9,9 +10,10 @@ import { toast } from "sonner"
 interface UploadBoxProps {
   totalCount?: number;
   processingCount?: number;
+  onAddManual?: () => void;
 }
 
-export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProps) {
+export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: UploadBoxProps) {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
@@ -29,7 +31,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProp
         uploadMutation.reset()
       }, 5000)
     },
-    onError: (error: any) => {
+    onError: (error: AxiosError) => {
       if (error.response?.status !== 409) {
         console.error("Błąd uploadu:", error)
         toast.error("Wystąpił błąd podczas wysyłania pliku.", {
@@ -77,7 +79,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProp
     uploadMutation.mutate(
       { file, force },
       {
-        onError: (error: any) => {
+        onError: (error: AxiosError) => {
           if (error.response?.status === 409) {
             toast.warning("Wykryto duplikat!", {
               description: "Ten paragon został już przesłany. Czy chcesz go dodać ponownie?",
@@ -96,40 +98,69 @@ export function UploadBox({ totalCount = 0, processingCount = 0 }: UploadBoxProp
   return (
     <Card className="rounded-2xl border-0 shadow-sm h-full min-h-[120px]">
       <div className="flex h-full p-2 lg:p-3 gap-2 lg:gap-4">
-        {/* LEWA STRONA: Upload Area */}
-        <div
-          onClick={handleBoxClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={cn(
-            "w-[60%] lg:w-3/4 flex flex-col items-center justify-center p-3 lg:p-4 transition-all cursor-pointer rounded-xl border-2 border-dashed",
-            isDragging
-              ? "bg-primary/5 border-primary scale-[0.98]"
-              : "bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50",
-            uploadMutation.isPending && "cursor-not-allowed opacity-70"
-          )}
-        >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileChange}
-            className="hidden"
-            accept="image/png, image/jpeg, image/jpg, image/webp"
-          />
+        {/* LEWA STRONA: Akcje dodawania */}
+        <div className="w-[60%] lg:w-3/4 flex gap-2 h-full">
 
-          <div className="flex h-8 w-8 lg:h-10 lg:w-10 items-center justify-center rounded-full bg-background border shadow-sm mb-1 lg:mb-2">
-            {uploadMutation.isPending ? (
-              <Loader2 className="h-4 w-4 lg:h-5 lg:w-5 text-primary animate-spin" />
-            ) : uploadMutation.isSuccess ? (
-              <CheckCircle2 className="h-4 w-4 lg:h-5 lg:w-5 text-green-500" />
-            ) : (
-              <Upload className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
+          {/* Upload zdjęcia */}
+          <div
+            onClick={handleBoxClick}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center p-2 lg:p-3 transition-all cursor-pointer rounded-xl border-2 border-dashed",
+              isDragging
+                ? "bg-primary/5 border-primary scale-[0.98]"
+                : "bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50",
+              uploadMutation.isPending && "cursor-not-allowed opacity-70"
             )}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/png, image/jpeg, image/jpg, image/webp"
+            />
+            <div className="flex h-7 w-7 lg:h-9 lg:w-9 items-center justify-center rounded-full bg-background border shadow-sm mb-1">
+              {uploadMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary animate-spin" />
+              ) : uploadMutation.isSuccess ? (
+                <CheckCircle2 className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-green-500" />
+              ) : (
+                <Upload className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
+              )}
+            </div>
+            <span className="text-[9px] lg:text-[10px] font-semibold text-foreground text-center leading-tight">
+              {uploadMutation.isPending ? "..." : "Zdjęcie"}
+            </span>
           </div>
-          <span className="text-[10px] lg:text-xs font-semibold text-foreground text-center">
-            {uploadMutation.isPending ? "..." : "Dodaj"}
-          </span>
+
+          {/* Separator */}
+          <div className="flex flex-col items-center justify-center gap-1 shrink-0">
+            <div className="h-full w-px bg-border/60" />
+            <span className="text-[9px] text-muted-foreground font-medium shrink-0 py-1">lub</span>
+            <div className="h-full w-px bg-border/60" />
+          </div>
+
+          {/* Dodaj ręcznie */}
+          <div
+            onClick={onAddManual}
+            className={cn(
+              "flex-1 flex flex-col items-center justify-center p-2 lg:p-3 transition-all rounded-xl border-2 border-dashed",
+              onAddManual
+                ? "cursor-pointer bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50"
+                : "cursor-not-allowed opacity-40 border-muted-foreground/10"
+            )}
+          >
+            <div className="flex h-7 w-7 lg:h-9 lg:w-9 items-center justify-center rounded-full bg-background border shadow-sm mb-1">
+              <Pencil className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
+            </div>
+            <span className="text-[9px] lg:text-[10px] font-semibold text-foreground text-center leading-tight">
+              Ręcznie
+            </span>
+          </div>
+
         </div>
 
         {/* PRAWA STRONA: Statystyki */}
