@@ -34,4 +34,17 @@ export default defineConfig({
       exclude: ["**/__tests__/**", "**/__snapshots__/**", "src/__mocks__/**", "src/components/ui/**", "src/main.tsx"],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+          "ui-vendor": ["lucide-react", "sonner", "class-variance-authority", "clsx", "tailwind-merge"],
+          "radix-vendor": ["radix-ui", "@radix-ui/react-avatar", "@radix-ui/react-dropdown-menu", "@radix-ui/react-progress", "@radix-ui/react-slot"],
+          "query-vendor": ["@tanstack/react-query", "axios", "recharts"],
+          "form-vendor": ["react-hook-form", "zod", "@hookform/resolvers"],
+        },
+      },
+    },
+  },
 })
