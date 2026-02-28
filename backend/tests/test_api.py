@@ -55,12 +55,12 @@ def test_manual_transaction_receipt_scan_is_null(client: TestClient, session: Se
 @patch("app.api.shutil.copyfileobj")
 @patch("builtins.open", new_callable=mock_open)
 @patch("app.api.process_transaction_in_background")
-def test_upload_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, client: TestClient, session: Session):
+def test_scan_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, client: TestClient, session: Session):
     file_content = b"fake_receipt_image_data"
     expected_hash = hashlib.sha256(file_content).hexdigest()
 
     response = client.post(
-        "/api/transactions/upload",
+        "/api/transactions/scan",
         files={"file": ("receipt.jpg", file_content, "image/jpeg")},
     )
 
@@ -76,7 +76,7 @@ def test_upload_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy,
     assert scan.content_hash == expected_hash
 
 
-def test_upload_duplicate_returns_409(client: TestClient, session: Session):
+def test_scan_duplicate_returns_409(client: TestClient, session: Session):
     file_content = b"known_duplicate_receipt"
     file_hash = hashlib.sha256(file_content).hexdigest()
 
@@ -93,7 +93,7 @@ def test_upload_duplicate_returns_409(client: TestClient, session: Session):
     session.commit()
 
     response = client.post(
-        "/api/transactions/upload",
+        "/api/transactions/scan",
         files={"file": ("receipt.jpg", file_content, "image/jpeg")},
     )
     assert response.status_code == 409
