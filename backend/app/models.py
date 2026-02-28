@@ -51,6 +51,7 @@ class CategoryBase(SQLModel):
     color: Optional[str] = None
     is_system: bool = False
     parent_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    order_index: int = Field(default=0)
 
 
 class Category(CategoryBase, table=True):
@@ -199,6 +200,7 @@ class CategoryUpdate(SQLModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     parent_id: Optional[int] = None
+    order_index: Optional[int] = None
 
 
 class CategoryRead(CategoryBase):

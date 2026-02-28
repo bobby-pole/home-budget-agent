@@ -1,5 +1,5 @@
 // frontend/src/lib/api.ts
-import type { Receipt, AuthResponse } from "@/types";
+import type { Receipt, AuthResponse, Category, Tag } from "@/types";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 
@@ -85,7 +85,7 @@ export const api = {
     total_amount: number;
     currency: string;
     date?: string;
-    category?: string;
+    category_id?: number;
     note?: string;
     items?: Array<{ name: string; price: number; quantity: number; category: string }>;
   }): Promise<Receipt> => {
@@ -104,4 +104,43 @@ export const api = {
     const response = await apiClient.post(`/budget/${data.year}/${data.month}`, { amount: data.amount });
     return response.data;
   },
+
+  // --- CATEGORIES ---
+
+  getCategories: async (): Promise<Category[]> => {
+    const response = await apiClient.get<Category[]>("/categories");
+    return response.data;
+  },
+
+  createCategory: async (data: Partial<Category>): Promise<Category> => {
+    const response = await apiClient.post<Category>("/categories", data);
+    return response.data;
+  },
+
+  updateCategory: async (id: number, data: Partial<Category>): Promise<Category> => {
+    const response = await apiClient.patch<Category>(`/categories/${id}`, data);
+    return response.data;
+  },
+
+  deleteCategory: async (id: number, reassignTo?: number) => {
+    const url = reassignTo ? `/categories/${id}?reassign_to=${reassignTo}` : `/categories/${id}`;
+    await apiClient.delete(url);
+  },
+
+  // --- TAGS ---
+
+  getTags: async (): Promise<Tag[]> => {
+    const response = await apiClient.get<Tag[]>("/tags");
+    return response.data;
+  },
+
+  createTag: async (data: Partial<Tag>): Promise<Tag> => {
+    const response = await apiClient.post<Tag>("/tags", data);
+    return response.data;
+  },
+
+  deleteTag: async (id: number) => {
+    await apiClient.delete(`/tags/${id}`);
+  },
 };
+

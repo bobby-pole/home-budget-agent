@@ -12,6 +12,23 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  icon?: string;
+  color?: string;
+  is_system: boolean;
+  parent_id?: number;
+  owner_id?: number;
+  order_index?: number;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  owner_id?: number;
+}
+
 export interface Item {
   id: number;
   name: string;
@@ -23,11 +40,14 @@ export interface Item {
 export interface Receipt {
   id: number;
   merchant_name: string;
-  date: string;         // Backend zwraca datę jako string ISO
+  date: string;
   total_amount: number;
   currency: string;
   image_path?: string;
   status: 'pending' | 'processing' | 'done' | 'error';
   is_manual?: boolean;
-  items: Item[];        // To jest ta tablica, którą dodaliśmy przed chwilą w backendzie
+  category_id?: number;
+  category?: Category;
+  tags?: Tag[];
+  items: Item[];
 }

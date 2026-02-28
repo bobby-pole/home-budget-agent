@@ -1,4 +1,6 @@
 import type { Control } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import {
   FormControl,
   FormField,
@@ -14,7 +16,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { CATEGORIES, CATEGORY_LABELS } from "@/lib/constants";
 import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
 
@@ -23,11 +24,16 @@ interface TransactionMetaSectionProps {
 }
 
 export function TransactionMetaSection({ control }: TransactionMetaSectionProps) {
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
+
   return (
     <SectionGrid>
       <FormField
         control={control}
-        name="category"
+        name="category_id"
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
@@ -40,9 +46,12 @@ export function TransactionMetaSection({ control }: TransactionMetaSectionProps)
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {CATEGORY_LABELS[cat] || cat}
+                {categories?.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id.toString()}>
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 text-center">{cat.icon}</span>
+                      {cat.name}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>

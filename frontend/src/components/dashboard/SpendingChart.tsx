@@ -4,7 +4,6 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   ResponsiveContainer,
   Cell,
 } from "recharts";
@@ -103,22 +102,6 @@ export function SpendingChart() {
                   tick={{ fontSize: 13, fill: "#64748b", fontWeight: 500 }}
                   axisLine={false}
                   tickLine={false}
-                />
-                <Tooltip
-                  formatter={(value: number | undefined) =>
-                    value != null
-                      ? value.toLocaleString("pl-PL", {
-                          style: "currency",
-                          currency: "PLN",
-                        })
-                      : "0 zł"
-                  }
-                  cursor={{ fill: "rgba(0,0,0,0.05)", radius: 4 }}
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "none",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                  }}
                 />
                 <Bar
                   dataKey="value"
