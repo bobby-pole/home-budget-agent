@@ -10,6 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export function SpendingChart() {
   const { data: receipts, isLoading: isReceiptsLoading } = useQuery({
@@ -60,9 +61,12 @@ export function SpendingChart() {
       }
     }
     
-    return matched 
-      ? { name: matched.name, color: matched.color || "#9ca3af", icon: matched.icon || "📦" } 
-      : { name: catString, color: "#9ca3af", icon: "📦" };
+    if (matched) {
+      const displayName = matched.is_system ? (CATEGORY_LABELS[matched.name] || matched.name) : matched.name;
+      return { name: displayName, color: matched.color || "#9ca3af", icon: matched.icon || "📦" };
+    }
+    
+    return { name: catString, color: "#9ca3af", icon: "📦" };
   };
 
   receipts?.forEach((receipt) => {

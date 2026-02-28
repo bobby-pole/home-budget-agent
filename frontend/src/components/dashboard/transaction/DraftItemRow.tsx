@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export interface NewItemDraft {
   name: string;
@@ -80,17 +81,16 @@ export function DraftItemRow({
         <SelectTrigger className="w-32 h-8 text-xs shrink-0">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
-          {categories?.map((cat) => (
-            <SelectItem key={cat.id} value={cat.name}>
-              <span className="flex items-center gap-2">
-                <span>{cat.icon}</span>
-                {cat.name}
-              </span>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+                    <SelectContent>
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          <span className="flex items-center gap-2">
+                            <span>{cat.icon}</span>
+                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>      </Select>
       <Button
         type="button"
         size="icon"

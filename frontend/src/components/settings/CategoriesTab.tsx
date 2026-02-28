@@ -19,6 +19,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export function CategoriesTab() {
   const queryClient = useQueryClient();
@@ -108,7 +109,7 @@ export function CategoriesTab() {
 
   const handleStartEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setEditName(cat.name);
+    setEditName(cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name);
     setEditColor(cat.color || "#cccccc");
     setEditIcon(cat.icon || "📦");
   };
@@ -268,7 +269,7 @@ export function CategoriesTab() {
                     >
                       {cat.icon || "📦"}
                     </div>
-                    <span className="font-medium truncate">{cat.name}</span>
+                    <span className="font-medium truncate">{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
                     {cat.is_system && <div title="Kategoria systemowa"><Lock className="h-3 w-3 text-muted-foreground ml-1 shrink-0" /></div>}
                   </div>
                 )}
