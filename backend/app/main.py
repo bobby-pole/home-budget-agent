@@ -15,7 +15,7 @@ from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
 # Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Receipt' i 'Item'!
-from .models import User
+from .models import User, Category
 
 # 3. ### WAŻNE ### Importujemy router z api.py
 from .api import router as api_router
@@ -37,6 +37,30 @@ def seed_dev_user():
         else:
             print(f"🧪 Dev seed: test user already exists [{TEST_USER_EMAIL}]")
 
+def seed_default_categories():
+    """Seed system default categories if they don't exist."""
+    with Session(operations_engine) as session:
+        existing = session.exec(select(Category).where(Category.is_system)).first()
+        if not existing:
+            defaults = [
+                {"name": "Food", "icon": "🍔", "color": "#f87171"},
+                {"name": "Transport", "icon": "🚗", "color": "#60a5fa"},
+                {"name": "Utilities", "icon": "💡", "color": "#facc15"},
+                {"name": "Entertainment", "icon": "🎬", "color": "#c084fc"},
+                {"name": "Health", "icon": "⚕️", "color": "#4ade80"},
+                {"name": "Other", "icon": "📦", "color": "#9ca3af"},
+            ]
+            for cat_data in defaults:
+                cat = Category(
+                    name=cat_data["name"],
+                    icon=cat_data["icon"],
+                    color=cat_data["color"],
+                    is_system=True
+                )
+                session.add(cat)
+            session.commit()
+            print("🌱 System default categories seeded.")
+
 
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
@@ -51,6 +75,7 @@ async def lifespan(app: FastAPI):
     from sqlalchemy import text
     migrations = [
         "ALTER TABLE receipt ADD COLUMN is_manual BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE receipt ADD COLUMN category_id INTEGER REFERENCES category(id)",
     ]
     with operations_engine.connect() as conn:
         for sql in migrations:
@@ -60,6 +85,8 @@ async def lifespan(app: FastAPI):
                 print(f"✅ Migration applied: {sql}")
             except Exception:
                 pass  # Column already exists — safe to ignore
+
+    seed_default_categories()
 
     if os.getenv("ENVIRONMENT") == "development":
         seed_dev_user()
