@@ -6,7 +6,7 @@ from openai import OpenAI
 
 # API setup
 # Pamiętaj, że w środowisku lokalnym/Docker klucz musi być w zmiennych środowiskowych
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy_key_for_tests")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Select model (Cheap and fast)
