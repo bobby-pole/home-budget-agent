@@ -58,3 +58,16 @@ export const CATEGORY_HEX_COLORS: Record<string, string> = {
 
 // Główne kategorie używane w Selectach
 export const CATEGORIES = ["Food", "FastFood", "Snacks", "Transport", "Utilities", "Entertainment", "Health", "Other"];
+
+export const TAG_COLORS = [
+  "#2563eb", // Blue 600
+  "#059669", // Emerald 600
+  "#dc2626", // Red 600
+  "#d97706", // Amber 600
+  "#7c3aed", // Purple 600
+  "#db2777", // Pink 600
+  "#0891b2", // Cyan 600
+  "#4f46e5", // Indigo 600
+  "#475569", // Slate 600
+  "#ca8a04", // Yellow 600 (Darker)
+];

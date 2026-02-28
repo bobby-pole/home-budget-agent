@@ -40,7 +40,10 @@ describe("TagsTab", () => {
     fireEvent.click(button);
     
     await waitFor(() => {
-      expect(api.createTag).toHaveBeenCalledWith({ name: "nowytag" });
+      expect(api.createTag).toHaveBeenCalledWith({ 
+        name: "nowytag", 
+        color: expect.any(String) 
+      });
     });
   });
 });

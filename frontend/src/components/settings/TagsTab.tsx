@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tag as TagIcon, X, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
+import { TAG_COLORS } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +28,7 @@ import {
 export function TagsTab() {
   const queryClient = useQueryClient();
   const [newTag, setNewTag] = useState("");
-  const [newTagColor, setNewTagColor] = useState("#9ca3af");
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
@@ -96,13 +103,32 @@ export function TagsTab() {
             onChange={(e) => setNewTag(e.target.value)}
             className="max-w-sm h-9"
           />
-          <input 
-            type="color" 
-            value={newTagColor} 
-            onChange={e => setNewTagColor(e.target.value)}
-            className="w-9 h-9 rounded border border-input cursor-pointer p-1"
-            title="Wybierz kolor tagu"
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 p-0" title="Wybierz kolor">
+                <div 
+                  className="w-5 h-5 rounded-full shadow-sm border border-black/10" 
+                  style={{ backgroundColor: newTagColor }} 
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="p-2">
+              <div className="grid grid-cols-5 gap-2">
+                {TAG_COLORS.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={cn(
+                      "w-6 h-6 rounded-full border border-black/10 transition-transform hover:scale-110",
+                      newTagColor === color && "ring-2 ring-ring ring-offset-1"
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewTagColor(color)}
+                  />
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="submit" className="h-9" disabled={!newTag.trim() || createMutation.isPending}>
             <Plus className="h-4 w-4 mr-2" /> Dodaj
           </Button>
@@ -129,12 +155,27 @@ export function TagsTab() {
                     onChange={(e) => setEditName(e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, tag.id)}
                   />
-                  <input 
-                    type="color" 
-                    value={editColor} 
-                    onChange={e => setEditColor(e.target.value)}
-                    className="w-6 h-6 rounded-full border-0 cursor-pointer p-0"
-                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="w-5 h-5 rounded-full border border-black/10 shadow-sm shrink-0 transition-transform hover:scale-110" style={{ backgroundColor: editColor }} />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="p-2">
+                      <div className="grid grid-cols-5 gap-2">
+                        {TAG_COLORS.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            className={cn(
+                              "w-5 h-5 rounded-full border border-black/10 transition-transform hover:scale-110",
+                              editColor === color && "ring-2 ring-ring ring-offset-1"
+                            )}
+                            style={{ backgroundColor: color }}
+                            onClick={() => setEditColor(color)}
+                          />
+                        ))}
+                      </div>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveEdit(tag.id)}>
                     <Save className="h-3 w-3 text-emerald-600" />
                   </Button>
