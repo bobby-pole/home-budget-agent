@@ -50,6 +50,31 @@ export function TransactionHeaderSection({
 
       <FormField
         control={control}
+        name="type"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+              Typ transakcji
+            </FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="expense">Wydatek</SelectItem>
+                <SelectItem value="income">Przychód</SelectItem>
+                <SelectItem value="transfer">Transfer</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={control}
         name="date"
         render={({ field }) => (
           <FormItem>

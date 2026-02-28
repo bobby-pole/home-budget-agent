@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
 
 export interface ManualItem {
@@ -7,7 +9,7 @@ export interface ManualItem {
   name: string;
   price: number;
   quantity: number;
-  category: string;
+  category_id: number | null;
 }
 
 interface ItemRowProps {
@@ -17,14 +19,26 @@ interface ItemRowProps {
 }
 
 export function ItemRow({ item, currency, onRemove }: ItemRowProps) {
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
+
+  const category = categories?.find((c) => c.id === item.category_id);
+  const categoryLabel = category
+    ? (category.is_system ? (CATEGORY_LABELS[category.name] || category.name) : category.name)
+    : null;
+
   return (
     <div className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30 transition-colors">
       <span className="flex-1 font-medium truncate min-w-0" title={item.name}>
         {item.name}
       </span>
-      <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
-        {CATEGORY_LABELS[item.category] || item.category}
-      </span>
+      {categoryLabel && (
+        <span className="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+          {categoryLabel}
+        </span>
+      )}
       <span className="text-muted-foreground text-xs shrink-0 w-14 text-right">
         {item.quantity} szt.
       </span>

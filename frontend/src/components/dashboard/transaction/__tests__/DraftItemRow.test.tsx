@@ -6,6 +6,14 @@ import { createRef } from "react";
 import { DraftItemRow } from "@/components/dashboard/transaction/DraftItemRow";
 import type { NewItemDraft } from "@/components/dashboard/transaction/DraftItemRow";
 
+vi.mock("@/lib/api", () => ({
+  api: {
+    getCategories: vi.fn().mockResolvedValue([
+      { id: 1, name: "food", is_system: true, color: "#4caf50", icon: "🍔" },
+    ]),
+  },
+}));
+
 // Mock Radix UI Select — SelectTrigger/SelectValue must return null
 // to avoid invalid HTML (<span> inside <select>) in jsdom
 vi.mock("@/components/ui/select", () => ({
@@ -30,7 +38,7 @@ const defaultDraft: NewItemDraft = {
   name: "",
   price: "",
   quantity: "1",
-  category: "Other",
+  category_id: null,
 };
 
 function renderDraftRow(
@@ -134,7 +142,7 @@ describe("DraftItemRow", () => {
       name: "Masło",
       price: "5.99",
       quantity: "3",
-      category: "Food",
+      category_id: null,
     };
     renderDraftRow(draft);
 
@@ -154,7 +162,7 @@ describe("DraftItemRow", () => {
         name: "Chleb",
         price: "3.50",
         quantity: "2",
-        category: "Food",
+        category_id: null,
       };
       const { asFragment } = renderDraftRow(draft, { draftValid: true });
       expect(asFragment()).toMatchSnapshot();

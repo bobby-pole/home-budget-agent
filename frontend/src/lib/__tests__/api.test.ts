@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { makeReceipt, makeAuthResponse } from "@/__mocks__/factories";
+import { makeTransaction, makeAuthResponse } from "@/__mocks__/factories";
 
 // Tworzymy mock instancji axios przed hoistingiem vi.mock
 const { mockAxios } = vi.hoisted(() => {
@@ -58,60 +58,60 @@ describe("api service", () => {
     });
   });
 
-  describe("receipt endpoints", () => {
-    it("getReceipts — wysyła GET /receipts i zwraca tablicę", async () => {
-      const receipts = [makeReceipt({ id: 1 }), makeReceipt({ id: 2 })];
-      mockAxios.get.mockResolvedValueOnce({ data: receipts });
+  describe("transaction endpoints", () => {
+    it("getTransactions — wysyła GET /transactions i zwraca tablicę", async () => {
+      const transactions = [makeTransaction({ id: 1 }), makeTransaction({ id: 2 })];
+      mockAxios.get.mockResolvedValueOnce({ data: transactions });
 
-      const result = await api.getReceipts();
+      const result = await api.getTransactions();
 
-      expect(mockAxios.get).toHaveBeenCalledWith("/receipts");
+      expect(mockAxios.get).toHaveBeenCalledWith("/transactions");
       expect(result).toHaveLength(2);
     });
 
-    it("updateReceipt — wysyła PATCH /receipts/:id", async () => {
-      const updated = makeReceipt({ merchant_name: "Lidl" });
+    it("updateTransaction — wysyła PATCH /transactions/:id", async () => {
+      const updated = makeTransaction({ merchant_name: "Lidl" });
       mockAxios.patch.mockResolvedValueOnce({ data: updated });
 
-      const result = await api.updateReceipt(1, { merchant_name: "Lidl" });
+      const result = await api.updateTransaction(1, { merchant_name: "Lidl" });
 
-      expect(mockAxios.patch).toHaveBeenCalledWith("/receipts/1", {
+      expect(mockAxios.patch).toHaveBeenCalledWith("/transactions/1", {
         merchant_name: "Lidl",
       });
       expect(result.merchant_name).toBe("Lidl");
     });
 
-    it("deleteReceipt — wysyła DELETE /receipts/:id", async () => {
+    it("deleteTransaction — wysyła DELETE /transactions/:id", async () => {
       mockAxios.delete.mockResolvedValueOnce({});
 
-      await api.deleteReceipt(5);
+      await api.deleteTransaction(5);
 
-      expect(mockAxios.delete).toHaveBeenCalledWith("/receipts/5");
+      expect(mockAxios.delete).toHaveBeenCalledWith("/transactions/5");
     });
 
-    it("retryReceipt — wysyła POST /receipts/:id/retry", async () => {
-      const receipt = makeReceipt({ status: "processing" });
-      mockAxios.post.mockResolvedValueOnce({ data: receipt });
+    it("retryTransaction — wysyła POST /transactions/:id/retry", async () => {
+      const transaction = makeTransaction({ receipt_scan: { id: 1, status: "processing", created_at: "" } });
+      mockAxios.post.mockResolvedValueOnce({ data: transaction });
 
-      const result = await api.retryReceipt(3);
+      const result = await api.retryTransaction(3);
 
-      expect(mockAxios.post).toHaveBeenCalledWith("/receipts/3/retry");
-      expect(result.status).toBe("processing");
+      expect(mockAxios.post).toHaveBeenCalledWith("/transactions/3/retry");
+      expect(result.receipt_scan?.status).toBe("processing");
     });
 
-    it("createManualTransaction — wysyła POST /receipts/manual", async () => {
+    it("createManualTransaction — wysyła POST /transactions/manual", async () => {
       const payload = {
         merchant_name: "Sklep",
         total_amount: 25.5,
         currency: "PLN",
-        items: [],
+        lines: [],
       };
-      const receipt = makeReceipt();
-      mockAxios.post.mockResolvedValueOnce({ data: receipt });
+      const transaction = makeTransaction();
+      mockAxios.post.mockResolvedValueOnce({ data: transaction });
 
       await api.createManualTransaction(payload);
 
-      expect(mockAxios.post).toHaveBeenCalledWith("/receipts/manual", payload);
+      expect(mockAxios.post).toHaveBeenCalledWith("/transactions/manual", payload);
     });
   });
 

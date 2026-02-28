@@ -1,27 +1,29 @@
-import type { Receipt } from "@/types";
-import { ReceiptItemRow } from "../ReceiptItemRow";
+import type { TransactionLine } from "@/types";
+import { TransactionItemRow } from "../TransactionItemRow";
 
-interface ReceiptItemsSectionProps {
-  items: Receipt["items"];
+interface TransactionItemsSectionProps {
+  lines: TransactionLine[];
   currency: string;
+  transactionId: number;
 }
 
-export function ReceiptItemsSection({ items, currency }: ReceiptItemsSectionProps) {
+export function TransactionItemsSection({ lines, currency, transactionId }: TransactionItemsSectionProps) {
   return (
     <div>
       <h4 className="mb-3 text-sm font-semibold text-muted-foreground flex items-center gap-2">
         Pozycje na paragonie
         <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">
-          {items?.length || 0}
+          {lines?.length || 0}
         </span>
       </h4>
       <div className="max-h-[350px] overflow-auto rounded-md border bg-card">
-        {items?.length ? (
+        {lines?.length ? (
           <div className="divide-y min-w-max">
-            {items.map((item) => (
-              <ReceiptItemRow
-                key={item.id}
-                item={{ ...item, category: item.category ?? "Other" }}
+            {lines.map((line) => (
+              <TransactionItemRow
+                key={line.id}
+                item={line}
+                transactionId={transactionId}
                 currency={currency}
               />
             ))}

@@ -5,12 +5,20 @@ import userEvent from "@testing-library/user-event";
 import { ItemRow } from "@/components/dashboard/transaction/ItemRow";
 import type { ManualItem } from "@/components/dashboard/transaction/ItemRow";
 
+vi.mock("@/lib/api", () => ({
+  api: {
+    getCategories: vi.fn().mockResolvedValue([
+      { id: 1, name: "food", is_system: true, color: "#4caf50", icon: "🍔" },
+    ]),
+  },
+}));
+
 const item: ManualItem = {
   id: "abc-123",
   name: "Mleko UHT",
   price: 3.5,
   quantity: 2,
-  category: "Food",
+  category_id: 1,
 };
 
 describe("ItemRow", () => {
@@ -28,11 +36,6 @@ describe("ItemRow", () => {
     render(<ItemRow item={item} currency="PLN" onRemove={vi.fn()} />);
     // 3.5 * 2 = 7.00
     expect(screen.getByText("7.00 PLN")).toBeInTheDocument();
-  });
-
-  it("renders category label", () => {
-    render(<ItemRow item={item} currency="PLN" onRemove={vi.fn()} />);
-    expect(screen.getByText("Jedzenie")).toBeInTheDocument();
   });
 
   it("renders currency from props", () => {
@@ -57,15 +60,16 @@ describe("ItemRow", () => {
     expect(screen.getByTitle("Mleko UHT")).toBeInTheDocument();
   });
 
-  it("falls back to raw category value for unknown categories", () => {
+  it("does not show category badge when category_id is null", () => {
     render(
       <ItemRow
-        item={{ ...item, category: "UnknownCategory" }}
+        item={{ ...item, category_id: null }}
         currency="PLN"
         onRemove={vi.fn()}
       />
     );
-    expect(screen.getByText("UnknownCategory")).toBeInTheDocument();
+    // No category badge should be rendered
+    expect(screen.queryByRole("button")).toBeInTheDocument(); // remove button still there
   });
 
   describe("snapshots", () => {
