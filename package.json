@@ -7,6 +7,9 @@
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [
       "bash -c 'cd frontend && npx eslint --max-warnings=0 \"${@}\"' --"
+    ],
+    "backend/**/*.py": [
+      "bash -c 'cd backend && source venv/bin/activate && ruff check \"${@}\"' --"
     ]
   },
   "devDependencies": {
@@ -14,3 +17,4 @@
     "lint-staged": "^16.2.7"
   }
 }
+
