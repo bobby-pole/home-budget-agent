@@ -556,7 +556,10 @@ async def update_tag(
     if tag.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this tag")
 
-    tag.name = tag_update.name
+    update_data = tag_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(tag, key, value)
+
     session.add(tag)
     session.commit()
     session.refresh(tag)
