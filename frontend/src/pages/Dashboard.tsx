@@ -1,4 +1,3 @@
-import { Header } from "@/components/dashboard/Header";
 import { KPICard } from "@/components/dashboard/KpiCard";
 import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { SpendingChart } from "@/components/dashboard/SpendingChart";
@@ -118,7 +117,7 @@ export function Dashboard() {
 
   if (isTransactionsLoading || isBudgetLoading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
         <div className="text-lg animate-pulse">
           Ładowanie Twoich finansów... 💸
         </div>
@@ -127,90 +126,87 @@ export function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header />
-      <main className="px-4 lg:px-6 pb-8">
-        {/* KPI Section - 2x2 on mobile, 1x4 on desktop */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-          <KPICard
-            title={`Suma Wydatków - ${monthName}`}
-            value={totalSpent.toLocaleString(undefined, {
-              style: "currency",
-              currency: "PLN",
-            })}
-            icon={Wallet}
-            iconBgColor="bg-blue-100"
-            iconColor="text-blue-600"
-            action={{
-              label: "Historia wydatków",
-              icon: CalendarDays,
-              onClick: () => setIsMonthlyModalOpen(true),
-            }}
-          />
+    <div className="p-4 lg:p-6 space-y-6">
+      {/* KPI Section - 2x2 on mobile, 1x4 on desktop */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+        <KPICard
+          title={`Suma Wydatków - ${monthName}`}
+          value={totalSpent.toLocaleString(undefined, {
+            style: "currency",
+            currency: "PLN",
+          })}
+          icon={Wallet}
+          iconBgColor="bg-blue-100"
+          iconColor="text-blue-600"
+          action={{
+            label: "Historia wydatków",
+            icon: CalendarDays,
+            onClick: () => setIsMonthlyModalOpen(true),
+          }}
+        />
 
-          <UploadBox
-            totalCount={transactionsCount}
-            processingCount={processingCount}
-            onAddManual={() => setAddTxOpen(true)}
-          />
+        <UploadBox
+          totalCount={transactionsCount}
+          processingCount={processingCount}
+          onAddManual={() => setAddTxOpen(true)}
+        />
 
-          <KPICard
-            title={`BUDŻET - ${monthName.toUpperCase()}`}
-            value={
-              <div className="flex items-center gap-1 lg:gap-2">
-                <span className="truncate">
-                  {budgetAmount > 0
-                    ? remainingBudget.toLocaleString(undefined, {
-                        style: "currency",
-                        currency: "PLN",
-                      })
-                    : "Brak"}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 lg:h-6 lg:w-6 rounded-full hover:bg-muted"
-                  onClick={() => setIsBudgetModalOpen(true)}
-                >
-                  {budgetAmount > 0 ? (
-                    <Pencil className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
-                  ) : (
-                    <PlusCircle className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
-                  )}
-                </Button>
-              </div>
-            }
-            icon={PiggyBank}
-            iconBgColor="bg-pink-100"
-            iconColor="text-pink-600"
-            showProgress={budgetAmount > 0}
-            progressValue={budgetProgress}
-            highlight={budgetAmount > 0 && remainingBudget < 0}
-          />
+        <KPICard
+          title={`BUDŻET - ${monthName.toUpperCase()}`}
+          value={
+            <div className="flex items-center gap-1 lg:gap-2">
+              <span className="truncate">
+                {budgetAmount > 0
+                  ? remainingBudget.toLocaleString(undefined, {
+                      style: "currency",
+                      currency: "PLN",
+                    })
+                  : "Brak"}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 lg:h-6 lg:w-6 rounded-full hover:bg-muted"
+                onClick={() => setIsBudgetModalOpen(true)}
+              >
+                {budgetAmount > 0 ? (
+                  <Pencil className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                ) : (
+                  <PlusCircle className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
+                )}
+              </Button>
+            </div>
+          }
+          icon={PiggyBank}
+          iconBgColor="bg-pink-100"
+          iconColor="text-pink-600"
+          showProgress={budgetAmount > 0}
+          progressValue={budgetProgress}
+          highlight={budgetAmount > 0 && remainingBudget < 0}
+        />
 
-          <KPICard
-            title="Dominująca Kategoria"
-            value={topCategoryName}
-            icon={TrendingUp}
-            iconBgColor="bg-purple-100"
-            iconColor="text-purple-600"
-          />
-        </section>
+        <KPICard
+          title="Dominująca Kategoria"
+          value={topCategoryName}
+          icon={TrendingUp}
+          iconBgColor="bg-purple-100"
+          iconColor="text-purple-600"
+        />
+      </section>
 
-        {/* Main Content */}
-        <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-          <div className="lg:col-span-3">
-            <TransactionsTable
-              transactions={transactions || []}
-              isLoading={isTransactionsLoading}
-              error={error}
-            />
-          </div>
-          <div className="lg:col-span-2 h-full">
-            <SpendingChart />
-          </div>
-        </section>
-      </main>
+      {/* Main Content */}
+      <section className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <TransactionsTable
+            transactions={transactions || []}
+            isLoading={isTransactionsLoading}
+            error={error}
+          />
+        </div>
+        <div className="lg:col-span-2 h-full">
+          <SpendingChart />
+        </div>
+      </section>
 
       <MonthlySummaryModal
         transactions={transactions}

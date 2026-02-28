@@ -2,6 +2,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import App from "@/App";
 
+vi.mock("@/components/AppSidebar", () => ({
+  AppSidebar: () => <div data-testid="mock-sidebar">Sidebar</div>,
+}));
+
+vi.mock("@/components/BottomNav", () => ({
+  BottomNav: () => <div data-testid="mock-bottom-nav">BottomNav</div>,
+}));
+
+vi.mock("@/components/DashboardHeader", () => ({
+  DashboardHeader: () => <div data-testid="mock-header">Header</div>,
+}));
+
 vi.mock("@/pages/Dashboard", () => ({
   Dashboard: () => <div>Dashboard Page</div>,
 }));

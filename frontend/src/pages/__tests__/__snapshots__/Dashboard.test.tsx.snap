@@ -3,63 +3,54 @@
 exports[`Dashboard > snapshot — loaded state 1`] = `
 <div>
   <div
-    class="min-h-screen bg-background"
+    class="p-4 lg:p-6 space-y-6"
   >
-    <div
-      data-testid="mock-header"
+    <section
+      class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4"
     >
-      Header
-    </div>
-    <main
-      class="px-4 lg:px-6 pb-8"
+      <div
+        data-testid="mock-kpi-card"
+      >
+        KpiCard
+      </div>
+      <div
+        data-testid="mock-upload-box"
+      >
+        UploadBox
+      </div>
+      <div
+        data-testid="mock-kpi-card"
+      >
+        KpiCard
+      </div>
+      <div
+        data-testid="mock-kpi-card"
+      >
+        KpiCard
+      </div>
+    </section>
+    <section
+      class="grid grid-cols-1 gap-6 lg:grid-cols-5"
     >
-      <section
-        class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4"
+      <div
+        class="lg:col-span-3"
       >
         <div
-          data-testid="mock-kpi-card"
+          data-testid="mock-transactions-table"
         >
-          KpiCard
+          TransactionsTable
         </div>
-        <div
-          data-testid="mock-upload-box"
-        >
-          UploadBox
-        </div>
-        <div
-          data-testid="mock-kpi-card"
-        >
-          KpiCard
-        </div>
-        <div
-          data-testid="mock-kpi-card"
-        >
-          KpiCard
-        </div>
-      </section>
-      <section
-        class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5"
+      </div>
+      <div
+        class="lg:col-span-2 h-full"
       >
         <div
-          class="lg:col-span-3"
+          data-testid="mock-spending-chart"
         >
-          <div
-            data-testid="mock-transactions-table"
-          >
-            TransactionsTable
-          </div>
+          SpendingChart
         </div>
-        <div
-          class="lg:col-span-2 h-full"
-        >
-          <div
-            data-testid="mock-spending-chart"
-          >
-            SpendingChart
-          </div>
-        </div>
-      </section>
-    </main>
+      </div>
+    </section>
     <div
       data-testid="mock-monthly-summary-modal"
     />
