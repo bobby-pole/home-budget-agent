@@ -8,8 +8,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CATEGORIES, CATEGORY_LABELS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export interface NewItemDraft {
   name: string;
@@ -37,6 +39,11 @@ export function DraftItemRow({
   onCancel,
   onKeyDown,
 }: DraftItemRowProps) {
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
+
   return (
     <div
       className="flex items-center gap-2 px-4 py-2 bg-background border-t"
@@ -71,17 +78,19 @@ export function DraftItemRow({
         value={draft.category}
         onValueChange={(cat) => onChange({ ...draft, category: cat })}
       >
-        <SelectTrigger className="w-28 h-8 text-xs shrink-0">
+        <SelectTrigger className="w-32 h-8 text-xs shrink-0">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
-          {CATEGORIES.map((cat) => (
-            <SelectItem key={cat} value={cat}>
-              {CATEGORY_LABELS[cat] || cat}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+                    <SelectContent>
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                          <span className="flex items-center gap-2">
+                            <span>{cat.icon}</span>
+                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>      </Select>
       <Button
         type="button"
         size="icon"

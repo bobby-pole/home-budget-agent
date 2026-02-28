@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
+import { render } from "@/__tests__/test-utils";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { ItemsPanel } from "@/components/dashboard/transaction/ItemsPanel";

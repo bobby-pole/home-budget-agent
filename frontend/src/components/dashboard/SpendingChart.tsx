@@ -4,23 +4,26 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
   ResponsiveContainer,
   Cell,
 } from "recharts";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
-import { CATEGORY_HEX_COLORS, CATEGORY_LABELS } from "@/lib/constants";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export function SpendingChart() {
-  // Fetch real data
-  const { data: receipts, isLoading } = useQuery({
+  const { data: receipts, isLoading: isReceiptsLoading } = useQuery({
     queryKey: ["receipts"],
     queryFn: api.getReceipts,
   });
 
-  if (isLoading) {
+  const { data: categories, isLoading: isCategoriesLoading } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
+
+  if (isReceiptsLoading || isCategoriesLoading) {
     return (
       <Card className="rounded-2xl border-0 shadow-sm h-[400px] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -29,11 +32,42 @@ export function SpendingChart() {
   }
 
   // Aggregate Data
-  const categoryTotals: Record<string, number> = {};
+  const categoryTotals: Record<string, { value: number; color: string; icon: string }> = {};
 
   const now = new Date();
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
+
+  // Helper to map old string labels from DB/AI to the dynamic category list
+  const getCategoryDisplay = (catString: string) => {
+    if (!categories) return { name: catString, color: "#9ca3af", icon: "📦" };
+    
+    let matched = categories.find(c => c.name.toLowerCase() === catString.toLowerCase());
+    
+    if (!matched) {
+      const map: Record<string, string> = {
+        food: "Jedzenie",
+        fastfood: "Fast Food",
+        snacks: "Przekąski",
+        transport: "Transport",
+        utilities: "Rachunki",
+        entertainment: "Rozrywka",
+        health: "Zdrowie",
+        other: "Inne"
+      };
+      const plName = map[catString.toLowerCase().replace(" ", "")];
+      if (plName) {
+        matched = categories.find(c => c.name.toLowerCase() === plName.toLowerCase());
+      }
+    }
+    
+    if (matched) {
+      const displayName = matched.is_system ? (CATEGORY_LABELS[matched.name] || matched.name) : matched.name;
+      return { name: displayName, color: matched.color || "#9ca3af", icon: matched.icon || "📦" };
+    }
+    
+    return { name: catString, color: "#9ca3af", icon: "📦" };
+  };
 
   receipts?.forEach((receipt) => {
     if (receipt.status !== "done") return;
@@ -43,29 +77,25 @@ export function SpendingChart() {
       return;
 
     receipt.items.forEach((item) => {
-      const rawCategory = item.category || "Other";
-      const displayName = CATEGORY_LABELS[rawCategory] || rawCategory;
+      const displayCat = getCategoryDisplay(item.category || "Other");
+      
       if (item.price > 0) {
-        categoryTotals[displayName] =
-          (categoryTotals[displayName] || 0) + item.price;
+        if (!categoryTotals[displayCat.name]) {
+          categoryTotals[displayCat.name] = { value: 0, color: displayCat.color, icon: displayCat.icon };
+        }
+        categoryTotals[displayCat.name].value += item.price;
       }
     });
   });
 
   // Convert to array and sort
   const chartData = Object.entries(categoryTotals)
-    .map(([displayName, value]) => {
-      // Find the original key for color mapping
-      const originalKey =
-        Object.keys(CATEGORY_LABELS).find(
-          (key) => CATEGORY_LABELS[key] === displayName,
-        ) || "Other";
-      return {
-        name: displayName,
-        key: originalKey,
-        value,
-      };
-    })
+    .map(([name, data]) => ({
+      name,
+      value: data.value,
+      color: data.color,
+      icon: data.icon
+    }))
     .sort((a, b) => b.value - a.value);
 
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
@@ -104,22 +134,6 @@ export function SpendingChart() {
                   axisLine={false}
                   tickLine={false}
                 />
-                <Tooltip
-                  formatter={(value: number | undefined) =>
-                    value != null
-                      ? value.toLocaleString("pl-PL", {
-                          style: "currency",
-                          currency: "PLN",
-                        })
-                      : "0 zł"
-                  }
-                  cursor={{ fill: "rgba(0,0,0,0.05)", radius: 4 }}
-                  contentStyle={{
-                    borderRadius: "12px",
-                    border: "none",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                  }}
-                />
                 <Bar
                   dataKey="value"
                   radius={[0, 6, 6, 0]}
@@ -127,23 +141,12 @@ export function SpendingChart() {
                   animationDuration={1500}
                   animationEasing="ease-out"
                 >
-                  {chartData.map((entry, index) => {
-                    // Try to match color, handling case sensitivity robustly
-                    let color = CATEGORY_HEX_COLORS[entry.key];
-                    if (!color && entry.key) {
-                      // Try capitalized (e.g. "food" -> "Food")
-                      const capitalized =
-                        entry.key.charAt(0).toUpperCase() +
-                        entry.key.slice(1).toLowerCase();
-                      color = CATEGORY_HEX_COLORS[capitalized];
-                    }
-                    return (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={color || CATEGORY_HEX_COLORS["Other"]}
-                      />
-                    );
-                  })}
+                  {chartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.color}
+                    />
+                  ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>

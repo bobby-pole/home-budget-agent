@@ -51,6 +51,7 @@ class CategoryBase(SQLModel):
     color: Optional[str] = None
     is_system: bool = False
     parent_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    order_index: int = Field(default=0)
 
 
 class Category(CategoryBase, table=True):
@@ -67,6 +68,7 @@ class Category(CategoryBase, table=True):
 
 class TagBase(SQLModel):
     name: str
+    color: Optional[str] = None
 
 
 class ReceiptTagLink(SQLModel, table=True):
@@ -148,6 +150,7 @@ class ReceiptRead(ReceiptBase):
     items: List[ItemRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
+    tags: List["TagRead"] = []
 
 
 class ReceiptCreate(ReceiptBase):
@@ -160,6 +163,8 @@ class ReceiptUpdate(SQLModel):
     total_amount: Optional[float] = None
     currency: Optional[str] = None
     status: Optional[str] = None
+    category_id: Optional[int] = None
+    tag_ids: Optional[List[int]] = None
 
 
 class ManualItemCreate(SQLModel):
@@ -174,8 +179,9 @@ class ManualReceiptCreate(SQLModel):
     total_amount: float
     currency: str = "PLN"
     date: Optional[datetime] = None
-    category: Optional[str] = None
+    category_id: Optional[int] = None
     note: Optional[str] = None
+    tag_ids: List[int] = Field(default_factory=list)
     items: List[ManualItemCreate] = Field(default_factory=list)
 
 
@@ -199,6 +205,7 @@ class CategoryUpdate(SQLModel):
     icon: Optional[str] = None
     color: Optional[str] = None
     parent_id: Optional[int] = None
+    order_index: Optional[int] = None
 
 
 class CategoryRead(CategoryBase):
@@ -208,6 +215,11 @@ class CategoryRead(CategoryBase):
 
 class TagCreate(TagBase):
     pass
+
+
+class TagUpdate(SQLModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
 
 
 class TagRead(TagBase):

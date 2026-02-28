@@ -18,6 +18,8 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Receipt } from "@/types";
 import { SectionGrid } from "../shared/SectionGrid";
+import { Badge } from "@/components/ui/badge";
+import { TagPicker } from "../shared/TagPicker";
 
 const formSchema = z.object({
   merchant_name: z.string().min(1, "Nazwa sklepu jest wymagana"),
@@ -26,6 +28,7 @@ const formSchema = z.object({
   }),
   total_amount: z.coerce.number().min(0.01, "Kwota musi być większa od 0"),
   currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
+  tag_ids: z.array(z.number()).default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -45,6 +48,7 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
       date: "",
       total_amount: 0,
       currency: "PLN",
+      tag_ids: [],
     },
   });
 
@@ -54,6 +58,7 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
       date: receipt.date ? new Date(receipt.date).toISOString().split("T")[0] : "",
       total_amount: receipt.total_amount,
       currency: receipt.currency,
+      tag_ids: receipt.tags?.map(t => t.id) || [],
     });
   }, [receipt, form]);
 
@@ -168,6 +173,38 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
                   </>
                 ) : (
                   <div className="text-lg font-medium">{field.value}</div>
+                )}
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tag_ids"
+            render={({ field }) => (
+              <FormItem className="col-span-full">
+                <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                  Tagi
+                </FormLabel>
+                {isEditing ? (
+                  <TagPicker value={field.value || []} onChange={field.onChange} />
+                ) : (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {receipt.tags && receipt.tags.length > 0 ? (
+                      receipt.tags.map(tag => (
+                        <Badge 
+                          key={tag.id} 
+                          variant="secondary"
+                          className="text-white border-0 shadow-sm"
+                          style={{ backgroundColor: tag.color || "#9ca3af" }}
+                        >
+                          #{tag.name}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Brak tagów</span>
+                    )}
+                  </div>
                 )}
               </FormItem>
             )}

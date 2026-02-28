@@ -63,9 +63,13 @@ exports[`ReceiptItemsSection > snapshots > matches snapshot — with two items 1
               class="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto"
             >
               <span
-                class="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                class="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
+                style="background-color: rgb(156, 163, 175);"
               >
-                Jedzenie
+                <span>
+                  📦
+                </span>
+                 Food
               </span>
               <span
                 class="w-12 text-right"
@@ -128,9 +132,13 @@ exports[`ReceiptItemsSection > snapshots > matches snapshot — with two items 1
               class="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto"
             >
               <span
-                class="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium bg-gray-100 text-gray-700 hover:bg-gray-200"
+                class="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
+                style="background-color: rgb(156, 163, 175);"
               >
-                Inne
+                <span>
+                  📦
+                </span>
+                 Other
               </span>
               <span
                 class="w-12 text-right"
