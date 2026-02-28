@@ -11,6 +11,7 @@ from .models import (
     ManualReceiptCreate,
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
+    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, ReceiptTagLink
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -413,3 +414,143 @@ async def set_budget(
     session.commit()
     session.refresh(new_budget)
     return new_budget
+
+
+# --- CATEGORIES ---
+
+@router.get("/categories", response_model=List[CategoryRead])
+async def get_categories(
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    # Returns all categories for the user (and system ones)
+    statement = select(Category).where(
+        (Category.owner_id == current_user.id) | (Category.is_system)
+    )
+    categories = session.exec(statement).all()
+    return categories
+
+@router.post("/categories", response_model=CategoryRead)
+async def create_category(
+    category_data: CategoryCreate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    category = Category(
+        **category_data.model_dump(),
+        owner_id=current_user.id,
+        is_system=False
+    )
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+@router.patch("/categories/{category_id}", response_model=CategoryRead)
+async def update_category(
+    category_id: int,
+    category_update: CategoryUpdate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if category.is_system or category.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this category")
+
+    update_data = category_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(category, key, value)
+        
+    session.add(category)
+    session.commit()
+    session.refresh(category)
+    return category
+
+@router.delete("/categories/{category_id}", status_code=204)
+async def delete_category(
+    category_id: int,
+    reassign_to: int | None = None,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    category = session.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    if category.is_system or category.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this category")
+
+    # Reassign transactions
+    target_category_id = reassign_to
+    if target_category_id is not None:
+        target_category = session.get(Category, target_category_id)
+        if not target_category or (target_category.owner_id != current_user.id and not target_category.is_system):
+            raise HTTPException(status_code=400, detail="Invalid target category for reassignment")
+    else:
+        # Check if parent exists, if yes reassign to parent, else None
+        target_category_id = category.parent_id
+
+    # Reassign all receipts
+    receipts_statement = select(Receipt).where(Receipt.category_id == category_id)
+    receipts = session.exec(receipts_statement).all()
+    for r in receipts:
+        r.category_id = target_category_id
+        session.add(r)
+        
+    # Reassign subcategories
+    subcategories_statement = select(Category).where(Category.parent_id == category_id)
+    subcategories = session.exec(subcategories_statement).all()
+    for sub in subcategories:
+        sub.parent_id = target_category_id
+        session.add(sub)
+
+    session.delete(category)
+    session.commit()
+    return None
+
+
+# --- TAGS ---
+
+@router.get("/tags", response_model=List[TagRead])
+async def get_tags(
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    statement = select(Tag).where(Tag.owner_id == current_user.id)
+    return session.exec(statement).all()
+
+@router.post("/tags", response_model=TagRead)
+async def create_tag(
+    tag_data: TagCreate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    tag = Tag(**tag_data.model_dump(), owner_id=current_user.id)
+    session.add(tag)
+    session.commit()
+    session.refresh(tag)
+    return tag
+
+@router.delete("/tags/{tag_id}", status_code=204)
+async def delete_tag(
+    tag_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    tag = session.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    if tag.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this tag")
+        
+    # Delete links first (if not cascading)
+    links_statement = select(ReceiptTagLink).where(ReceiptTagLink.tag_id == tag_id)
+    links = session.exec(links_statement).all()
+    for link in links:
+        session.delete(link)
+
+    session.delete(tag)
+    session.commit()
+    return None
+

@@ -43,6 +43,44 @@ class BudgetMember(SQLModel, table=True):
     user: Optional[User] = Relationship(back_populates="memberships")
 
 
+# ─── Category & Tag ───────────────────────────────────────────────────────────
+
+class CategoryBase(SQLModel):
+    name: str
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    is_system: bool = False
+    parent_id: Optional[int] = Field(default=None, foreign_key="category.id")
+
+
+class Category(CategoryBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+    parent: Optional["Category"] = Relationship(
+        back_populates="subcategories", 
+        sa_relationship_kwargs=dict(remote_side="Category.id")
+    )
+    subcategories: List["Category"] = Relationship(back_populates="parent")
+    receipts: List["Receipt"] = Relationship(back_populates="category")
+
+
+class TagBase(SQLModel):
+    name: str
+
+
+class ReceiptTagLink(SQLModel, table=True):
+    receipt_id: Optional[int] = Field(default=None, foreign_key="receipt.id", primary_key=True)
+    tag_id: Optional[int] = Field(default=None, foreign_key="tag.id", primary_key=True)
+
+
+class Tag(TagBase, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+
+    receipts: List["Receipt"] = Relationship(back_populates="tags", link_model=ReceiptTagLink)
+
+
 # ─── Receipt ──────────────────────────────────────────────────────────────────
 
 class ReceiptBase(SQLModel):
@@ -60,10 +98,13 @@ class Receipt(ReceiptBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
+    category_id: Optional[int] = Field(default=None, foreign_key="category.id")
 
     items: List["Item"] = Relationship(back_populates="receipt")
     budget: Optional[Budget] = Relationship(back_populates="receipts")
     uploader: Optional[User] = Relationship(back_populates="receipts")
+    category: Optional["Category"] = Relationship(back_populates="receipts")
+    tags: List["Tag"] = Relationship(back_populates="receipts", link_model=ReceiptTagLink)
 
 
 # ─── Item ─────────────────────────────────────────────────────────────────────
@@ -147,6 +188,31 @@ class ItemUpdate(SQLModel):
 
 class MonthlyBudgetUpdate(SQLModel):
     amount: float
+
+
+class CategoryCreate(CategoryBase):
+    pass
+
+
+class CategoryUpdate(SQLModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    parent_id: Optional[int] = None
+
+
+class CategoryRead(CategoryBase):
+    id: int
+    owner_id: Optional[int] = None
+
+
+class TagCreate(TagBase):
+    pass
+
+
+class TagRead(TagBase):
+    id: int
+    owner_id: Optional[int] = None
 
 
 # ─── Auth DTOs ────────────────────────────────────────────────────────────────
