@@ -1,6 +1,6 @@
 import { Header } from "@/components/dashboard/Header";
 import { KPICard } from "@/components/dashboard/KpiCard";
-import { ReceiptsTable } from "@/components/dashboard/ReceiptsTable";
+import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { SpendingChart } from "@/components/dashboard/SpendingChart";
 import { UploadBox } from "@/components/dashboard/UploadBox";
 import { Button } from "@/components/ui/button";
@@ -42,13 +42,18 @@ export function Dashboard() {
   }, []);
 
   const {
-    data: receipts = [],
-    isLoading: isReceiptsLoading,
+    data: transactions = [],
+    isLoading: isTransactionsLoading,
     error,
   } = useQuery({
-    queryKey: ["receipts"],
-    queryFn: api.getReceipts,
+    queryKey: ["transactions"],
+    queryFn: api.getTransactions,
     refetchInterval: 5000,
+  });
+
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
   });
 
   const { data: budgetData, isLoading: isBudgetLoading } = useQuery({
@@ -57,11 +62,12 @@ export function Dashboard() {
   });
 
   // --- STATYSTYKI ---
-  const totalSpent = receipts.reduce((sum, r) => {
+  const totalSpent = transactions.reduce((sum, r) => {
     if (!r.date) return sum;
     const rDate = new Date(r.date);
+    const isDone = !r.receipt_scan || r.receipt_scan.status === "done";
     if (
-      r.status === "done" &&
+      isDone &&
       rDate.getMonth() === curMonth &&
       rDate.getFullYear() === curYear
     ) {
@@ -75,42 +81,42 @@ export function Dashboard() {
   const budgetProgress =
     budgetAmount > 0 ? Math.min((totalSpent / budgetAmount) * 100, 100) : 0;
 
-  const receiptsCount = receipts.length;
-  const processingCount = receipts.filter(
-    (r) =>
-      r.status === "processing" ||
-      r.status === "pending" ||
-      r.status === "error",
+  const transactionsCount = transactions.length;
+  const processingCount = transactions.filter(
+    (r) => r.receipt_scan && r.receipt_scan.status !== "done",
   ).length;
 
   const currentMonthRaw = new Date().toLocaleString("pl-PL", { month: "long" });
   const monthName =
     currentMonthRaw.charAt(0).toUpperCase() + currentMonthRaw.slice(1);
 
-  const categoryTotals: Record<string, number> = {};
-  receipts.forEach((receipt) => {
-    if (receipt.status !== "done") return;
-    if (!receipt.date) return;
-    const rDate = new Date(receipt.date);
+  const categoryTotals: Record<number, number> = {};
+  transactions.forEach((transaction) => {
+    const isDone = !transaction.receipt_scan || transaction.receipt_scan.status === "done";
+    if (!isDone) return;
+    if (!transaction.date) return;
+    const rDate = new Date(transaction.date);
     if (rDate.getMonth() === curMonth && rDate.getFullYear() === curYear) {
-      receipt.items?.forEach((item) => {
-        const cat = item.category || "Other";
-        if (item.price > 0)
-          categoryTotals[cat] = (categoryTotals[cat] || 0) + item.price;
+      transaction.lines?.forEach((item) => {
+        if (item.category_id != null && item.price > 0)
+          categoryTotals[item.category_id] = (categoryTotals[item.category_id] || 0) + item.price;
       });
     }
   });
 
   let topCategoryName = "Brak";
   let topCategoryValue = 0;
-  Object.entries(categoryTotals).forEach(([cat, val]) => {
+  Object.entries(categoryTotals).forEach(([catIdStr, val]) => {
     if (val > topCategoryValue) {
       topCategoryValue = val;
-      topCategoryName = CATEGORY_LABELS[cat] || cat;
+      const cat = categories?.find(c => c.id === parseInt(catIdStr));
+      if (cat) {
+        topCategoryName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
+      }
     }
   });
 
-  if (isReceiptsLoading || isBudgetLoading) {
+  if (isTransactionsLoading || isBudgetLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-lg animate-pulse">
@@ -143,7 +149,7 @@ export function Dashboard() {
           />
 
           <UploadBox
-            totalCount={receiptsCount}
+            totalCount={transactionsCount}
             processingCount={processingCount}
             onAddManual={() => setAddTxOpen(true)}
           />
@@ -194,9 +200,9 @@ export function Dashboard() {
         {/* Main Content */}
         <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
           <div className="lg:col-span-3">
-            <ReceiptsTable
-              receipts={receipts}
-              isLoading={isReceiptsLoading}
+            <TransactionsTable
+              transactions={transactions || []}
+              isLoading={isTransactionsLoading}
               error={error}
             />
           </div>
@@ -207,7 +213,7 @@ export function Dashboard() {
       </main>
 
       <MonthlySummaryModal
-        receipts={receipts}
+        transactions={transactions}
         isOpen={isMonthlyModalOpen}
         onClose={() => setIsMonthlyModalOpen(false)}
       />

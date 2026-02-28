@@ -17,30 +17,24 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import type { TransactionLine } from "@/types";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Nazwa wymagana"),
   price: z.number().min(0.01),
   quantity: z.number().min(0.1),
-  category: z.string(),
+  category_id: z.number().nullable(),
 });
 
 type FormValues = z.infer<typeof itemSchema>;
 
-interface ItemType {
-  id: number;
-  name: string;
-  price: number;
-  quantity: number;
-  category: string;
-}
-
-interface ReceiptItemRowProps {
-  item: ItemType;
+interface TransactionItemRowProps {
+  item: TransactionLine;
+  transactionId: number;
   currency: string;
 }
 
-export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
+export function TransactionItemRow({ item, transactionId, currency }: TransactionItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -55,15 +49,15 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
       name: item.name,
       price: item.price,
       quantity: item.quantity,
-      category: item.category || "Other",
+      category_id: item.category_id,
     },
   });
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) =>
-      api.updateItem(item.id, values),
+      api.updateTransactionLine(transactionId, item.id, values),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Zaktualizowano pozycję");
       setIsEditing(false);
     },
@@ -76,39 +70,19 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
     mutation.mutate(values);
   };
 
-  const getCategoryDisplay = (catString: string) => {
-    if (!categories) return { name: catString, color: "#9ca3af", icon: "📦" };
-    // Try to match by exact name or mapped synonym
-    let matched = categories.find(c => c.name.toLowerCase() === catString.toLowerCase());
-    
-    // Fallbacks for AI English labels -> Polish system categories
-    if (!matched) {
-      const map: Record<string, string> = {
-        food: "Jedzenie",
-        fastfood: "Fast Food",
-        snacks: "Przekąski",
-        transport: "Transport",
-        utilities: "Rachunki",
-        entertainment: "Rozrywka",
-        health: "Zdrowie",
-        other: "Inne"
-      };
-      const plName = map[catString.toLowerCase().replace(" ", "")];
-      if (plName) {
-        matched = categories.find(c => c.name.toLowerCase() === plName.toLowerCase());
-      }
-    }
-    
-    if (matched) {
-      const displayName = matched.is_system ? (CATEGORY_LABELS[matched.name] || matched.name) : matched.name;
-      return { name: displayName, color: matched.color || "#9ca3af", icon: matched.icon || "📦" };
-    }
-    
-    return { name: catString, color: "#9ca3af", icon: "📦" };
+  const getDisplayCategory = (categoryId: number | null) => {
+    if (!categories || categoryId == null) return null;
+    const cat = categories.find((c) => c.id === categoryId);
+    if (!cat) return null;
+    return {
+      name: cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name,
+      color: cat.color || "#9ca3af",
+      icon: cat.icon || "📦",
+    };
   };
 
   if (!isEditing) {
-    const displayCat = getCategoryDisplay(item.category || "Other");
+    const displayCat = getDisplayCategory(item.category_id);
 
     return (
       <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors min-w-[450px]">
@@ -118,12 +92,14 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
           </span>
 
           <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
-            <span 
-              className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
-              style={{ backgroundColor: displayCat.color }}
-            >
-              <span>{displayCat.icon}</span> {displayCat.name}
-            </span>
+            {displayCat && (
+              <span
+                className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
+                style={{ backgroundColor: displayCat.color }}
+              >
+                <span>{displayCat.icon}</span> {displayCat.name}
+              </span>
+            )}
             <span className="w-12 text-right">
               {item.quantity} szt.
             </span>
@@ -170,18 +146,21 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
           {/* 2. Kategoria */}
           <FormField
             control={form.control}
-            name="category"
+            name="category_id"
             render={({ field }) => (
               <FormItem className="w-32 space-y-0">
                 <FormControl>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    value={field.value != null ? String(field.value) : ""}
+                    onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
+                  >
                     <SelectTrigger className="h-8 text-xs px-2 bg-background">
                       <SelectValue placeholder="Kat." />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories?.map(cat => (
-                        <SelectItem key={cat.id} value={cat.name}>
-                           <span className="flex items-center gap-2">
+                      {categories?.map((cat) => (
+                        <SelectItem key={cat.id} value={String(cat.id)}>
+                          <span className="flex items-center gap-2">
                             <span>{cat.icon}</span>
                             {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
                           </span>

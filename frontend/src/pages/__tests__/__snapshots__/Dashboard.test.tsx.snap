@@ -44,9 +44,9 @@ exports[`Dashboard > snapshot — loaded state 1`] = `
           class="lg:col-span-3"
         >
           <div
-            data-testid="mock-receipts-table"
+            data-testid="mock-transactions-table"
           >
-            ReceiptsTable
+            TransactionsTable
           </div>
         </div>
         <div

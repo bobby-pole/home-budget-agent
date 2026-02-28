@@ -21,45 +21,45 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Receipt } from "@/types";
+import type { Transaction } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { ReceiptDetailModal } from "./ReceiptDetailModal";
+import { TransactionDetailModal } from "./TransactionDetailModal";
 
-interface ReceiptsTableProps {
-  receipts: Receipt[];
+interface TransactionsTableProps {
+  transactions: Transaction[];
   isLoading?: boolean;
   error?: unknown;
 }
 
-export function ReceiptsTable({
-  receipts,
+export function TransactionsTable({
+  transactions,
   isLoading,
   error,
-}: ReceiptsTableProps) {
+}: TransactionsTableProps) {
   const queryClient = useQueryClient();
-  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [receiptToDelete, setReceiptToDelete] = useState<number | null>(null);
+  const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 5;
 
-  const totalPages = Math.ceil(receipts.length / ITEMS_PER_PAGE) || 1;
-  const paginatedReceipts = receipts.slice(
+  const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE) || 1;
+  const paginatedTransactions = transactions.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
   const retryMutation = useMutation({
-    mutationFn: api.retryReceipt,
+    mutationFn: api.retryTransaction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Ponawiam przetwarzanie...", {
-        description: "AI spróbuje ponownie przeanalizować ten paragon.",
+        description: "AI spróbuje ponownie przeanalizować ten transakcję.",
       });
     },
     onError: (err) => {
@@ -72,25 +72,25 @@ export function ReceiptsTable({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: api.deleteReceipt,
+    mutationFn: api.deleteTransaction,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] });
-      toast.success("Paragon usunięty");
-      setReceiptToDelete(null);
-      if (paginatedReceipts.length === 1 && currentPage > 1) {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Transakcja usunięty");
+      setTransactionToDelete(null);
+      if (paginatedTransactions.length === 1 && currentPage > 1) {
           setCurrentPage(prev => prev - 1);
       }
     },
-    onError: () => toast.error("Nie udało się usunąć paragonu"),
+    onError: () => toast.error("Nie udało się usunąć transakcjęu"),
   });
 
-  const handleOpenModal = (receipt: Receipt) => {
-    setSelectedReceipt(receipt);
+  const handleOpenModal = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
     setIsModalOpen(true);
   };
 
   if (error) {
-    return <div className="text-red-500">Error loading receipts.</div>;
+    return <div className="text-red-500">Error loading transactions.</div>;
   }
 
   return (
@@ -98,9 +98,9 @@ export function ReceiptsTable({
       <Card className="rounded-2xl border border-border/50 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-lg font-semibold">Paragony</CardTitle>
+            <CardTitle className="text-lg font-semibold">Transakcje</CardTitle>
             <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] font-bold">
-                {receipts.length}
+                {transactions.length}
             </Badge>
           </div>
 
@@ -134,9 +134,10 @@ export function ReceiptsTable({
           <Table>
             <TableHeader>
               <TableRow className="border-b border-muted">
-                <TableHead className="text-muted-foreground">Sklep</TableHead>
+                <TableHead className="text-muted-foreground">Odbiorca/Sklep</TableHead>
+                <TableHead className="text-muted-foreground">Typ</TableHead>
                 <TableHead className="text-muted-foreground">Data</TableHead>
-                <TableHead className="text-muted-foreground w-[140px]">Status</TableHead>
+                <TableHead className="text-muted-foreground w-[140px]">Status AI</TableHead>
                 <TableHead className="text-right text-muted-foreground">
                   Kwota
                 </TableHead>
@@ -147,30 +148,30 @@ export function ReceiptsTable({
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="h-24 text-center text-muted-foreground"
                   >
                     Ładowanie danych...
                   </TableCell>
                 </TableRow>
-              ) : receipts.length === 0 ? (
+              ) : transactions.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    Brak paragonów. Wgraj pierwszy! 🧾
+                    Brak transakcji. Dodaj pierwszą! 🧾
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedReceipts.map((receipt) => {
+                paginatedTransactions.map((transaction) => {
                   return (
                     <TableRow
-                      key={receipt.id}
+                      key={transaction.id}
                       className="border-b border-muted/50 cursor-pointer lg:cursor-default hover:bg-muted/30 lg:hover:bg-transparent transition-colors"
                       onClick={() => {
                         if (window.innerWidth < 1024) {
-                          handleOpenModal(receipt);
+                          handleOpenModal(transaction);
                         }
                       }}
                     >
@@ -181,10 +182,10 @@ export function ReceiptsTable({
                           </div>
                           <div className="flex flex-col">
                             <span className="font-medium">
-                              {receipt.merchant_name}
+                              {transaction.merchant_name}
                             </span>
                             <div className="flex flex-wrap gap-1 mt-0.5">
-                              {receipt.tags?.map(tag => (
+                              {transaction.tags?.map(tag => (
                                 <span 
                                   key={tag.id} 
                                   className="text-[9px] text-white px-1.5 py-0 rounded-sm font-bold shadow-xs"
@@ -195,18 +196,32 @@ export function ReceiptsTable({
                               ))}
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-gray-500">
-                        {receipt.date 
-                          ? new Date(receipt.date).toLocaleDateString("pl-PL")
+                          </div>
+                          </TableCell>
+                          <TableCell>
+                          {transaction.type === 'expense' && (
+                          <Badge variant="outline" className="text-red-500 bg-red-500/5 border-red-500/20 text-[10px] uppercase font-bold">Wydatek</Badge>
+                          )}
+                          {transaction.type === 'income' && (
+                          <Badge variant="outline" className="text-green-500 bg-green-500/5 border-green-500/20 text-[10px] uppercase font-bold">Przychód</Badge>
+                          )}
+                          {transaction.type === 'transfer' && (
+                          <Badge variant="outline" className="text-blue-500 bg-blue-500/5 border-blue-500/20 text-[10px] uppercase font-bold">Transfer</Badge>
+                          )}
+                          </TableCell>
+                          <TableCell className="text-gray-500 text-sm">
+                        {transaction.date 
+                          ? new Date(transaction.date).toLocaleDateString("pl-PL")
                           : "-"}
                       </TableCell>
                       <TableCell>
                         {(() => {
-                          const isDone = receipt.status === "done";
-                          const isError = receipt.status === "error";
-                          
+                          const scanStatus = transaction.receipt_scan?.status;
+                          if (!scanStatus) return null;
+
+                          const isDone = scanStatus === "done";
+                          const isError = scanStatus === "error";
+
                           let colors = "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/20";
                           if (isDone) colors = "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-400/20";
                           if (isError) colors = "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-400/20";
@@ -216,24 +231,24 @@ export function ReceiptsTable({
                               variant="outline"
                               className={cn("rounded-md capitalize w-24 justify-center font-semibold", colors)}
                             >
-                              {receipt.status}
+                              {scanStatus}
                             </Badge>
                           );
                         })()}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {receipt.total_amount.toFixed(2)} {receipt.currency}
+                        {transaction.total_amount.toFixed(2)} {transaction.currency}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {receipt.status === "error" && (
+                          {transaction.receipt_scan?.status === "error" && (
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-8 w-8 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                retryMutation.mutate(receipt.id);
+                                retryMutation.mutate(transaction.id);
                               }}
                               disabled={retryMutation.isPending}
                               title="Błąd przetwarzania - Spróbuj ponownie"
@@ -253,7 +268,7 @@ export function ReceiptsTable({
                             className="h-8 w-8 text-gray-500 hover:text-primary hover:bg-primary/10"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                handleOpenModal(receipt);
+                                handleOpenModal(transaction);
                             }}
                             title="Szczegóły / Edycja"
                           >
@@ -266,9 +281,9 @@ export function ReceiptsTable({
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setReceiptToDelete(receipt.id);
+                                setTransactionToDelete(transaction.id);
                             }}
-                            title="Usuń paragon"
+                            title="Usuń transakcję"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -283,23 +298,23 @@ export function ReceiptsTable({
         </CardContent>
       </Card>
 
-      <ReceiptDetailModal
-        receipt={selectedReceipt}
+      <TransactionDetailModal
+        transaction={selectedTransaction}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />
 
       <AlertDialog
-        open={!!receiptToDelete}
-        onOpenChange={(open) => !open && setReceiptToDelete(null)}
+        open={!!transactionToDelete}
+        onOpenChange={(open) => !open && setTransactionToDelete(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Czy na pewno chcesz usunąć ten paragon?
+              Czy na pewno chcesz usunąć ten transakcję?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tej operacji nie można cofnąć. Paragon zostanie trwale usunięty z
+              Tej operacji nie można cofnąć. Transakcja zostanie trwale usunięty z
               bazy danych wraz ze wszystkimi pozycjami.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -307,7 +322,7 @@ export function ReceiptsTable({
             <AlertDialogCancel>Anuluj</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                receiptToDelete && deleteMutation.mutate(receiptToDelete)
+                transactionToDelete && deleteMutation.mutate(transactionToDelete)
               }
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >

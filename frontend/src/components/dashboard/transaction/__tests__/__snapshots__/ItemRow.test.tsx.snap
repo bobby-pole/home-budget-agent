@@ -12,11 +12,6 @@ exports[`ItemRow > snapshots > matches snapshot 1`] = `
       Mleko UHT
     </span>
     <span
-      class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
-    >
-      Jedzenie
-    </span>
-    <span
       class="text-muted-foreground text-xs shrink-0 w-14 text-right"
     >
       2 szt.
@@ -77,11 +72,6 @@ exports[`ItemRow > snapshots > matches snapshot — EUR currency 1`] = `
       title="Mleko UHT"
     >
       Mleko UHT
-    </span>
-    <span
-      class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
-    >
-      Jedzenie
     </span>
     <span
       class="text-muted-foreground text-xs shrink-0 w-14 text-right"

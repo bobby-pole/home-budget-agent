@@ -16,7 +16,7 @@ import { Loader2, Save, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { Receipt } from "@/types";
+import type { Transaction } from "@/types";
 import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
 import { TagPicker } from "../shared/TagPicker";
@@ -33,11 +33,11 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-interface ReceiptHeaderFormProps {
-  receipt: Receipt;
+interface TransactionHeaderFormProps {
+  transaction: Transaction;
 }
 
-export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
+export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -54,22 +54,22 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
 
   useEffect(() => {
     form.reset({
-      merchant_name: receipt.merchant_name,
-      date: receipt.date ? new Date(receipt.date).toISOString().split("T")[0] : "",
-      total_amount: receipt.total_amount,
-      currency: receipt.currency,
-      tag_ids: receipt.tags?.map(t => t.id) || [],
+      merchant_name: transaction.merchant_name,
+      date: transaction.date ? new Date(transaction.date).toISOString().split("T")[0] : "",
+      total_amount: transaction.total_amount,
+      currency: transaction.currency,
+      tag_ids: transaction.tags?.map(t => t.id) || [],
     });
-  }, [receipt, form]);
+  }, [transaction, form]);
 
   const updateMutation = useMutation({
     mutationFn: (values: FormValues) =>
-      api.updateReceipt(receipt.id, {
+      api.updateTransaction(transaction.id, {
         ...values,
         date: new Date(values.date).toISOString(),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Zapisano dane nagłówka!");
       setIsEditing(false);
     },
@@ -190,8 +190,8 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
                   <TagPicker value={field.value || []} onChange={field.onChange} />
                 ) : (
                   <div className="flex flex-wrap gap-2 pt-1">
-                    {receipt.tags && receipt.tags.length > 0 ? (
-                      receipt.tags.map(tag => (
+                    {transaction.tags && transaction.tags.length > 0 ? (
+                      transaction.tags.map(tag => (
                         <Badge 
                           key={tag.id} 
                           variant="secondary"

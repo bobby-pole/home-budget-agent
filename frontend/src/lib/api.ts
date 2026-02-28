@@ -1,5 +1,5 @@
 // frontend/src/lib/api.ts
-import type { Receipt, AuthResponse, Category, Tag } from "@/types";
+import type { Transaction, AuthResponse, Category, Tag } from "@/types";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 
@@ -45,39 +45,43 @@ export const api = {
     return response.data;
   },
 
-  // --- RECEIPTS ---
+  // --- TRANSACTIONS ---
 
-  uploadReceipt: async (file: File, force: boolean = false) => {
+  scanTransaction: async (file: File, force: boolean = false) => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await apiClient.post<Receipt>(`/upload?force=${force}`, formData, {
+    const response = await apiClient.post<Transaction>(`/transactions/scan?force=${force}`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;
   },
 
-  getReceipts: async () => {
-    const response = await apiClient.get<Receipt[]>("/receipts");
+  getTransactions: async () => {
+    const response = await apiClient.get<Transaction[]>("/transactions");
     return response.data;
   },
 
-  retryReceipt: async (receiptId: number) => {
-    const response = await apiClient.post<Receipt>(`/receipts/${receiptId}/retry`);
+  retryTransaction: async (transactionId: number) => {
+    const response = await apiClient.post<Transaction>(`/transactions/${transactionId}/retry`);
     return response.data;
   },
 
-  updateReceipt: async (id: number, data: Partial<Receipt>) => {
-    const response = await apiClient.patch<Receipt>(`/receipts/${id}`, data);
+  updateTransaction: async (id: number, data: Partial<Transaction> & { tag_ids?: number[] }) => {
+    const response = await apiClient.patch<Transaction>(`/transactions/${id}`, data);
     return response.data;
   },
 
-  updateItem: async (id: number, data: { name?: string; price?: number; quantity?: number; category?: string }) => {
-    const response = await apiClient.patch(`/items/${id}`, data);
+  updateTransactionLine: async (
+    transactionId: number,
+    lineId: number,
+    data: { name?: string; price?: number; quantity?: number; category_id?: number | null }
+  ) => {
+    const response = await apiClient.patch(`/transactions/${transactionId}/lines/${lineId}`, data);
     return response.data;
   },
 
-  deleteReceipt: async (id: number) => {
-    await apiClient.delete(`/receipts/${id}`);
+  deleteTransaction: async (id: number) => {
+    await apiClient.delete(`/transactions/${id}`);
   },
 
   createManualTransaction: async (data: {
@@ -88,9 +92,10 @@ export const api = {
     category_id?: number;
     note?: string;
     tag_ids?: number[];
-    items?: Array<{ name: string; price: number; quantity: number; category: string }>;
-  }): Promise<Receipt> => {
-    const response = await apiClient.post<Receipt>("/receipts/manual", data);
+    type?: string;
+    lines?: Array<{ name: string; price: number; quantity: number; category_id?: number | null }>;
+  }): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>("/transactions/manual", data);
     return response.data;
   },
 
@@ -149,4 +154,3 @@ export const api = {
     await apiClient.delete(`/tags/${id}`);
   },
 };
-

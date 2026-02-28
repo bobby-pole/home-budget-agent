@@ -113,11 +113,6 @@ exports[`ItemsPanel > snapshots > matches snapshot — with two items 1`] = `
           Chleb
         </span>
         <span
-          class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
-        >
-          Jedzenie
-        </span>
-        <span
           class="text-muted-foreground text-xs shrink-0 w-14 text-right"
         >
           1 szt.
@@ -173,11 +168,6 @@ exports[`ItemsPanel > snapshots > matches snapshot — with two items 1`] = `
           title="Masło"
         >
           Masło
-        </span>
-        <span
-          class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
-        >
-          Inne
         </span>
         <span
           class="text-muted-foreground text-xs shrink-0 w-14 text-right"

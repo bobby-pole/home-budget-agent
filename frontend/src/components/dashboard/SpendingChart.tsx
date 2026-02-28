@@ -13,9 +13,9 @@ import { Loader2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/constants";
 
 export function SpendingChart() {
-  const { data: receipts, isLoading: isReceiptsLoading } = useQuery({
-    queryKey: ["receipts"],
-    queryFn: api.getReceipts,
+  const { data: transactions, isLoading: isTransactionsLoading } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: api.getTransactions,
   });
 
   const { data: categories, isLoading: isCategoriesLoading } = useQuery({
@@ -23,7 +23,7 @@ export function SpendingChart() {
     queryFn: api.getCategories,
   });
 
-  if (isReceiptsLoading || isCategoriesLoading) {
+  if (isTransactionsLoading || isCategoriesLoading) {
     return (
       <Card className="rounded-2xl border-0 shadow-sm h-[400px] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -38,47 +38,25 @@ export function SpendingChart() {
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
 
-  // Helper to map old string labels from DB/AI to the dynamic category list
-  const getCategoryDisplay = (catString: string) => {
-    if (!categories) return { name: catString, color: "#9ca3af", icon: "📦" };
-    
-    let matched = categories.find(c => c.name.toLowerCase() === catString.toLowerCase());
-    
-    if (!matched) {
-      const map: Record<string, string> = {
-        food: "Jedzenie",
-        fastfood: "Fast Food",
-        snacks: "Przekąski",
-        transport: "Transport",
-        utilities: "Rachunki",
-        entertainment: "Rozrywka",
-        health: "Zdrowie",
-        other: "Inne"
-      };
-      const plName = map[catString.toLowerCase().replace(" ", "")];
-      if (plName) {
-        matched = categories.find(c => c.name.toLowerCase() === plName.toLowerCase());
-      }
-    }
-    
-    if (matched) {
-      const displayName = matched.is_system ? (CATEGORY_LABELS[matched.name] || matched.name) : matched.name;
-      return { name: displayName, color: matched.color || "#9ca3af", icon: matched.icon || "📦" };
-    }
-    
-    return { name: catString, color: "#9ca3af", icon: "📦" };
+  const getCategoryById = (categoryId: number | null) => {
+    if (categoryId == null || !categories) return { name: "Inne", color: "#9ca3af", icon: "📦" };
+    const cat = categories.find(c => c.id === categoryId);
+    if (!cat) return { name: "Inne", color: "#9ca3af", icon: "📦" };
+    const displayName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
+    return { name: displayName, color: cat.color || "#9ca3af", icon: cat.icon || "📦" };
   };
 
-  receipts?.forEach((receipt) => {
-    if (receipt.status !== "done") return;
-    if (!receipt.date) return;
-    const rDate = new Date(receipt.date);
+  transactions?.forEach((transaction) => {
+    const isDone = !transaction.receipt_scan || transaction.receipt_scan.status === "done";
+    if (!isDone) return;
+    if (!transaction.date) return;
+    const rDate = new Date(transaction.date);
     if (rDate.getMonth() !== curMonth || rDate.getFullYear() !== curYear)
       return;
 
-    receipt.items.forEach((item) => {
-      const displayCat = getCategoryDisplay(item.category || "Other");
-      
+    transaction.lines.forEach((item) => {
+      const displayCat = getCategoryById(item.category_id);
+
       if (item.price > 0) {
         if (!categoryTotals[displayCat.name]) {
           categoryTotals[displayCat.name] = { value: 0, color: displayCat.color, icon: displayCat.icon };

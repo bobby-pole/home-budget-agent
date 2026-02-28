@@ -5,25 +5,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Receipt } from "@/types";
+import type { Transaction } from "@/types";
 import { CalendarDays } from "lucide-react";
 
 interface MonthlySummaryModalProps {
-  receipts: Receipt[];
+  transactions: Transaction[];
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function MonthlySummaryModal({
-  receipts,
+  transactions,
   isOpen,
   onClose,
 }: MonthlySummaryModalProps) {
   // Aggregate data by Year-Month
   const monthlyData: Record<string, number> = {};
 
-  receipts.forEach((r) => {
-    if (r.date && (r.status === "done" || r.total_amount > 0)) {
+  transactions.forEach((r) => {
+    if (r.date && (!r.receipt_scan || r.receipt_scan.status === "done")) {
       const date = new Date(r.date);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
       monthlyData[key] = (monthlyData[key] || 0) + r.total_amount;

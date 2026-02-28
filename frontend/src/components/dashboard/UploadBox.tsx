@@ -18,17 +18,17 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
-  const uploadMutation = useMutation({
+  const scanMutation = useMutation({
     mutationFn: ({ file, force }: { file: File; force?: boolean }) =>
-      api.uploadReceipt(file, force),
+      api.scanTransaction(file, force),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] })
+      queryClient.invalidateQueries({ queryKey: ["transactions"] })
       toast.success("Paragon został przesłany!", {
         description: "Rozpoczynam analizę AI w tle.",
       })
       
       setTimeout(() => {
-        uploadMutation.reset()
+        scanMutation.reset()
       }, 5000)
     },
     onError: (error: AxiosError) => {
@@ -42,7 +42,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   })
 
   const handleBoxClick = () => {
-    if (!uploadMutation.isPending) {
+    if (!scanMutation.isPending) {
       fileInputRef.current?.click()
     }
   }
@@ -50,7 +50,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (file) {
-      handleUpload(file)
+      handleScan(file)
       event.target.value = ""
     }
   }
@@ -59,7 +59,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
     event.preventDefault()
     setIsDragging(false)
     const file = event.dataTransfer.files?.[0]
-    if (file) handleUpload(file)
+    if (file) handleScan(file)
   }
 
   const handleDragOver = (event: React.DragEvent) => {
@@ -68,7 +68,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   }
   const handleDragLeave = () => setIsDragging(false)
 
-  const handleUpload = (file: File, force = false) => {
+  const handleScan = (file: File, force = false) => {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
       toast.error("Nieprawidłowy format pliku.", {
         description: "Proszę wgrać zdjęcie lub PDF.",
@@ -76,17 +76,17 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
       return
     }
 
-    uploadMutation.mutate(
+    scanMutation.mutate(
       { file, force },
       {
         onError: (error: AxiosError) => {
           if (error.response?.status === 409) {
             toast.warning("Wykryto duplikat!", {
-              description: "Ten paragon został już przesłany. Czy chcesz go dodać ponownie?",
+              description: "Ta transakcja została już przesłana. Czy chcesz ją dodać ponownie?",
               duration: 5000,
               action: {
                 label: "Tak, dodaj",
-                onClick: () => handleUpload(file, true),
+                onClick: () => handleScan(file, true),
               },
             })
           }
@@ -112,7 +112,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
               isDragging
                 ? "bg-primary/5 border-primary scale-[0.98]"
                 : "bg-muted/30 border-muted-foreground/20 hover:bg-muted/50 hover:border-primary/50",
-              uploadMutation.isPending && "cursor-not-allowed opacity-70"
+              scanMutation.isPending && "cursor-not-allowed opacity-70"
             )}
           >
             <input
@@ -123,16 +123,16 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
               accept="image/png, image/jpeg, image/jpg, image/webp"
             />
             <div className="flex h-7 w-7 lg:h-9 lg:w-9 items-center justify-center rounded-full bg-background border shadow-sm mb-1">
-              {uploadMutation.isPending ? (
+              {scanMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary animate-spin" />
-              ) : uploadMutation.isSuccess ? (
+              ) : scanMutation.isSuccess ? (
                 <CheckCircle2 className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-green-500" />
               ) : (
                 <Upload className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
               )}
             </div>
             <span className="text-[9px] lg:text-[10px] font-semibold text-foreground text-center leading-tight">
-              {uploadMutation.isPending ? "..." : "Zdjęcie"}
+              {scanMutation.isPending ? "..." : "Zdjęcie"}
             </span>
           </div>
 
@@ -188,7 +188,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
             <div className="flex flex-col">
                 <span className="text-[9px] lg:text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                     <Receipt className="h-2.5 w-2.5" />
-                    Razem
+                    Transakcji
                 </span>
                 <span className="text-base lg:text-lg font-semibold text-foreground mt-0.5">
                     {totalCount}
