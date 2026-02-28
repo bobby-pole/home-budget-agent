@@ -247,6 +247,7 @@ async def upload_receipt(
     session.commit()
     session.refresh(scan)
 
+    assert scan.id is not None
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
     session.refresh(new_transaction)
@@ -284,6 +285,8 @@ async def retry_transaction(
     session.commit()
     session.refresh(transaction)
 
+    assert transaction.id is not None
+    assert scan.id is not None
     background_tasks.add_task(process_transaction_in_background, transaction.id, scan.id, scan.image_path)
 
     return transaction
