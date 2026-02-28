@@ -21,6 +21,8 @@ import {
 export function TagsTab() {
   const queryClient = useQueryClient();
   const [newTag, setNewTag] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
 
   const { data: tags, isLoading } = useQuery({
     queryKey: ["tags"],
@@ -37,6 +39,16 @@ export function TagsTab() {
     onError: () => toast.error("Nie udało się dodać tagu"),
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, name }: { id: number; name: string }) => api.updateTag(id, { name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setEditingId(null);
+      toast.success("Zapisano");
+    },
+    onError: () => toast.error("Błąd podczas zapisu"),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteTag(id),
     onSuccess: () => {
@@ -51,6 +63,19 @@ export function TagsTab() {
     if (newTag.trim()) {
       createMutation.mutate(newTag.trim());
     }
+  };
+
+  const handleSaveEdit = (id: number) => {
+    if (editName.trim()) {
+      updateMutation.mutate({ id, name: editName.trim() });
+    } else {
+      setEditingId(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, id: number) => {
+    if (e.key === "Enter") handleSaveEdit(id);
+    if (e.key === "Escape") setEditingId(null);
   };
 
   return (
@@ -84,35 +109,56 @@ export function TagsTab() {
         ) : (
           <div className="flex flex-wrap gap-2">
             {tags?.map((tag) => (
-              <Badge key={tag.id} variant="secondary" className="px-3 py-1.5 text-sm group">
-                #{tag.name}
-                
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button className="ml-2 text-muted-foreground hover:text-destructive transition-colors focus:outline-none">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Usunąć tag?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Czy na pewno chcesz usunąć tag <strong>#{tag.name}</strong>? Ta akcja odepnie go od wszystkich transakcji i nie może być cofnięta.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Anuluj</AlertDialogCancel>
-                      <AlertDialogAction 
-                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        onClick={() => deleteMutation.mutate(tag.id)}
-                      >
-                        Usuń tag
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-
-              </Badge>
+              editingId === tag.id ? (
+                <Badge key={tag.id} variant="secondary" className="px-1 py-0.5 text-sm flex items-center gap-1">
+                  <span className="text-muted-foreground ml-1">#</span>
+                  <input
+                    autoFocus
+                    className="bg-transparent border-b border-primary/50 outline-none w-20 text-sm py-0.5"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, tag.id)}
+                    onBlur={() => handleSaveEdit(tag.id)}
+                  />
+                </Badge>
+              ) : (
+                <Badge key={tag.id} variant="secondary" className="px-3 py-1.5 text-sm group">
+                  <span 
+                    className="cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => {
+                      setEditingId(tag.id);
+                      setEditName(tag.name);
+                    }}
+                  >
+                    #{tag.name}
+                  </span>
+                  
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="ml-2 text-muted-foreground hover:text-destructive transition-colors focus:outline-none">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Usunąć tag?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Czy na pewno chcesz usunąć tag <strong>#{tag.name}</strong>? Ta akcja odepnie go od wszystkich transakcji i nie może być cofnięta.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Anuluj</AlertDialogCancel>
+                        <AlertDialogAction 
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          onClick={() => deleteMutation.mutate(tag.id)}
+                        >
+                          Usuń tag
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </Badge>
+              )
             ))}
           </div>
         )}

@@ -139,6 +139,11 @@ export const api = {
     return response.data;
   },
 
+  updateTag: async (id: number, data: Partial<Tag>): Promise<Tag> => {
+    const response = await apiClient.patch<Tag>(`/tags/${id}`, data);
+    return response.data;
+  },
+
   deleteTag: async (id: number) => {
     await apiClient.delete(`/tags/${id}`);
   },
