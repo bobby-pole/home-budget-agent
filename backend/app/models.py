@@ -84,7 +84,7 @@ class Item(ItemBase, table=True):
 # ─── MonthlyBudget (spending limit per month) ────────────────────────────────
 
 class MonthlyBudget(SQLModel, table=True):
-    __tablename__ = "monthly_budget"
+    __tablename__: str = "monthly_budget" # type: ignore
 
     id: Optional[int] = Field(default=None, primary_key=True)
     month: int = Field(index=True)

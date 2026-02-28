@@ -3,11 +3,10 @@ import os
 import json
 import base64
 from openai import OpenAI
-from .models import Receipt, Item
 
 # API setup
 # Pamiętaj, że w środowisku lokalnym/Docker klucz musi być w zmiennych środowiskowych
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "dummy_key_for_tests")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Select model (Cheap and fast)
@@ -15,7 +14,7 @@ MODEL_NAME = "gpt-4o-mini"
 
 class AIService:
     @staticmethod
-    def parse_receipt(image_path: str) -> dict:
+    def parse_receipt(image_path: str) -> dict | None:
         """
         Sends image to OpenAI and enforces JSON response.
         """
@@ -83,6 +82,10 @@ class AIService:
             )
             
             raw_text = response.choices[0].message.content
+            
+            if raw_text is None:
+                print("❌ AI Error: Empty response content")
+                return None
             
             # 4. Parse JSON
             parsed_data = json.loads(raw_text)

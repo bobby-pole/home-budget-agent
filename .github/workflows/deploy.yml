@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  test-frontend:
     name: Frontend Tests
     runs-on: ubuntu-latest
 
@@ -28,9 +28,36 @@ jobs:
         working-directory: frontend
         run: npm run test:run
 
+  test-backend:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: backend
+        env:
+          OPENAI_API_KEY: mock_key_for_tests
+        run: pytest tests/
+
   build-and-push:
     name: Build & Push to GHCR
-    needs: test
+    needs: [test-frontend, test-backend]
     runs-on: ubuntu-latest
     permissions:
       contents: read

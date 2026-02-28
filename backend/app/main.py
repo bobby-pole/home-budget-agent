@@ -15,7 +15,7 @@ from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
 # Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Receipt' i 'Item'!
-from .models import User, Budget, BudgetMember, Receipt, Item, MonthlyBudget
+from .models import User
 
 # 3. ### WAŻNE ### Importujemy router z api.py
 from .api import router as api_router

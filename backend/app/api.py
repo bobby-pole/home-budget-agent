@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlmodel import Session, select, desc
 from .models import (
-    Receipt, Item, ReceiptCreate, ReceiptRead, ReceiptUpdate, ItemUpdate,
+    Receipt, Item, ReceiptRead, ReceiptUpdate, ItemUpdate,
     ManualReceiptCreate,
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
@@ -32,6 +32,7 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
+    assert user.id is not None
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
 
@@ -41,6 +42,7 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == user_data.email)).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    assert user.id is not None
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
 
@@ -209,7 +211,8 @@ async def upload_receipt(
             )
 
     # File saving
-    file_extension = file.filename.split(".")[-1]
+    filename = file.filename or "upload.jpg"
+    file_extension = filename.split(".")[-1]
     unique_filename = f"{uuid4()}.{file_extension}"
     file_path = f"{UPLOAD_DIR}/{unique_filename}"
 
@@ -230,6 +233,7 @@ async def upload_receipt(
     session.refresh(new_receipt)
 
     # AI agent works in background
+    assert new_receipt.id is not None
     background_tasks.add_task(process_receipt_in_background, new_receipt.id, file_path)
 
     return new_receipt
@@ -262,6 +266,7 @@ async def retry_receipt(
     session.refresh(receipt)
 
     # Restart AI task
+    assert receipt.id is not None
     background_tasks.add_task(process_receipt_in_background, receipt.id, receipt.image_path)
 
     return receipt
