@@ -30,25 +30,32 @@ export interface Tag {
   owner_id?: number;
 }
 
-export interface Item {
+export interface TransactionLine {
   id: number;
   name: string;
   price: number;
   quantity: number;
-  category: string | null;
+  category_id: number | null;
 }
 
-export interface Receipt {
+export interface ReceiptScan {
+  id: number;
+  status: 'processing' | 'done' | 'error' | 'needs_review';
+  image_path?: string | null;
+  content_hash?: string | null;
+  created_at: string;
+}
+
+export interface Transaction {
   id: number;
   merchant_name: string;
   date: string;
   total_amount: number;
   currency: string;
-  image_path?: string;
-  status: 'pending' | 'processing' | 'done' | 'error';
   is_manual?: boolean;
+  type: 'expense' | 'income' | 'transfer';
   category_id?: number;
-  category?: Category;
   tags?: Tag[];
-  items: Item[];
+  lines: TransactionLine[];
+  receipt_scan?: ReceiptScan | null;
 }

@@ -12,7 +12,7 @@ const EMPTY_DRAFT: NewItemDraft = {
   name: "",
   price: "",
   quantity: "1",
-  category: "Other",
+  category_id: null,
 };
 
 interface ItemsPanelProps {
@@ -39,7 +39,7 @@ export function ItemsPanel({ items, currency, onItemsChange }: ItemsPanelProps) 
         name: draft.name.trim(),
         price,
         quantity,
-        category: draft.category || "Other",
+        category_id: draft.category_id,
       },
     ]);
     setDraft(null);

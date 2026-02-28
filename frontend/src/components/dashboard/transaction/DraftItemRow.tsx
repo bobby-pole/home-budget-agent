@@ -17,7 +17,7 @@ export interface NewItemDraft {
   name: string;
   price: string;
   quantity: string;
-  category: string;
+  category_id: number | null;
 }
 
 interface DraftItemRowProps {
@@ -75,22 +75,23 @@ export function DraftItemRow({
         className="w-16 h-8 text-xs shrink-0"
       />
       <Select
-        value={draft.category}
-        onValueChange={(cat) => onChange({ ...draft, category: cat })}
+        value={draft.category_id != null ? String(draft.category_id) : ""}
+        onValueChange={(val) => onChange({ ...draft, category_id: val ? parseInt(val) : null })}
       >
         <SelectTrigger className="w-32 h-8 text-xs shrink-0">
           <SelectValue />
         </SelectTrigger>
-                    <SelectContent>
-                      {categories?.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.name}>
-                          <span className="flex items-center gap-2">
-                            <span>{cat.icon}</span>
-                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>      </Select>
+        <SelectContent>
+          {categories?.map((cat) => (
+            <SelectItem key={cat.id} value={String(cat.id)}>
+              <span className="flex items-center gap-2">
+                <span>{cat.icon}</span>
+                {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <Button
         type="button"
         size="icon"

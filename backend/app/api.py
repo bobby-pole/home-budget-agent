@@ -192,8 +192,8 @@ def create_manual_transaction(
     return transaction
 
 
-@router.post("/transactions/upload", response_model=TransactionRead)
-async def upload_receipt(
+@router.post("/transactions/scan", response_model=TransactionRead)
+async def scan_transaction(
     background_tasks: BackgroundTasks,
     force: bool = False,
     file: UploadFile = File(...),

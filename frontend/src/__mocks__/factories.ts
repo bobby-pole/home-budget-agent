@@ -1,4 +1,4 @@
-import type { Receipt, Item, User, AuthResponse } from "@/types";
+import type { Transaction, TransactionLine, User, AuthResponse } from "@/types";
 
 export function makeUser(overrides?: Partial<User>): User {
   return {
@@ -9,27 +9,28 @@ export function makeUser(overrides?: Partial<User>): User {
   };
 }
 
-export function makeItem(overrides?: Partial<Item>): Item {
+export function makeTransactionLine(overrides?: Partial<TransactionLine>): TransactionLine {
   return {
     id: 1,
     name: "Mleko",
     price: 3.99,
     quantity: 2,
-    category: "Food",
+    category_id: null,
     ...overrides,
   };
 }
 
-export function makeReceipt(overrides?: Partial<Receipt>): Receipt {
+export function makeTransaction(overrides?: Partial<Transaction>): Transaction {
   return {
     id: 1,
     merchant_name: "Biedronka",
     date: "2024-01-15T10:00:00Z",
     total_amount: 49.99,
     currency: "PLN",
-    status: "done",
+    type: "expense",
     is_manual: false,
-    items: [makeItem()],
+    lines: [makeTransactionLine()],
+    receipt_scan: null,
     ...overrides,
   };
 }

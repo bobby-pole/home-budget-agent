@@ -78,12 +78,13 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
         note: hasItems ? undefined : (values.note || undefined),
         tag_ids: values.tag_ids,
-        items: hasItems
-          ? items.map(({ name, price, quantity, category }) => ({ name, price, quantity, category }))
+        type: values.type,
+        lines: hasItems
+          ? items.map(({ name, price, quantity, category_id }) => ({ name, price, quantity, category_id }))
           : [],
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Transakcja dodana");
       onOpenChange(false);
     },

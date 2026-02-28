@@ -11,8 +11,8 @@ vi.mock("@/components/dashboard/KpiCard", () => ({
   KPICard: () => <div data-testid="mock-kpi-card">KpiCard</div>,
 }));
 
-vi.mock("@/components/dashboard/ReceiptsTable", () => ({
-  ReceiptsTable: () => <div data-testid="mock-receipts-table">ReceiptsTable</div>,
+vi.mock("@/components/dashboard/TransactionsTable", () => ({
+  TransactionsTable: () => <div data-testid="mock-transactions-table">TransactionsTable</div>,
 }));
 
 vi.mock("@/components/dashboard/SpendingChart", () => ({
@@ -36,25 +36,26 @@ vi.mock("@/components/dashboard/AddTransactionModal", () => ({
     open ? <div data-testid="mock-add-transaction-modal">AddTransactionModal</div> : null,
 }));
 
-const mockGetReceipts = vi.fn();
+const mockGetTransactions = vi.fn();
 const mockGetBudget = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   api: {
-    getReceipts: () => mockGetReceipts(),
+    getTransactions: () => mockGetTransactions(),
     getBudget: () => mockGetBudget(),
+    getCategories: vi.fn().mockResolvedValue([]),
   },
 }));
 
 describe("Dashboard", () => {
   beforeEach(() => {
-    mockGetReceipts.mockResolvedValue([]);
-    mockGetBudget.mockResolvedValue(undefined);
+    mockGetTransactions.mockResolvedValue([]);
+    mockGetBudget.mockResolvedValue({ amount: 0, year: 2026, month: 2 });
   });
 
   it("shows loading state before data resolves", () => {
     // Make queries hang indefinitely to keep the loading state
-    mockGetReceipts.mockReturnValue(new Promise(() => {}));
+    mockGetTransactions.mockReturnValue(new Promise(() => {}));
     mockGetBudget.mockReturnValue(new Promise(() => {}));
 
     render(<Dashboard />);

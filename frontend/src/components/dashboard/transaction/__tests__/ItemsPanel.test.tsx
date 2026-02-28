@@ -6,6 +6,12 @@ import { useState } from "react";
 import { ItemsPanel } from "@/components/dashboard/transaction/ItemsPanel";
 import type { ManualItem } from "@/components/dashboard/transaction/ItemsPanel";
 
+vi.mock("@/lib/api", () => ({
+  api: {
+    getCategories: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 // Mock Radix UI Select — SelectTrigger/SelectValue must return null
 // to avoid invalid HTML (<span> inside <select>) in jsdom
 vi.mock("@/components/ui/select", () => ({
@@ -134,7 +140,7 @@ describe("ItemsPanel", () => {
       name: "Mleko",
       price: 3.99,
       quantity: 1,
-      category: "Food",
+      category_id: null,
     };
 
     it("renders items passed via props", () => {
@@ -183,8 +189,8 @@ describe("ItemsPanel", () => {
 
     it("renders multiple items", () => {
       const items: ManualItem[] = [
-        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category: "Food" },
-        { id: "2", name: "Masło", price: 6.5, quantity: 2, category: "Food" },
+        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category_id: null },
+        { id: "2", name: "Masło", price: 6.5, quantity: 2, category_id: null },
       ];
       render(<ItemsPanelWrapper initialItems={items} />);
       expect(screen.getByText("Chleb")).toBeInTheDocument();
@@ -195,7 +201,7 @@ describe("ItemsPanel", () => {
     it("amounts are displayed with currency", () => {
       render(
         <ItemsPanelWrapper
-          initialItems={[{ id: "x", name: "Test", price: 10, quantity: 3, category: "Other" }]}
+          initialItems={[{ id: "x", name: "Test", price: 10, quantity: 3, category_id: null }]}
         />
       );
       expect(screen.getByText("30.00 PLN")).toBeInTheDocument();
@@ -210,8 +216,8 @@ describe("ItemsPanel", () => {
 
     it("matches snapshot — with two items", () => {
       const items: ManualItem[] = [
-        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category: "Food" },
-        { id: "2", name: "Masło", price: 6.5, quantity: 2, category: "Other" },
+        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category_id: null },
+        { id: "2", name: "Masło", price: 6.5, quantity: 2, category_id: null },
       ];
       const { asFragment } = render(<ItemsPanelWrapper initialItems={items} />);
       expect(asFragment()).toMatchSnapshot();
