@@ -11,7 +11,7 @@ from .models import (
     ManualReceiptCreate,
     MonthlyBudget, MonthlyBudgetUpdate,
     User, UserCreate, UserRead, Token,
-    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, ReceiptTagLink
+    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, ReceiptTagLink
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -528,6 +528,25 @@ async def create_tag(
     current_user: User = Depends(get_current_user),
 ):
     tag = Tag(**tag_data.model_dump(), owner_id=current_user.id)
+    session.add(tag)
+    session.commit()
+    session.refresh(tag)
+    return tag
+
+@router.patch("/tags/{tag_id}", response_model=TagRead)
+async def update_tag(
+    tag_id: int,
+    tag_update: TagUpdate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    tag = session.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found")
+    if tag.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this tag")
+
+    tag.name = tag_update.name
     session.add(tag)
     session.commit()
     session.refresh(tag)

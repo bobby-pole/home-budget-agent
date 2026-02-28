@@ -259,8 +259,8 @@ export function CategoriesTab() {
                   </div>
                 ) : (
                   <div 
-                    className="flex items-center gap-3 flex-1 cursor-pointer"
-                    onDoubleClick={() => handleStartEdit(cat)}
+                    className="flex items-center gap-3 flex-1 cursor-pointer hover:bg-muted/50 p-1 -ml-1 rounded transition-colors"
+                    onClick={() => handleStartEdit(cat)}
                   >
                     <div 
                       className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-sm shadow-sm"

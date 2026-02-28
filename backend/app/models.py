@@ -212,6 +212,10 @@ class TagCreate(TagBase):
     pass
 
 
+class TagUpdate(SQLModel):
+    name: str
+
+
 class TagRead(TagBase):
     id: int
     owner_id: Optional[int] = None
