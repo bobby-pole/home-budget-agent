@@ -6,6 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Plus, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { TAG_COLORS } from "@/lib/constants";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TagPickerProps {
   value: number[];
@@ -16,7 +22,7 @@ interface TagPickerProps {
 export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
   const queryClient = useQueryClient();
   const [newTagName, setNewTagName] = useState("");
-  const [newTagColor, setNewTagColor] = useState("#9ca3af");
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
 
   const { data: tags } = useQuery({
     queryKey: ["tags"],
@@ -65,14 +71,34 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
             disabled={disabled || createTagMutation.isPending}
             className="h-8 text-xs flex-1"
           />
-          <input 
-            type="color" 
-            value={newTagColor} 
-            onChange={e => setNewTagColor(e.target.value)}
-            className="w-8 h-8 rounded border border-input cursor-pointer p-0.5 shrink-0"
-            title="Wybierz kolor tagu"
-            disabled={disabled || createTagMutation.isPending}
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button 
+                type="button"
+                className="w-8 h-8 rounded-md border border-input cursor-pointer p-1 shrink-0 flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+                title="Wybierz kolor tagu"
+                disabled={disabled || createTagMutation.isPending}
+              >
+                <div className="w-full h-full rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: newTagColor }} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="p-2">
+              <div className="grid grid-cols-5 gap-2">
+                {TAG_COLORS.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={cn(
+                      "w-6 h-6 rounded-full border border-black/10 transition-transform hover:scale-110",
+                      newTagColor === color && "ring-2 ring-ring ring-offset-1"
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setNewTagColor(color)}
+                  />
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             type="button"
             onClick={handleCreateTag}
