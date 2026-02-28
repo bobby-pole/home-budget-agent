@@ -1,0 +1,25 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`App > snapshot — authenticated state (shows dashboard) 1`] = `
+<div>
+  <div
+    class="min-h-screen bg-background"
+  >
+    <div>
+      Dashboard Page
+    </div>
+  </div>
+</div>
+`;
+
+exports[`App > snapshot — unauthenticated state (shows login) 1`] = `
+<div>
+  <div
+    class="min-h-screen bg-background"
+  >
+    <div>
+      Login Page
+    </div>
+  </div>
+</div>
+`;

@@ -5,8 +5,32 @@ on:
     branches: [main]
 
 jobs:
+  test:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: frontend
+        run: npm run test:run
+
   build-and-push:
     name: Build & Push to GHCR
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
