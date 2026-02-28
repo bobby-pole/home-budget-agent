@@ -161,6 +161,8 @@ class ReceiptUpdate(SQLModel):
     total_amount: Optional[float] = None
     currency: Optional[str] = None
     status: Optional[str] = None
+    category_id: Optional[int] = None
+    tag_ids: Optional[List[int]] = None
 
 
 class ManualItemCreate(SQLModel):
@@ -175,8 +177,9 @@ class ManualReceiptCreate(SQLModel):
     total_amount: float
     currency: str = "PLN"
     date: Optional[datetime] = None
-    category: Optional[str] = None
+    category_id: Optional[int] = None
     note: Optional[str] = None
+    tag_ids: List[int] = Field(default_factory=list)
     items: List[ManualItemCreate] = Field(default_factory=list)
 
 

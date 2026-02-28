@@ -87,6 +87,7 @@ export const api = {
     date?: string;
     category_id?: number;
     note?: string;
+    tag_ids?: number[];
     items?: Array<{ name: string; price: number; quantity: number; category: string }>;
   }): Promise<Receipt> => {
     const response = await apiClient.post<Receipt>("/receipts/manual", data);

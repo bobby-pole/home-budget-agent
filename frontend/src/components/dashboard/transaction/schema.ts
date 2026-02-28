@@ -7,6 +7,7 @@ export const transactionSchema = z.object({
   date: z.string().optional(),
   category_id: z.string().optional(),
   note: z.string().optional(),
+  tag_ids: z.array(z.number()).default([]),
 });
 
 export type TransactionFormInput = z.input<typeof transactionSchema>;

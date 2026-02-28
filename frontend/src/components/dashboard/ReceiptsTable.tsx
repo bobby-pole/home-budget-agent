@@ -179,9 +179,18 @@ export function ReceiptsTable({
                           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
                             <Store className="h-4 w-4 text-muted-foreground" />
                           </div>
-                          <span className="font-medium">
-                            {receipt.merchant_name}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {receipt.merchant_name}
+                            </span>
+                            <div className="flex flex-wrap gap-1 mt-0.5">
+                              {receipt.tags?.map(tag => (
+                                <span key={tag.id} className="text-[9px] text-muted-foreground bg-muted px-1.5 py-0 rounded-sm">
+                                  #{tag.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-gray-500">

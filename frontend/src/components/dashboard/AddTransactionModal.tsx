@@ -44,6 +44,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
       date: todayISO(),
       category_id: "",
       note: "",
+      tag_ids: [],
     },
   });
 
@@ -56,6 +57,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         date: todayISO(),
         category_id: "",
         note: "",
+        tag_ids: [],
       });
     }
   }, [open, form]);
@@ -75,6 +77,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         date: values.date || undefined,
         category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
         note: hasItems ? undefined : (values.note || undefined),
+        tag_ids: values.tag_ids,
         items: hasItems
           ? items.map(({ name, price, quantity, category }) => ({ name, price, quantity, category }))
           : [],
