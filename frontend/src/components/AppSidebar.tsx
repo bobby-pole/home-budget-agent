@@ -4,12 +4,13 @@ import {
   ArrowLeftRight,
   Sparkles,
   Settings,
-  ChevronsLeft,
-  ChevronsRight,
+  LogOut,
+  User,
 } from "lucide-react"
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { api } from "@/lib/api"
+import { useAuth } from "@/context/AuthContext"
 
 import { cn } from "@/lib/utils"
 import {
@@ -28,6 +29,14 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 const mainNavItems = [
   {
@@ -60,25 +69,9 @@ const bottomNavItems = [
   },
 ]
 
-function CollapseButton() {
-  const { toggleSidebar, state } = useSidebar()
-
-  return (
-    <button
-      onClick={toggleSidebar}
-      className="flex items-center justify-center size-7 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-      aria-label="Toggle sidebar"
-    >
-      {state === "expanded" ? (
-        <ChevronsLeft className="size-4" />
-      ) : (
-        <ChevronsRight className="size-4" />
-      )}
-    </button>
-  )
-}
-
 export function AppSidebar() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const location = useLocation()
   const pathname = location.pathname
   const { state } = useSidebar()
@@ -93,24 +86,35 @@ export function AppSidebar() {
     (t) => t.receipt_scan && t.receipt_scan.status !== "done"
   ).length
 
+  const handleLogout = () => {
+    logout()
+    navigate("/login")
+  }
+
+  const initials = user?.email?.slice(0, 2).toUpperCase() ?? "??"
+
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      <SidebarHeader className="px-3 py-4">
+      <SidebarHeader className="px-2 py-4">
         <div className={cn(
-          "flex items-center gap-2.5",
-          isCollapsed ? "flex-col" : "justify-between"
+          "flex items-center gap-2",
+          isCollapsed ? "justify-center" : "px-1"
         )}>
           <Link to="/dashboard" className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground shrink-0">
+            <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground shrink-0 shadow-sm">
               <Wallet className="size-4" />
             </div>
             {!isCollapsed && (
-              <span className="text-sm font-semibold text-sidebar-foreground tracking-tight truncate">
-                Smart Budget
-              </span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-sm font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
+                  Smart Budget
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate mt-0.5">
+                  Personal Finance
+                </span>
+              </div>
             )}
           </Link>
-          <CollapseButton />
         </div>
       </SidebarHeader>
 
@@ -181,26 +185,69 @@ export function AppSidebar() {
 
         <SidebarSeparator />
 
-        <div className={cn(
-          "flex items-center gap-2.5 px-2 py-1.5",
-          isCollapsed && "justify-center px-0"
-        )}>
-          <Avatar className="size-7 shrink-0">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
-              JD
-            </AvatarFallback>
-          </Avatar>
-          {!isCollapsed && (
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium text-sidebar-foreground truncate">
-                Jane Doe
-              </span>
-              <span className="text-[11px] text-sidebar-foreground/50 truncate">
-                jane@email.com
-              </span>
-            </div>
-          )}
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
+                  <Avatar className="size-8 shrink-0 rounded-lg">
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium rounded-lg">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-semibold text-sidebar-foreground">
+                      {user?.email?.split('@')[0]}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {user?.email}
+                    </span>
+                  </div>
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                side="right"
+                align="end"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarFallback className="bg-primary text-primary-foreground rounded-lg">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-semibold">{user?.email?.split('@')[0]}</span>
+                      <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
+                    </div>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Profil
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Ustawienia
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  onClick={handleLogout} 
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Wyloguj się
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

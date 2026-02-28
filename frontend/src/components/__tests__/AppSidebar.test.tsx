@@ -15,6 +15,13 @@ vi.mock("@/lib/api", () => ({
   }
 }))
 
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({
+    user: { email: "test@example.com" },
+    logout: vi.fn(),
+  }),
+}))
+
 describe("AppSidebar", () => {
   const renderSidebar = () => {
     return render(
