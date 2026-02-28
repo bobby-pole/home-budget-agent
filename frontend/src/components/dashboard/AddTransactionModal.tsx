@@ -57,9 +57,12 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         category: "",
         note: "",
       });
-      setItems([]);
     }
   }, [open, form]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (open) setItems([]);
+  }, [open]);
 
   const currency = useWatch({ control: form.control, name: "currency", defaultValue: "PLN" });
 

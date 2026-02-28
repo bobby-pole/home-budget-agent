@@ -65,7 +65,7 @@ describe("ReceiptItemsSection", () => {
   });
 
   it("handles items=undefined (no items from backend)", () => {
-    render(<ReceiptItemsSection items={undefined as any} currency="PLN" />);
+    render(<ReceiptItemsSection items={undefined as unknown as import("@/types").Item[]} currency="PLN" />);
     expect(screen.getByText("0")).toBeInTheDocument();
     expect(screen.getByText("Brak wykrytych pozycji.")).toBeInTheDocument();
   });
