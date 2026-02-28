@@ -457,7 +457,7 @@ async def update_category(
     category = session.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if category.is_system or category.owner_id != current_user.id:
+    if not category.is_system and category.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this category")
 
     update_data = category_update.model_dump(exclude_unset=True)

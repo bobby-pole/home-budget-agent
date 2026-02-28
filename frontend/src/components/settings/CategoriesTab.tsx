@@ -107,10 +107,6 @@ export function CategoriesTab() {
   const getChildren = (parentId: number) => categories.filter(c => c.parent_id === parentId);
 
   const handleStartEdit = (cat: Category) => {
-    if (cat.is_system) {
-      toast.error("Nie można edytować kategorii systemowych");
-      return;
-    }
     setEditingId(cat.id);
     setEditName(cat.name);
     setEditColor(cat.color || "#cccccc");
