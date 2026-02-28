@@ -13,11 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { CATEGORIES, CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/constants";
-import { cn } from "@/lib/utils";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Nazwa wymagana"),
@@ -44,6 +42,11 @@ interface ReceiptItemRowProps {
 export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
+
+  const { data: categories } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(itemSchema),
@@ -72,8 +75,34 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
     mutation.mutate(values);
   };
 
+  const getCategoryDisplay = (catString: string) => {
+    if (!categories) return { name: catString, color: "#9ca3af", icon: "📦" };
+    // Try to match by exact name or mapped synonym
+    let matched = categories.find(c => c.name.toLowerCase() === catString.toLowerCase());
+    
+    // Fallbacks for AI English labels -> Polish system categories
+    if (!matched) {
+      const map: Record<string, string> = {
+        food: "Jedzenie",
+        fastfood: "Fast Food",
+        snacks: "Przekąski",
+        transport: "Transport",
+        utilities: "Rachunki",
+        entertainment: "Rozrywka",
+        health: "Zdrowie",
+        other: "Inne"
+      };
+      const plName = map[catString.toLowerCase().replace(" ", "")];
+      if (plName) {
+        matched = categories.find(c => c.name.toLowerCase() === plName.toLowerCase());
+      }
+    }
+    
+    return matched ? { name: matched.name, color: matched.color || "#9ca3af", icon: matched.icon || "📦" } : { name: catString, color: "#9ca3af", icon: "📦" };
+  };
+
   if (!isEditing) {
-    const badgeColor = CATEGORY_COLORS[item.category] || CATEGORY_COLORS["Other"];
+    const displayCat = getCategoryDisplay(item.category || "Other");
 
     return (
       <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors min-w-[450px]">
@@ -83,8 +112,11 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
           </span>
 
           <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
-            <span className={cn("px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium", badgeColor)}>
-              {CATEGORY_LABELS[item.category] || item.category}
+            <span 
+              className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
+              style={{ backgroundColor: displayCat.color }}
+            >
+              <span>{displayCat.icon}</span> {displayCat.name}
             </span>
             <span className="w-12 text-right">
               {item.quantity} szt.
@@ -134,16 +166,19 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
             control={form.control}
             name="category"
             render={({ field }) => (
-              <FormItem className="w-28 space-y-0">
+              <FormItem className="w-32 space-y-0">
                 <FormControl>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <SelectTrigger className="h-8 text-xs px-2 bg-background">
                       <SelectValue placeholder="Kat." />
                     </SelectTrigger>
                     <SelectContent>
-                      {CATEGORIES.map(cat => (
-                        <SelectItem key={cat} value={cat}>
-                          {CATEGORY_LABELS[cat] || cat}
+                      {categories?.map(cat => (
+                        <SelectItem key={cat.id} value={cat.name}>
+                           <span className="flex items-center gap-2">
+                            <span>{cat.icon}</span>
+                            {cat.name}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
