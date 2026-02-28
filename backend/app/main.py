@@ -8,13 +8,13 @@ from sqlmodel import SQLModel
 
 # 1. Importujemy silniki bazy danych
 # identity_engine — dane tożsamości (User, auth)
-# operations_engine — dane operacyjne (Receipt, Item, Budget)
+# operations_engine — dane operacyjne (Transaction, TransactionLine, Budget)
 # Przy przyszłym splicie: zmienić URL w database.py i dodać migration script.
 from sqlmodel import Session, select
 from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
-# Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Receipt' i 'Item'!
+# Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Transaction' i 'TransactionLine'!
 from .models import User, Category
 
 # 3. ### WAŻNE ### Importujemy router z api.py
@@ -74,16 +74,21 @@ async def lifespan(app: FastAPI):
     # (SQLite's create_all does not add new columns to existing tables)
     from sqlalchemy import text
     migrations = [
+        # Legacy migrations for old 'receipt' table (kept for reference, safe to ignore on fresh DB)
         "ALTER TABLE receipt ADD COLUMN is_manual BOOLEAN NOT NULL DEFAULT 0",
         "ALTER TABLE receipt ADD COLUMN category_id INTEGER REFERENCES category(id)",
+        # Schema migrations
         "ALTER TABLE category ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE monthly_budget ADD COLUMN user_id INTEGER REFERENCES user(id)",
         "ALTER TABLE tag ADD COLUMN color TEXT",
+        # Data migrations
         "UPDATE category SET name = 'Food' WHERE name = 'Jedzenie' AND is_system = 1",
         "UPDATE category SET name = 'Utilities' WHERE name = 'Rachunki' AND is_system = 1",
         "UPDATE category SET name = 'Entertainment' WHERE name = 'Rozrywka' AND is_system = 1",
         "UPDATE category SET name = 'Health' WHERE name = 'Zdrowie' AND is_system = 1",
         "UPDATE category SET name = 'Other' WHERE name = 'Inne' AND is_system = 1",
+        # Transaction-First refactor: add type column to transaction table (for existing DBs)
+        "ALTER TABLE \"transaction\" ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'",
     ]
     with operations_engine.connect() as conn:
         for sql in migrations:
