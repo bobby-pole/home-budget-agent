@@ -1,0 +1,320 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`KPICard > snapshots > matches snapshot — base card 1`] = `
+<DocumentFragment>
+  <div
+    class="text-card-foreground flex flex-col gap-6 py-6 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden transition-all hover:shadow-md bg-card/50 backdrop-blur-sm"
+    data-slot="card"
+  >
+    <div
+      class="p-4 lg:p-6 h-full flex flex-col justify-between min-h-[130px] lg:min-h-[140px]"
+      data-slot="card-content"
+    >
+      <div
+        class="flex items-start justify-between"
+      >
+        <div
+          class="space-y-1 min-w-0"
+        >
+          <p
+            class="text-[10px] lg:text-xs font-bold uppercase tracking-wider text-muted-foreground truncate"
+          >
+            Wydatki
+          </p>
+          <div
+            class="flex items-center gap-1 lg:gap-2"
+          >
+            <div
+              class="text-base lg:text-2xl font-bold truncate text-foreground"
+            >
+              1 234,56 PLN
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex h-10 w-10 lg:h-12 lg:w-12 items-center justify-center rounded-full shrink-0 bg-blue-100"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-wallet h-5 w-5 lg:h-6 lg:w-6 text-blue-600"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+            />
+            <path
+              d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+            />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="space-y-2 mt-4"
+      />
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`KPICard > snapshots > matches snapshot — highlighted 1`] = `
+<DocumentFragment>
+  <div
+    class="text-card-foreground flex flex-col gap-6 py-6 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden transition-all hover:shadow-md ring-2 ring-red-500/20 bg-red-500/5"
+    data-slot="card"
+  >
+    <div
+      class="p-4 lg:p-6 h-full flex flex-col justify-between min-h-[130px] lg:min-h-[140px]"
+      data-slot="card-content"
+    >
+      <div
+        class="flex items-start justify-between"
+      >
+        <div
+          class="space-y-1 min-w-0"
+        >
+          <p
+            class="text-[10px] lg:text-xs font-bold uppercase tracking-wider text-muted-foreground truncate"
+          >
+            Wydatki
+          </p>
+          <div
+            class="flex items-center gap-1 lg:gap-2"
+          >
+            <div
+              class="text-base lg:text-2xl font-bold truncate text-red-600"
+            >
+              1 234,56 PLN
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex h-10 w-10 lg:h-12 lg:w-12 items-center justify-center rounded-full shrink-0 bg-blue-100"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-wallet h-5 w-5 lg:h-6 lg:w-6 text-blue-600"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+            />
+            <path
+              d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+            />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="space-y-2 mt-4"
+      />
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`KPICard > snapshots > matches snapshot — with action button 1`] = `
+<DocumentFragment>
+  <div
+    class="text-card-foreground flex flex-col gap-6 py-6 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden transition-all hover:shadow-md bg-card/50 backdrop-blur-sm"
+    data-slot="card"
+  >
+    <div
+      class="p-4 lg:p-6 h-full flex flex-col justify-between min-h-[130px] lg:min-h-[140px]"
+      data-slot="card-content"
+    >
+      <div
+        class="flex items-start justify-between"
+      >
+        <div
+          class="space-y-1 min-w-0"
+        >
+          <p
+            class="text-[10px] lg:text-xs font-bold uppercase tracking-wider text-muted-foreground truncate"
+          >
+            Wydatki
+          </p>
+          <div
+            class="flex items-center gap-1 lg:gap-2"
+          >
+            <div
+              class="text-base lg:text-2xl font-bold truncate text-foreground"
+            >
+              1 234,56 PLN
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex h-10 w-10 lg:h-12 lg:w-12 items-center justify-center rounded-full shrink-0 bg-blue-100"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-wallet h-5 w-5 lg:h-6 lg:w-6 text-blue-600"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+            />
+            <path
+              d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+            />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="space-y-2 mt-4"
+      >
+        <button
+          class="inline-flex items-center justify-center whitespace-nowrap disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive gap-1.5 has-[>svg]:px-2.5 h-7 lg:h-8 px-3 lg:px-4 text-[10px] lg:text-xs font-bold bg-primary/10 text-primary hover:bg-primary/20 rounded-full transition-colors w-full lg:w-auto"
+          data-size="sm"
+          data-slot="button"
+          data-variant="secondary"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-plus mr-2 h-3.5 w-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="M12 5v14"
+            />
+          </svg>
+          Add
+        </button>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`KPICard > snapshots > matches snapshot — with progress bar (65%) 1`] = `
+<DocumentFragment>
+  <div
+    class="text-card-foreground flex flex-col gap-6 py-6 rounded-2xl border border-border/50 shadow-sm relative overflow-hidden transition-all hover:shadow-md bg-card/50 backdrop-blur-sm"
+    data-slot="card"
+  >
+    <div
+      class="p-4 lg:p-6 h-full flex flex-col justify-between min-h-[130px] lg:min-h-[140px]"
+      data-slot="card-content"
+    >
+      <div
+        class="flex items-start justify-between"
+      >
+        <div
+          class="space-y-1 min-w-0"
+        >
+          <p
+            class="text-[10px] lg:text-xs font-bold uppercase tracking-wider text-muted-foreground truncate"
+          >
+            Wydatki
+          </p>
+          <div
+            class="flex items-center gap-1 lg:gap-2"
+          >
+            <div
+              class="text-base lg:text-2xl font-bold truncate text-foreground"
+            >
+              1 234,56 PLN
+            </div>
+          </div>
+        </div>
+        <div
+          class="flex h-10 w-10 lg:h-12 lg:w-12 items-center justify-center rounded-full shrink-0 bg-blue-100"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-wallet h-5 w-5 lg:h-6 lg:w-6 text-blue-600"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"
+            />
+            <path
+              d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"
+            />
+          </svg>
+        </div>
+      </div>
+      <div
+        class="space-y-2 mt-4"
+      >
+        <div
+          class="w-full space-y-1"
+        >
+          <div
+            class="flex justify-between text-[10px] font-bold uppercase text-muted-foreground"
+          >
+            <span>
+              Zużycie
+            </span>
+            <span
+              class=""
+            >
+              65%
+            </span>
+          </div>
+          <div
+            aria-valuemax="100"
+            aria-valuemin="0"
+            class="bg-primary/20 relative w-full overflow-hidden rounded-full h-2 lg:h-3"
+            data-max="100"
+            data-slot="progress"
+            data-state="indeterminate"
+            role="progressbar"
+          >
+            <div
+              class="bg-primary h-full w-full flex-1 transition-all"
+              data-max="100"
+              data-slot="progress-indicator"
+              data-state="indeterminate"
+              style="transform: translateX(-35%);"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;

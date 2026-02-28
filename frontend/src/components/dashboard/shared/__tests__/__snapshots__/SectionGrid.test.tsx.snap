@@ -1,0 +1,28 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SectionGrid > snapshots > matches snapshot — default rendering 1`] = `
+<DocumentFragment>
+  <div
+    class="grid grid-cols-2 gap-6 p-4 border rounded-lg bg-muted/20"
+  >
+    <span>
+      Item 1
+    </span>
+    <span>
+      Item 2
+    </span>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`SectionGrid > snapshots > matches snapshot — with custom className 1`] = `
+<DocumentFragment>
+  <div
+    class="grid grid-cols-2 gap-6 p-4 border rounded-lg bg-muted/20 extra-class"
+  >
+    <div>
+      content
+    </div>
+  </div>
+</DocumentFragment>
+`;
