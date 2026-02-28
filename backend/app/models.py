@@ -14,7 +14,7 @@ class User(SQLModel, table=True):
 
     owned_budgets: List["Budget"] = Relationship(back_populates="owner")
     memberships: List["BudgetMember"] = Relationship(back_populates="user")
-    receipts: List["Receipt"] = Relationship(back_populates="uploader")
+    transactions: List["Transaction"] = Relationship(back_populates="uploader")
 
 
 # ─── Budget (multi-tenant household container) ────────────────────────────────
@@ -27,7 +27,7 @@ class Budget(SQLModel, table=True):
 
     owner: Optional[User] = Relationship(back_populates="owned_budgets")
     members: List["BudgetMember"] = Relationship(back_populates="budget")
-    receipts: List["Receipt"] = Relationship(back_populates="budget")
+    transactions: List["Transaction"] = Relationship(back_populates="budget")
     monthly_budgets: List["MonthlyBudget"] = Relationship(back_populates="budget")
 
 
@@ -59,11 +59,11 @@ class Category(CategoryBase, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
     parent: Optional["Category"] = Relationship(
-        back_populates="subcategories", 
+        back_populates="subcategories",
         sa_relationship_kwargs=dict(remote_side="Category.id")
     )
     subcategories: List["Category"] = Relationship(back_populates="parent")
-    receipts: List["Receipt"] = Relationship(back_populates="category")
+    transactions: List["Transaction"] = Relationship(back_populates="category")
 
 
 class TagBase(SQLModel):
@@ -71,8 +71,8 @@ class TagBase(SQLModel):
     color: Optional[str] = None
 
 
-class ReceiptTagLink(SQLModel, table=True):
-    receipt_id: Optional[int] = Field(default=None, foreign_key="receipt.id", primary_key=True)
+class TransactionTagLink(SQLModel, table=True):
+    transaction_id: Optional[int] = Field(default=None, foreign_key="transaction.id", primary_key=True)
     tag_id: Optional[int] = Field(default=None, foreign_key="tag.id", primary_key=True)
 
 
@@ -80,54 +80,72 @@ class Tag(TagBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
 
-    receipts: List["Receipt"] = Relationship(back_populates="tags", link_model=ReceiptTagLink)
+    transactions: List["Transaction"] = Relationship(back_populates="tags", link_model=TransactionTagLink)
 
 
-# ─── Receipt ──────────────────────────────────────────────────────────────────
+# ─── Transaction ──────────────────────────────────────────────────────────────
 
-class ReceiptBase(SQLModel):
+class TransactionBase(SQLModel):
     merchant_name: str = Field(index=True)
     date: Optional[datetime] = Field(default=None)
     total_amount: float = Field(default=0.0)
     currency: str = Field(default="PLN")
-    image_path: Optional[str] = None
-    status: str = Field(default="pending")
-    content_hash: Optional[str] = Field(default=None, index=True)
     is_manual: bool = Field(default=False)
+    type: str = Field(default="expense")  # expense | income | transfer
 
 
-class Receipt(ReceiptBase, table=True):
+class Transaction(TransactionBase, table=True):
+    __tablename__: str = "transaction"  # type: ignore
+
     id: Optional[int] = Field(default=None, primary_key=True)
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
 
-    items: List["Item"] = Relationship(back_populates="receipt")
-    budget: Optional[Budget] = Relationship(back_populates="receipts")
-    uploader: Optional[User] = Relationship(back_populates="receipts")
-    category: Optional["Category"] = Relationship(back_populates="receipts")
-    tags: List["Tag"] = Relationship(back_populates="receipts", link_model=ReceiptTagLink)
+    lines: List["TransactionLine"] = Relationship(back_populates="transaction")
+    receipt_scan: Optional["ReceiptScan"] = Relationship(back_populates="transaction")
+    budget: Optional[Budget] = Relationship(back_populates="transactions")
+    uploader: Optional[User] = Relationship(back_populates="transactions")
+    category: Optional["Category"] = Relationship(back_populates="transactions")
+    tags: List["Tag"] = Relationship(back_populates="transactions", link_model=TransactionTagLink)
 
 
-# ─── Item ─────────────────────────────────────────────────────────────────────
+# ─── ReceiptScan ──────────────────────────────────────────────────────────────
 
-class ItemBase(SQLModel):
+class ReceiptScan(SQLModel, table=True):
+    __tablename__: str = "receiptscan"  # type: ignore
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    transaction_id: int = Field(foreign_key="transaction.id", index=True)
+    image_path: Optional[str] = None
+    status: str = Field(default="processing")  # processing | done | error | needs_review
+    content_hash: Optional[str] = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
+
+
+# ─── TransactionLine ──────────────────────────────────────────────────────────
+
+class TransactionLineBase(SQLModel):
     name: str
     price: float
     quantity: float = Field(default=1.0)
-    category: Optional[str] = None
+    category_id: Optional[int] = Field(default=None, foreign_key="category.id")
 
 
-class Item(ItemBase, table=True):
+class TransactionLine(TransactionLineBase, table=True):
+    __tablename__: str = "transactionline"  # type: ignore
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    receipt_id: Optional[int] = Field(default=None, foreign_key="receipt.id")
-    receipt: Optional[Receipt] = Relationship(back_populates="items")
+    transaction_id: Optional[int] = Field(default=None, foreign_key="transaction.id")
+    transaction: Optional[Transaction] = Relationship(back_populates="lines")
 
 
 # ─── MonthlyBudget (spending limit per month) ────────────────────────────────
 
 class MonthlyBudget(SQLModel, table=True):
-    __tablename__: str = "monthly_budget" # type: ignore
+    __tablename__: str = "monthly_budget"  # type: ignore
 
     id: Optional[int] = Field(default=None, primary_key=True)
     month: int = Field(index=True)
@@ -141,40 +159,49 @@ class MonthlyBudget(SQLModel, table=True):
 
 # ─── API DTOs ────────────────────────────────────────────────────────────────
 
-class ItemRead(ItemBase):
+class TransactionLineRead(TransactionLineBase):
     id: int
 
 
-class ReceiptRead(ReceiptBase):
+class ReceiptScanRead(SQLModel):
     id: int
-    items: List[ItemRead] = []
+    status: str
+    image_path: Optional[str] = None
+    content_hash: Optional[str] = None
+    created_at: datetime
+
+
+class TransactionRead(TransactionBase):
+    id: int
+    lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
     tags: List["TagRead"] = []
+    receipt_scan: Optional[ReceiptScanRead] = None
 
 
-class ReceiptCreate(ReceiptBase):
+class TransactionCreate(TransactionBase):
     pass
 
 
-class ReceiptUpdate(SQLModel):
+class TransactionUpdate(SQLModel):
     merchant_name: Optional[str] = None
     date: Optional[datetime] = None
     total_amount: Optional[float] = None
     currency: Optional[str] = None
-    status: Optional[str] = None
     category_id: Optional[int] = None
     tag_ids: Optional[List[int]] = None
+    type: Optional[str] = None
 
 
-class ManualItemCreate(SQLModel):
+class TransactionLineCreate(SQLModel):
     name: str
     price: float
     quantity: float = 1.0
-    category: str = "Other"
+    category_id: Optional[int] = None
 
 
-class ManualReceiptCreate(SQLModel):
+class ManualTransactionCreate(SQLModel):
     merchant_name: str
     total_amount: float
     currency: str = "PLN"
@@ -182,14 +209,15 @@ class ManualReceiptCreate(SQLModel):
     category_id: Optional[int] = None
     note: Optional[str] = None
     tag_ids: List[int] = Field(default_factory=list)
-    items: List[ManualItemCreate] = Field(default_factory=list)
+    lines: List[TransactionLineCreate] = Field(default_factory=list)
+    type: str = "expense"  # expense | income | transfer
 
 
-class ItemUpdate(SQLModel):
+class TransactionLineUpdate(SQLModel):
     name: Optional[str] = None
     price: Optional[float] = None
     quantity: Optional[float] = None
-    category: Optional[str] = None
+    category_id: Optional[int] = None
 
 
 class MonthlyBudgetUpdate(SQLModel):

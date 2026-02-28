@@ -11,7 +11,7 @@ connect_args = {"check_same_thread": False}
 # Future split: point this to a separate auth DB.
 identity_engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
-# Operations engine: Business data (receipts, items, budgets).
+# Operations engine: Business data (transactions, items, budgets).
 # Future split: point this to a separate ops DB and add a migration script.
 operations_engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
@@ -26,7 +26,7 @@ def get_session():
 
 
 def get_ops_session():
-    """Session for operational data (Receipt, Budget, Item)."""
+    """Session for operational data (Transaction, TransactionLine, Budget)."""
     with Session(operations_engine) as session:
         yield session
 
