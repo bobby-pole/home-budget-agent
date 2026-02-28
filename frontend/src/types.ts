@@ -26,6 +26,7 @@ export interface Category {
 export interface Tag {
   id: number;
   name: string;
+  color?: string;
   owner_id?: number;
 }
 

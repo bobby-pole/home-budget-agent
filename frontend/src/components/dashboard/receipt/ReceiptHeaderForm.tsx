@@ -192,7 +192,14 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
                   <div className="flex flex-wrap gap-2 pt-1">
                     {receipt.tags && receipt.tags.length > 0 ? (
                       receipt.tags.map(tag => (
-                        <Badge key={tag.id} variant="secondary">#{tag.name}</Badge>
+                        <Badge 
+                          key={tag.id} 
+                          variant="secondary"
+                          className="text-white border-0 shadow-sm"
+                          style={{ backgroundColor: tag.color || "#9ca3af" }}
+                        >
+                          #{tag.name}
+                        </Badge>
                       ))
                     ) : (
                       <span className="text-xs text-muted-foreground italic">Brak tagów</span>

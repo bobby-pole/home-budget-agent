@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tag as TagIcon, X, Plus } from "lucide-react";
+import { Tag as TagIcon, X, Plus, Save } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -21,8 +21,10 @@ import {
 export function TagsTab() {
   const queryClient = useQueryClient();
   const [newTag, setNewTag] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#9ca3af");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
+  const [editColor, setEditColor] = useState("");
 
   const { data: tags, isLoading } = useQuery({
     queryKey: ["tags"],
@@ -30,17 +32,18 @@ export function TagsTab() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api.createTag({ name }),
+    mutationFn: (data: { name: string; color: string }) => api.createTag(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       setNewTag("");
+      setNewTagColor("#9ca3af");
       toast.success("Tag został dodany");
     },
     onError: () => toast.error("Nie udało się dodać tagu"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, name }: { id: number; name: string }) => api.updateTag(id, { name }),
+    mutationFn: ({ id, data }: { id: number; data: { name?: string; color?: string } }) => api.updateTag(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       setEditingId(null);
@@ -61,13 +64,13 @@ export function TagsTab() {
   const handleAddTag = (e: React.FormEvent) => {
     e.preventDefault();
     if (newTag.trim()) {
-      createMutation.mutate(newTag.trim());
+      createMutation.mutate({ name: newTag.trim(), color: newTagColor });
     }
   };
 
   const handleSaveEdit = (id: number) => {
     if (editName.trim()) {
-      updateMutation.mutate({ id, name: editName.trim() });
+      updateMutation.mutate({ id, data: { name: editName.trim(), color: editColor } });
     } else {
       setEditingId(null);
     }
@@ -86,14 +89,21 @@ export function TagsTab() {
           Twoje tagi
         </h3>
         
-        <form onSubmit={handleAddTag} className="flex gap-2 mb-6">
+        <form onSubmit={handleAddTag} className="flex flex-wrap gap-2 mb-6">
           <Input 
             placeholder="Dodaj nowy tag (np. #wakacje2026)" 
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
-            className="max-w-sm"
+            className="max-w-sm h-9"
           />
-          <Button type="submit" disabled={!newTag.trim() || createMutation.isPending}>
+          <input 
+            type="color" 
+            value={newTagColor} 
+            onChange={e => setNewTagColor(e.target.value)}
+            className="w-9 h-9 rounded border border-input cursor-pointer p-1"
+            title="Wybierz kolor tagu"
+          />
+          <Button type="submit" className="h-9" disabled={!newTag.trim() || createMutation.isPending}>
             <Plus className="h-4 w-4 mr-2" /> Dodaj
           </Button>
         </form>
@@ -110,24 +120,41 @@ export function TagsTab() {
           <div className="flex flex-wrap gap-2">
             {tags?.map((tag) => (
               editingId === tag.id ? (
-                <Badge key={tag.id} variant="secondary" className="px-1 py-0.5 text-sm flex items-center gap-1">
-                  <span className="text-muted-foreground ml-1">#</span>
+                <div key={tag.id} className="flex items-center gap-1 bg-secondary p-1 rounded-md border shadow-sm animate-in zoom-in-95 duration-200">
+                  <span className="text-muted-foreground ml-1 text-sm font-bold">#</span>
                   <input
                     autoFocus
-                    className="bg-transparent border-b border-primary/50 outline-none w-20 text-sm py-0.5"
+                    className="bg-transparent border-b border-primary/50 outline-none w-24 text-sm py-0.5 px-1 font-medium"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, tag.id)}
-                    onBlur={() => handleSaveEdit(tag.id)}
                   />
-                </Badge>
+                  <input 
+                    type="color" 
+                    value={editColor} 
+                    onChange={e => setEditColor(e.target.value)}
+                    className="w-6 h-6 rounded-full border-0 cursor-pointer p-0"
+                  />
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleSaveEdit(tag.id)}>
+                    <Save className="h-3 w-3 text-emerald-600" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingId(null)}>
+                    <X className="h-3 w-3 text-destructive" />
+                  </Button>
+                </div>
               ) : (
-                <Badge key={tag.id} variant="secondary" className="px-3 py-1.5 text-sm group">
+                <Badge 
+                  key={tag.id} 
+                  variant="secondary" 
+                  className="px-3 py-1.5 text-sm group flex items-center gap-1.5 transition-all text-white border-0 shadow-sm"
+                  style={{ backgroundColor: tag.color || "#9ca3af" }}
+                >
                   <span 
-                    className="cursor-pointer hover:text-primary transition-colors"
+                    className="cursor-pointer hover:underline underline-offset-2"
                     onClick={() => {
                       setEditingId(tag.id);
                       setEditName(tag.name);
+                      setEditColor(tag.color || "#9ca3af");
                     }}
                   >
                     #{tag.name}
@@ -135,7 +162,7 @@ export function TagsTab() {
                   
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <button className="ml-2 text-muted-foreground hover:text-destructive transition-colors focus:outline-none">
+                      <button className="text-white/70 hover:text-white transition-colors focus:outline-none ml-1">
                         <X className="h-3 w-3" />
                       </button>
                     </AlertDialogTrigger>

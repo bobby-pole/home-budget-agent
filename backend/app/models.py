@@ -68,6 +68,7 @@ class Category(CategoryBase, table=True):
 
 class TagBase(SQLModel):
     name: str
+    color: Optional[str] = None
 
 
 class ReceiptTagLink(SQLModel, table=True):
@@ -149,6 +150,7 @@ class ReceiptRead(ReceiptBase):
     items: List[ItemRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
+    tags: List["TagRead"] = []
 
 
 class ReceiptCreate(ReceiptBase):
@@ -216,7 +218,8 @@ class TagCreate(TagBase):
 
 
 class TagUpdate(SQLModel):
-    name: str
+    name: Optional[str] = None
+    color: Optional[str] = None
 
 
 class TagRead(TagBase):
