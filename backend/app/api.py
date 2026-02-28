@@ -436,8 +436,9 @@ async def create_category(
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
+    dump_data = category_data.model_dump(exclude={"is_system"})
     category = Category(
-        **category_data.model_dump(),
+        **dump_data,
         owner_id=current_user.id,
         is_system=False
     )

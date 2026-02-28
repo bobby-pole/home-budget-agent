@@ -42,7 +42,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
       total_amount: undefined,
       currency: "PLN",
       date: todayISO(),
-      category: "",
+      category_id: "",
       note: "",
     },
   });
@@ -54,7 +54,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         total_amount: undefined,
         currency: "PLN",
         date: todayISO(),
-        category: "",
+        category_id: "",
         note: "",
       });
     }
@@ -73,7 +73,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         total_amount: hasItems ? computedTotal : (values.total_amount ?? 0),
         currency: values.currency,
         date: values.date || undefined,
-        category: hasItems ? undefined : (values.category || undefined),
+        category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
         note: hasItems ? undefined : (values.note || undefined),
         items: hasItems
           ? items.map(({ name, price, quantity, category }) => ({ name, price, quantity, category }))

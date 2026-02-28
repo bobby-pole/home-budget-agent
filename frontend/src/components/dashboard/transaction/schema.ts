@@ -5,7 +5,7 @@ export const transactionSchema = z.object({
   total_amount: z.coerce.number().positive("Musi być większe od 0").optional(),
   currency: z.string().min(1),
   date: z.string().optional(),
-  category: z.string().optional(),
+  category_id: z.string().optional(),
   note: z.string().optional(),
 });
 

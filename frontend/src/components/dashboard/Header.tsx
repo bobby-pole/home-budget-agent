@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
@@ -25,7 +25,7 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between px-6 py-4">
-      <h1 className="text-2xl font-bold text-foreground">Smart Budget AI</h1>
+      <h1 className="text-2xl font-bold text-foreground cursor-pointer" onClick={() => navigate("/")}>Smart Budget AI</h1>
       <div className="flex items-center gap-2 lg:gap-4">
         <ThemeToggle />
         <DropdownMenu>
@@ -40,6 +40,11 @@ export function Header() {
             <div className="px-2 py-1.5">
               <p className="text-sm font-medium truncate">{user?.email}</p>
             </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/settings/categories")} className="cursor-pointer">
+              <Settings className="mr-2 h-4 w-4" />
+              Ustawienia
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
