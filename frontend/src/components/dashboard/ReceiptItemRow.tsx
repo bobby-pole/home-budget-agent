@@ -16,6 +16,7 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Nazwa wymagana"),
@@ -98,7 +99,12 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
       }
     }
     
-    return matched ? { name: matched.name, color: matched.color || "#9ca3af", icon: matched.icon || "📦" } : { name: catString, color: "#9ca3af", icon: "📦" };
+    if (matched) {
+      const displayName = matched.is_system ? (CATEGORY_LABELS[matched.name] || matched.name) : matched.name;
+      return { name: displayName, color: matched.color || "#9ca3af", icon: matched.icon || "📦" };
+    }
+    
+    return { name: catString, color: "#9ca3af", icon: "📦" };
   };
 
   if (!isEditing) {
@@ -177,7 +183,7 @@ export function ReceiptItemRow({ item, currency }: ReceiptItemRowProps) {
                         <SelectItem key={cat.id} value={cat.name}>
                            <span className="flex items-center gap-2">
                             <span>{cat.icon}</span>
-                            {cat.name}
+                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
                           </span>
                         </SelectItem>
                       ))}

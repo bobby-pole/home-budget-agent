@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 interface TransactionMetaSectionProps {
   control: Control<TransactionFormInput>;
@@ -50,7 +51,7 @@ export function TransactionMetaSection({ control }: TransactionMetaSectionProps)
                   <SelectItem key={cat.id} value={cat.id.toString()}>
                     <span className="flex items-center gap-2">
                       <span className="w-4 text-center">{cat.icon}</span>
-                      {cat.name}
+                      {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
                     </span>
                   </SelectItem>
                 ))}
