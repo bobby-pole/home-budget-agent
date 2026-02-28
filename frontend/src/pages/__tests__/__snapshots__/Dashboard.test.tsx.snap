@@ -1,0 +1,71 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Dashboard > snapshot — loaded state 1`] = `
+<div>
+  <div
+    class="min-h-screen bg-background"
+  >
+    <div
+      data-testid="mock-header"
+    >
+      Header
+    </div>
+    <main
+      class="px-4 lg:px-6 pb-8"
+    >
+      <section
+        class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4"
+      >
+        <div
+          data-testid="mock-kpi-card"
+        >
+          KpiCard
+        </div>
+        <div
+          data-testid="mock-upload-box"
+        >
+          UploadBox
+        </div>
+        <div
+          data-testid="mock-kpi-card"
+        >
+          KpiCard
+        </div>
+        <div
+          data-testid="mock-kpi-card"
+        >
+          KpiCard
+        </div>
+      </section>
+      <section
+        class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5"
+      >
+        <div
+          class="lg:col-span-3"
+        >
+          <div
+            data-testid="mock-receipts-table"
+          >
+            ReceiptsTable
+          </div>
+        </div>
+        <div
+          class="lg:col-span-2 h-full"
+        >
+          <div
+            data-testid="mock-spending-chart"
+          >
+            SpendingChart
+          </div>
+        </div>
+      </section>
+    </main>
+    <div
+      data-testid="mock-monthly-summary-modal"
+    />
+    <div
+      data-testid="mock-budget-modal"
+    />
+  </div>
+</div>
+`;

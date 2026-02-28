@@ -1,0 +1,262 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DraftItemRow > snapshots > matches snapshot — empty draft (confirm disabled) 1`] = `
+<DocumentFragment>
+  <div
+    class="flex items-center gap-2 px-4 py-2 bg-background border-t"
+  >
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive flex-1 h-8 text-xs min-w-0"
+      data-slot="input"
+      placeholder="Nazwa pozycji"
+      value=""
+    />
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input min-w-0 rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-20 h-8 text-xs shrink-0"
+      data-slot="input"
+      min="0.01"
+      placeholder="Cena"
+      step="0.01"
+      type="number"
+      value=""
+    />
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input min-w-0 rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-16 h-8 text-xs shrink-0"
+      data-slot="input"
+      min="0.1"
+      placeholder="Ilość"
+      step="0.1"
+      type="number"
+      value="1"
+    />
+    <select
+      data-testid="category-select"
+    >
+      <option
+        value="Food"
+      >
+        Jedzenie
+      </option>
+      <option
+        value="FastFood"
+      >
+        Fast Food
+      </option>
+      <option
+        value="Snacks"
+      >
+        Przekąski
+      </option>
+      <option
+        value="Transport"
+      >
+        Transport
+      </option>
+      <option
+        value="Utilities"
+      >
+        Rachunki
+      </option>
+      <option
+        value="Entertainment"
+      >
+        Rozrywka
+      </option>
+      <option
+        value="Health"
+      >
+        Zdrowie
+      </option>
+      <option
+        value="Other"
+      >
+        Inne
+      </option>
+    </select>
+    <button
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 size-9 h-8 w-8 shrink-0 opacity-40 cursor-not-allowed"
+      data-size="icon"
+      data-slot="button"
+      data-variant="default"
+      disabled=""
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-check h-3.5 w-3.5"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 6 9 17l-5-5"
+        />
+      </svg>
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent dark:hover:bg-accent/50 size-9 h-8 w-8 shrink-0 hover:text-destructive"
+      data-size="icon"
+      data-slot="button"
+      data-variant="ghost"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x h-3.5 w-3.5"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`DraftItemRow > snapshots > matches snapshot — filled draft (confirm enabled) 1`] = `
+<DocumentFragment>
+  <div
+    class="flex items-center gap-2 px-4 py-2 bg-background border-t"
+  >
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input w-full rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive flex-1 h-8 text-xs min-w-0"
+      data-slot="input"
+      placeholder="Nazwa pozycji"
+      value="Chleb"
+    />
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input min-w-0 rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-20 h-8 text-xs shrink-0"
+      data-slot="input"
+      min="0.01"
+      placeholder="Cena"
+      step="0.01"
+      type="number"
+      value="3.50"
+    />
+    <input
+      class="file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input min-w-0 rounded-md border bg-transparent px-3 py-1 shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive w-16 h-8 text-xs shrink-0"
+      data-slot="input"
+      min="0.1"
+      placeholder="Ilość"
+      step="0.1"
+      type="number"
+      value="2"
+    />
+    <select
+      data-testid="category-select"
+    >
+      <option
+        value="Food"
+      >
+        Jedzenie
+      </option>
+      <option
+        value="FastFood"
+      >
+        Fast Food
+      </option>
+      <option
+        value="Snacks"
+      >
+        Przekąski
+      </option>
+      <option
+        value="Transport"
+      >
+        Transport
+      </option>
+      <option
+        value="Utilities"
+      >
+        Rachunki
+      </option>
+      <option
+        value="Entertainment"
+      >
+        Rozrywka
+      </option>
+      <option
+        value="Health"
+      >
+        Zdrowie
+      </option>
+      <option
+        value="Other"
+      >
+        Inne
+      </option>
+    </select>
+    <button
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 size-9 h-8 w-8 shrink-0"
+      data-size="icon"
+      data-slot="button"
+      data-variant="default"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-check h-3.5 w-3.5"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 6 9 17l-5-5"
+        />
+      </svg>
+    </button>
+    <button
+      class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent dark:hover:bg-accent/50 size-9 h-8 w-8 shrink-0 hover:text-destructive"
+      data-size="icon"
+      data-slot="button"
+      data-variant="ghost"
+      type="button"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-x h-3.5 w-3.5"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M18 6 6 18"
+        />
+        <path
+          d="m6 6 12 12"
+        />
+      </svg>
+    </button>
+  </div>
+</DocumentFragment>
+`;

@@ -1,0 +1,233 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ItemsPanel > snapshots > matches snapshot — empty state 1`] = `
+<DocumentFragment>
+  <div
+    class="border rounded-lg bg-muted/20 overflow-hidden"
+  >
+    <div
+      class="flex items-center justify-between px-4 py-2.5 border-b bg-muted/10"
+    >
+      <span
+        class="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2"
+      >
+        Pozycje
+      </span>
+      <button
+        class="inline-flex items-center justify-center whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 rounded-md px-3 has-[>svg]:px-2.5 h-7 text-xs gap-1"
+        data-size="sm"
+        data-slot="button"
+        data-variant="outline"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-plus h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 12h14"
+          />
+          <path
+            d="M12 5v14"
+          />
+        </svg>
+        Dodaj pozycję
+      </button>
+    </div>
+    <p
+      class="px-4 py-3 text-xs text-muted-foreground"
+    >
+      Brak pozycji — paragon zostanie zapisany jako całość z podaną kwotą.
+    </p>
+  </div>
+</DocumentFragment>
+`;
+
+exports[`ItemsPanel > snapshots > matches snapshot — with two items 1`] = `
+<DocumentFragment>
+  <div
+    class="border rounded-lg bg-muted/20 overflow-hidden"
+  >
+    <div
+      class="flex items-center justify-between px-4 py-2.5 border-b bg-muted/10"
+    >
+      <span
+        class="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2"
+      >
+        Pozycje
+        <span
+          class="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold"
+        >
+          2
+        </span>
+      </span>
+      <button
+        class="inline-flex items-center justify-center whitespace-nowrap font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 rounded-md px-3 has-[>svg]:px-2.5 h-7 text-xs gap-1"
+        data-size="sm"
+        data-slot="button"
+        data-variant="outline"
+        type="button"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-plus h-3 w-3"
+          fill="none"
+          height="24"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5 12h14"
+          />
+          <path
+            d="M12 5v14"
+          />
+        </svg>
+        Dodaj pozycję
+      </button>
+    </div>
+    <div
+      class="divide-y"
+    >
+      <div
+        class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30 transition-colors"
+      >
+        <span
+          class="flex-1 font-medium truncate min-w-0"
+          title="Chleb"
+        >
+          Chleb
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
+        >
+          Jedzenie
+        </span>
+        <span
+          class="text-muted-foreground text-xs shrink-0 w-14 text-right"
+        >
+          1 szt.
+        </span>
+        <span
+          class="font-semibold shrink-0 w-24 text-right tabular-nums"
+        >
+          3.00 PLN
+        </span>
+        <button
+          class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent dark:hover:bg-accent/50 size-9 h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+          data-size="icon"
+          data-slot="button"
+          data-variant="ghost"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-trash2 lucide-trash-2 h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 11v6"
+            />
+            <path
+              d="M14 11v6"
+            />
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
+            />
+            <path
+              d="M3 6h18"
+            />
+            <path
+              d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+            />
+          </svg>
+        </button>
+      </div>
+      <div
+        class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/30 transition-colors"
+      >
+        <span
+          class="flex-1 font-medium truncate min-w-0"
+          title="Masło"
+        >
+          Masło
+        </span>
+        <span
+          class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0"
+        >
+          Inne
+        </span>
+        <span
+          class="text-muted-foreground text-xs shrink-0 w-14 text-right"
+        >
+          2 szt.
+        </span>
+        <span
+          class="font-semibold shrink-0 w-24 text-right tabular-nums"
+        >
+          13.00 PLN
+        </span>
+        <button
+          class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent dark:hover:bg-accent/50 size-9 h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+          data-size="icon"
+          data-slot="button"
+          data-variant="ghost"
+          type="button"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-trash2 lucide-trash-2 h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 11v6"
+            />
+            <path
+              d="M14 11v6"
+            />
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
+            />
+            <path
+              d="M3 6h18"
+            />
+            <path
+              d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</DocumentFragment>
+`;
