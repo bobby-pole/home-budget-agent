@@ -81,11 +81,13 @@ def test_upload_duplicate_returns_409(client: TestClient, session: Session):
     file_hash = hashlib.sha256(file_content).hexdigest()
 
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
     transaction = Transaction(merchant_name="Original", uploaded_by=test_user.id, total_amount=30.0)
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
 
+    assert transaction.id is not None
     scan = ReceiptScan(transaction_id=transaction.id, status="done", content_hash=file_hash)
     session.add(scan)
     session.commit()
@@ -101,11 +103,13 @@ def test_upload_duplicate_returns_409(client: TestClient, session: Session):
 @patch("app.api.process_transaction_in_background")
 def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, session: Session):
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
     transaction = Transaction(merchant_name="Failed Shop", uploaded_by=test_user.id, total_amount=30.0)
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
 
+    assert transaction.id is not None
     scan = ReceiptScan(transaction_id=transaction.id, status="error", image_path="/fake/path/image.jpg")
     session.add(scan)
     session.commit()
@@ -122,11 +126,13 @@ def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, sessio
 
 def test_delete_removes_receipt_scan(client: TestClient, session: Session):
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
     transaction = Transaction(merchant_name="Old Shop", uploaded_by=test_user.id, total_amount=20.0)
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
 
+    assert transaction.id is not None
     scan = ReceiptScan(transaction_id=transaction.id, status="done", image_path=None)
     session.add(scan)
     session.commit()
