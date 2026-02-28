@@ -16,7 +16,7 @@ describe("cn()", () => {
   });
 
   it("handles conditional classes (falsy values ignored)", () => {
-    expect(cn("base", false && "ignored", undefined, null, "visible")).toBe(
+    expect(cn("base", undefined, undefined, null, "visible")).toBe(
       "base visible"
     );
   });
