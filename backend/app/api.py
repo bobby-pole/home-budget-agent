@@ -155,7 +155,13 @@ def create_manual_receipt(
         status="done",
         is_manual=True,
         uploaded_by=current_user.id,
+        category_id=data.category_id,
     )
+    
+    if data.tag_ids:
+        tags = session.exec(select(Tag).where(Tag.id.in_(data.tag_ids))).all()
+        receipt.tags = tags
+
     session.add(receipt)
     session.commit()
     session.refresh(receipt)
@@ -301,9 +307,13 @@ async def update_receipt(
     if db_receipt.uploaded_by != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this receipt")
 
-    receipt_data = receipt_update.model_dump(exclude_unset=True)
+    receipt_data = receipt_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in receipt_data.items():
         setattr(db_receipt, key, value)
+
+    if receipt_update.tag_ids is not None:
+        tags = session.exec(select(Tag).where(Tag.id.in_(receipt_update.tag_ids))).all()
+        db_receipt.tags = tags
 
     session.add(db_receipt)
     session.commit()

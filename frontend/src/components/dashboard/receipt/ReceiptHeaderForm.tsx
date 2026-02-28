@@ -13,11 +13,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, Pencil } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { Receipt } from "@/types";
 import { SectionGrid } from "../shared/SectionGrid";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   merchant_name: z.string().min(1, "Nazwa sklepu jest wymagana"),
@@ -26,6 +28,7 @@ const formSchema = z.object({
   }),
   total_amount: z.coerce.number().min(0.01, "Kwota musi być większa od 0"),
   currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
+  tag_ids: z.array(z.number()).default([]),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -38,6 +41,11 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
 
+  const { data: tags } = useQuery({
+    queryKey: ["tags"],
+    queryFn: api.getTags,
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
@@ -45,6 +53,7 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
       date: "",
       total_amount: 0,
       currency: "PLN",
+      tag_ids: [],
     },
   });
 
@@ -54,6 +63,7 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
       date: receipt.date ? new Date(receipt.date).toISOString().split("T")[0] : "",
       total_amount: receipt.total_amount,
       currency: receipt.currency,
+      tag_ids: receipt.tags?.map(t => t.id) || [],
     });
   }, [receipt, form]);
 
@@ -169,6 +179,51 @@ export function ReceiptHeaderForm({ receipt }: ReceiptHeaderFormProps) {
                 ) : (
                   <div className="text-lg font-medium">{field.value}</div>
                 )}
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="tag_ids"
+            render={({ field }) => (
+              <FormItem className="col-span-full">
+                <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                  Tagi
+                </FormLabel>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {isEditing ? (
+                    tags?.map((tag) => {
+                      const isSelected = field.value?.includes(tag.id);
+                      return (
+                        <Badge
+                          key={tag.id}
+                          variant={isSelected ? "default" : "outline"}
+                          className={cn(
+                            "cursor-pointer transition-all hover:opacity-80",
+                            !isSelected && "text-muted-foreground"
+                          )}
+                          onClick={() => {
+                            const newValue = isSelected
+                              ? field.value?.filter((id: number) => id !== tag.id)
+                              : [...(field.value || []), tag.id];
+                            field.onChange(newValue);
+                          }}
+                        >
+                          #{tag.name}
+                        </Badge>
+                      );
+                    })
+                  ) : (
+                    receipt.tags && receipt.tags.length > 0 ? (
+                      receipt.tags.map(tag => (
+                        <Badge key={tag.id} variant="secondary">#{tag.name}</Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground italic">Brak tagów</span>
+                    )
+                  )}
+                </div>
               </FormItem>
             )}
           />
