@@ -186,12 +186,12 @@ export function Dashboard() {
 
       {/* Row 2: Charts & Envelopes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <SpendingPieChart data={pieData} isLoading={false} total={totalSpent} />
-        <TopEnvelopesCard envelopes={envelopes} isLoading={false} />
+        <SpendingPieChart data={pieData} isLoading={isBudgetLoading} total={totalSpent} />
+        <TopEnvelopesCard envelopes={envelopes} isLoading={isBudgetLoading} />
       </div>
 
       {/* Row 3: Recent Transactions */}
-      <RecentTransactionsList transactions={transactions} isLoading={false} />
+      <RecentTransactionsList transactions={transactions} isLoading={isTransactionsLoading} />
 
       {/* Modals */}
       <BudgetModal

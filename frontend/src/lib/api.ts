@@ -122,7 +122,7 @@ export const api = {
   },
 
   setBudgetLimit: async (year: number, month: number, category_id: number, amount: number) => {
-    const response = await apiClient.put(`/budget/${year}/${month}/limits/${category_id}`, { category_id, amount });
+    const response = await apiClient.put(`/budget/${year}/${month}/limits/${category_id}`, { amount });
     return response.data;
   },
 
