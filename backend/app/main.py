@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from sqlmodel import SQLModel
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
 
 # 1. Importujemy silniki bazy danych
 # identity_engine — dane tożsamości (User, auth)
@@ -14,7 +15,7 @@ from sqlmodel import Session, select
 from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
-# Jeśli tego nie zrobisz, SQLModel nie będzie wiedział, że ma utworzyć tabele 'Transaction' i 'TransactionLine'!
+# Wymagane żeby SQLModel.metadata było wypełnione przed migracjami Alembica.
 from .models import User, Category, Transaction, TransactionLine  # noqa: F401
 
 # 3. ### WAŻNE ### Importujemy router z api.py
@@ -62,46 +63,42 @@ def seed_default_categories():
             print("🌱 System default categories seeded.")
 
 
+def _run_migrations() -> None:
+    """Apply all pending Alembic migrations at application startup.
+
+    If the database already has tables but no alembic_version (i.e. it was
+    created by the old create_all() approach), stamp it to head first so that
+    Alembic does not try to recreate existing tables.
+    """
+    from sqlalchemy import inspect
+    from .database import engine
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+    alembic_cfg = AlembicConfig(alembic_ini_path)
+
+    with engine.connect() as conn:
+        inspector = inspect(conn)
+        existing_tables = inspector.get_table_names()
+        has_alembic_version = "alembic_version" in existing_tables
+        has_app_tables = any(t for t in existing_tables if t != "alembic_version")
+
+    if has_app_tables and not has_alembic_version:
+        # Legacy database created by SQLModel.metadata.create_all() — stamp it
+        # to head so Alembic knows the schema is already up to date.
+        print("⚠️  Legacy database detected (no alembic_version). Stamping to head...")
+        alembic_command.stamp(alembic_cfg, "head")
+        print("✅ Database stamped to head. Future migrations will apply incrementally.")
+
+    alembic_command.upgrade(alembic_cfg, "head")
+
+
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tworzy tabele na obu silnikach (bezpieczne — ta sama baza, idempotentne).
-    SQLModel.metadata.create_all(identity_engine)
-    SQLModel.metadata.create_all(operations_engine)
-    print("✅ Database tables created (if not existed).")
-
-    # Inline migrations for columns added after initial schema creation
-    # (SQLite's create_all does not add new columns to existing tables)
-    from sqlalchemy import text
-    migrations = [
-        # Legacy migrations for old 'receipt' table (kept for reference, safe to ignore on fresh DB)
-        "ALTER TABLE receipt ADD COLUMN is_manual BOOLEAN NOT NULL DEFAULT 0",
-        "ALTER TABLE receipt ADD COLUMN category_id INTEGER REFERENCES category(id)",
-        # Schema migrations
-        "ALTER TABLE category ADD COLUMN order_index INTEGER NOT NULL DEFAULT 0",
-        "ALTER TABLE monthly_budget ADD COLUMN user_id INTEGER REFERENCES user(id)",
-        "ALTER TABLE tag ADD COLUMN color TEXT",
-        # Data migrations
-        "UPDATE category SET name = 'Food' WHERE name = 'Jedzenie' AND is_system = 1",
-        "UPDATE category SET name = 'Utilities' WHERE name = 'Rachunki' AND is_system = 1",
-        "UPDATE category SET name = 'Entertainment' WHERE name = 'Rozrywka' AND is_system = 1",
-        "UPDATE category SET name = 'Health' WHERE name = 'Zdrowie' AND is_system = 1",
-        "UPDATE category SET name = 'Other' WHERE name = 'Inne' AND is_system = 1",
-        # Transaction-First refactor: add type column to transaction table (for existing DBs)
-        "ALTER TABLE \"transaction\" ADD COLUMN type TEXT NOT NULL DEFAULT 'expense'",
-        # Clean up obsolete columns from transaction table (moved to ReceiptScan)
-        "ALTER TABLE \"transaction\" DROP COLUMN status",
-        "ALTER TABLE \"transaction\" DROP COLUMN image_path",
-        "ALTER TABLE \"transaction\" DROP COLUMN content_hash",
-    ]
-    with operations_engine.connect() as conn:
-        for sql in migrations:
-            try:
-                conn.execute(text(sql))
-                conn.commit()
-                print(f"✅ Migration applied: {sql}")
-            except Exception:
-                pass  # Column already exists — safe to ignore
+    # Run Alembic migrations on startup (applies any pending migrations automatically)
+    _run_migrations()
+    print("✅ Database migrations applied (alembic upgrade head).")
 
     seed_default_categories()
 
