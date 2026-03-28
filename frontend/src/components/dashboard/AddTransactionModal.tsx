@@ -76,7 +76,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         currency: values.currency,
         date: values.date || undefined,
         category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
-        note: hasItems ? undefined : (values.note || undefined),
+        note: values.note || undefined,
         tag_ids: values.tag_ids,
         type: values.type,
         lines: hasItems
@@ -116,7 +116,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
                 currency={currency}
               />
 
-              {!hasItems && <TransactionMetaSection control={form.control} />}
+              <TransactionMetaSection control={form.control} hideCategory={hasItems} />
 
               <ItemsPanel items={items} currency={currency} onItemsChange={setItems} />
 

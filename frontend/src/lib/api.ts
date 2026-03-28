@@ -47,9 +47,10 @@ export const api = {
 
   // --- TRANSACTIONS ---
 
-  scanTransaction: async (file: File, force: boolean = false) => {
+  scanTransaction: async (file: File, force: boolean = false, note?: string) => {
     const formData = new FormData();
     formData.append("file", file);
+    if (note) formData.append("note", note);
     const response = await apiClient.post<Transaction>(`/transactions/scan?force=${force}`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
