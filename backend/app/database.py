@@ -1,8 +1,9 @@
 # backend/app/database.py
+import os
 from sqlmodel import create_engine, Session
 
 SQLITE_FILE_NAME = "database.db"
-DATABASE_URL = f"sqlite:///./data/{SQLITE_FILE_NAME}"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///./data/{SQLITE_FILE_NAME}")
 
 # check_same_thread=False jest wymagane dla SQLite w FastAPI
 connect_args = {"check_same_thread": False}
