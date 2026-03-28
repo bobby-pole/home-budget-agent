@@ -162,6 +162,7 @@ def create_manual_transaction(
         type=data.type,
         uploaded_by=current_user.id,
         category_id=data.category_id,
+        note=data.note,
     )
 
     if data.tag_ids:

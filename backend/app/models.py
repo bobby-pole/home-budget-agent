@@ -99,6 +99,7 @@ class Transaction(TransactionBase, table=True):
     __tablename__: str = "transaction"  # type: ignore
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    note: Optional[str] = Field(default=None)
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
@@ -205,6 +206,7 @@ class ReceiptScanRead(SQLModel):
 
 class TransactionRead(TransactionBase):
     id: int
+    note: Optional[str] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
@@ -222,6 +224,7 @@ class TransactionUpdate(SQLModel):
     total_amount: Optional[float] = None
     currency: Optional[str] = None
     category_id: Optional[int] = None
+    note: Optional[str] = None
     tag_ids: Optional[List[int]] = None
     type: Optional[str] = None
 
