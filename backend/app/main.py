@@ -70,18 +70,24 @@ def _run_migrations() -> None:
     created by the old create_all() approach), stamp it to head first so that
     Alembic does not try to recreate existing tables.
     """
-    from sqlalchemy import inspect
-    from .database import engine
+    from sqlalchemy import create_engine, inspect
 
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     alembic_ini_path = os.path.join(base_dir, "alembic.ini")
     alembic_cfg = AlembicConfig(alembic_ini_path)
 
-    with engine.connect() as conn:
-        inspector = inspect(conn)
-        existing_tables = inspector.get_table_names()
-        has_alembic_version = "alembic_version" in existing_tables
-        has_app_tables = any(t for t in existing_tables if t != "alembic_version")
+    # Use the same DATABASE_URL that Alembic env.py reads — keeps legacy-check
+    # and Alembic migrations on the exact same connection.
+    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
+    check_engine = create_engine(database_url)
+    try:
+        with check_engine.connect() as conn:
+            inspector = inspect(conn)
+            existing_tables = inspector.get_table_names()
+            has_alembic_version = "alembic_version" in existing_tables
+            has_app_tables = any(t for t in existing_tables if t != "alembic_version")
+    finally:
+        check_engine.dispose()
 
     if has_app_tables and not has_alembic_version:
         # Legacy database created by SQLModel.metadata.create_all() — stamp it
