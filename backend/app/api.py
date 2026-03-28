@@ -570,8 +570,8 @@ async def get_budget_summary(
     # --- Fetch transactions for this month/year belonging to current user ---
     transactions_stmt = select(Transaction).where(
         Transaction.uploaded_by == current_user.id,
-        extract("year", Transaction.date) == year,
-        extract("month", Transaction.date) == month,
+        extract("year", col(Transaction.date)) == year,
+        extract("month", col(Transaction.date)) == month,
     )
     month_transactions = session.exec(transactions_stmt).all()
 
@@ -579,8 +579,8 @@ async def get_budget_summary(
     income_stmt = select(Transaction).where(
         Transaction.uploaded_by == current_user.id,
         Transaction.type == "income",
-        extract("year", Transaction.date) == year,
-        extract("month", Transaction.date) == month,
+        extract("year", col(Transaction.date)) == year,
+        extract("month", col(Transaction.date)) == month,
     )
     total_income = sum(t.total_amount for t in session.exec(income_stmt).all())
 
