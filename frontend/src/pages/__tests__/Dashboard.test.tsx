@@ -1,26 +1,22 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor, fireEvent } from "@testing-library/react";
 import { render } from "@/__tests__/test-utils";
 import { Dashboard } from "@/pages/Dashboard";
 
-vi.mock("@/components/dashboard/KpiCard", () => ({
-  KPICard: () => <div data-testid="mock-kpi-card">KpiCard</div>,
+vi.mock("@/components/dashboard/BudgetSummaryCard", () => ({
+  BudgetSummaryCard: () => <div data-testid="mock-budget-summary">BudgetSummaryCard</div>,
 }));
 
-vi.mock("@/components/dashboard/TransactionsTable", () => ({
-  TransactionsTable: () => <div data-testid="mock-transactions-table">TransactionsTable</div>,
+vi.mock("@/components/dashboard/SpendingPieChart", () => ({
+  SpendingPieChart: () => <div data-testid="mock-pie-chart">SpendingPieChart</div>,
 }));
 
-vi.mock("@/components/dashboard/SpendingChart", () => ({
-  SpendingChart: () => <div data-testid="mock-spending-chart">SpendingChart</div>,
+vi.mock("@/components/dashboard/TopEnvelopesCard", () => ({
+  TopEnvelopesCard: () => <div data-testid="mock-top-envelopes">TopEnvelopesCard</div>,
 }));
 
-vi.mock("@/components/dashboard/UploadBox", () => ({
-  UploadBox: () => <div data-testid="mock-upload-box">UploadBox</div>,
-}));
-
-vi.mock("@/components/dashboard/MonthlySummaryModal", () => ({
-  MonthlySummaryModal: () => <div data-testid="mock-monthly-summary-modal" />,
+vi.mock("@/components/dashboard/RecentTransactionsList", () => ({
+  RecentTransactionsList: () => <div data-testid="mock-recent-transactions">RecentTransactionsList</div>,
 }));
 
 vi.mock("@/components/dashboard/BudgetModal", () => ({
@@ -33,46 +29,51 @@ vi.mock("@/components/dashboard/AddTransactionModal", () => ({
 }));
 
 const mockGetTransactions = vi.fn();
-const mockGetBudget = vi.fn();
+const mockGetBudgetSummary = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   api: {
     getTransactions: () => mockGetTransactions(),
-    getBudget: () => mockGetBudget(),
+    getBudgetSummary: () => mockGetBudgetSummary(),
     getCategories: vi.fn().mockResolvedValue([]),
+    scanTransaction: vi.fn(),
   },
 }));
 
 describe("Dashboard", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-01"));
     mockGetTransactions.mockResolvedValue([]);
-    mockGetBudget.mockResolvedValue({ amount: 0, year: 2026, month: 2 });
-  });
-
-  it("shows loading state before data resolves", () => {
-    // Make queries hang indefinitely to keep the loading state
-    mockGetTransactions.mockReturnValue(new Promise(() => {}));
-    mockGetBudget.mockReturnValue(new Promise(() => {}));
-
-    render(<Dashboard />);
-
-    expect(screen.getByText(/ładowanie twoich finansów/i)).toBeInTheDocument();
-  });
-
-  it("renders KPI Cards and UploadBox after data loads", async () => {
-    render(<Dashboard />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
-      expect(screen.getAllByTestId("mock-kpi-card")).toHaveLength(3);
+    mockGetBudgetSummary.mockResolvedValue({
+      year: 2026,
+      month: 3,
+      total_planned: 0,
+      total_spent: 0,
+      total_remaining: 0,
+      total_income: 0,
+      categories: [],
     });
   });
 
-  it("renders UploadBox after data loads", async () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows loading state before data resolves", () => {
+    mockGetTransactions.mockReturnValue(new Promise(() => {}));
+    render(<Dashboard />);
+    expect(screen.getByText(/Przygotowujemy Twój pulpit/i)).toBeInTheDocument();
+  });
+
+  it("renders summary and charts after data loads", async () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-budget-summary")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-pie-chart")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-top-envelopes")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-recent-transactions")).toBeInTheDocument();
     });
   });
 
@@ -80,23 +81,19 @@ describe("Dashboard", () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-budget-summary")).toBeInTheDocument();
     });
 
     expect(screen.queryByTestId("mock-add-transaction-modal")).not.toBeInTheDocument();
-
     fireEvent.keyDown(window, { key: "n" });
-
     expect(screen.getByTestId("mock-add-transaction-modal")).toBeInTheDocument();
   });
 
   it("snapshot — loaded state", async () => {
     const { container } = render(<Dashboard />);
-
     await waitFor(() => {
-      expect(screen.getByTestId("mock-upload-box")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-budget-summary")).toBeInTheDocument();
     });
-
     expect(container).toMatchSnapshot();
   });
 });

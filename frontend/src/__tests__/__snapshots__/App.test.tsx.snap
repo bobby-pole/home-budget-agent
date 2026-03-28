@@ -8,7 +8,7 @@ exports[`App > snapshot — authenticated state (shows dashboard) 1`] = `
     <div
       class="group/sidebar-wrapper has-data-[variant=inset]:bg-sidebar flex min-h-svh w-full"
       data-slot="sidebar-wrapper"
-      style="--sidebar-width: 16rem; --sidebar-width-icon: 3rem;"
+      style="--sidebar-width: 16rem; --sidebar-width-icon: 4rem;"
     >
       <div
         class="flex min-h-screen w-full"

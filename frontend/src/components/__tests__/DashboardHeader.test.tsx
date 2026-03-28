@@ -14,7 +14,7 @@ describe("DashboardHeader", () => {
       </SidebarProvider>
     );
     
-    expect(screen.getByText("Smart Budget AI")).toBeInTheDocument();
+    expect(screen.getByText(/Smart Budget AI/i)).toBeInTheDocument();
   });
 
   it("should show sidebar trigger on mobile", () => {

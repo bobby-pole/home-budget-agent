@@ -1,32 +1,32 @@
-import { KPICard } from "@/components/dashboard/KpiCard";
-import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
-import { SpendingChart } from "@/components/dashboard/SpendingChart";
-import { UploadBox } from "@/components/dashboard/UploadBox";
-import { Button } from "@/components/ui/button";
-import {
-  Wallet,
-  PiggyBank,
-  TrendingUp,
-  CalendarDays,
-  Pencil,
-  PlusCircle,
-} from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { CATEGORY_LABELS } from "@/lib/constants";
-import { useState, useEffect } from "react";
-import { MonthlySummaryModal } from "@/components/dashboard/MonthlySummaryModal";
-import { BudgetModal } from "@/components/dashboard/BudgetModal";
+import { 
+  Plus, 
+  Camera, 
+  Loader2,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal";
+import { BudgetModal } from "@/components/dashboard/BudgetModal";
+import { BudgetSummaryCard } from "@/components/dashboard/BudgetSummaryCard";
+import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
+import { TopEnvelopesCard } from "@/components/dashboard/TopEnvelopesCard";
+import { RecentTransactionsList } from "@/components/dashboard/RecentTransactionsList";
+import { toast } from "sonner";
+import type { AxiosError } from "axios";
 
 export function Dashboard() {
-  const [isMonthlyModalOpen, setIsMonthlyModalOpen] = useState(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [addTxOpen, setAddTxOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const now = new Date();
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
+  const monthName = now.toLocaleString("pl-PL", { month: "long" });
+  const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -43,176 +43,157 @@ export function Dashboard() {
   const {
     data: transactions = [],
     isLoading: isTransactionsLoading,
-    error,
   } = useQuery({
     queryKey: ["transactions"],
     queryFn: api.getTransactions,
-    refetchInterval: 5000,
+    refetchInterval: 10000,
   });
 
-  const { data: categories } = useQuery({
+  const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
     queryKey: ["categories"],
     queryFn: api.getCategories,
   });
 
-  const { data: budgetData, isLoading: isBudgetLoading } = useQuery({
-    queryKey: ["budget", curYear, curMonth + 1],
-    queryFn: () => api.getBudget(curYear, curMonth + 1),
+  const { data: budgetSummary, isLoading: isBudgetLoading } = useQuery({
+    queryKey: ["budget-summary", curYear, curMonth + 1],
+    queryFn: () => api.getBudgetSummary(curYear, curMonth + 1),
   });
 
-  // --- STATYSTYKI ---
-  const totalSpent = transactions.reduce((sum, r) => {
-    if (!r.date) return sum;
-    const rDate = new Date(r.date);
-    const isDone = !r.receipt_scan || r.receipt_scan.status === "done";
-    if (
-      isDone &&
-      rDate.getMonth() === curMonth &&
-      rDate.getFullYear() === curYear
-    ) {
-      return sum + r.total_amount;
-    }
-    return sum;
-  }, 0);
-
-  const budgetAmount = budgetData?.amount || 0;
-  const remainingBudget = budgetAmount - totalSpent;
-  const budgetProgress =
-    budgetAmount > 0 ? Math.min((totalSpent / budgetAmount) * 100, 100) : 0;
-
-  const transactionsCount = transactions.length;
-  const processingCount = transactions.filter(
-    (r) => r.receipt_scan && r.receipt_scan.status !== "done",
-  ).length;
-
-  const currentMonthRaw = new Date().toLocaleString("pl-PL", { month: "long" });
-  const monthName =
-    currentMonthRaw.charAt(0).toUpperCase() + currentMonthRaw.slice(1);
-
-  const categoryTotals: Record<number, number> = {};
-  transactions.forEach((transaction) => {
-    const isDone = !transaction.receipt_scan || transaction.receipt_scan.status === "done";
-    if (!isDone) return;
-    if (!transaction.date) return;
-    const rDate = new Date(transaction.date);
-    if (rDate.getMonth() === curMonth && rDate.getFullYear() === curYear) {
-      transaction.lines?.forEach((item) => {
-        if (item.category_id != null && item.price > 0)
-          categoryTotals[item.category_id] = (categoryTotals[item.category_id] || 0) + item.price;
-      });
-    }
-  });
-
-  let topCategoryName = "Brak";
-  let topCategoryValue = 0;
-  Object.entries(categoryTotals).forEach(([catIdStr, val]) => {
-    if (val > topCategoryValue) {
-      topCategoryValue = val;
-      const cat = categories?.find(c => c.id === parseInt(catIdStr));
-      if (cat) {
-        topCategoryName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
+  const scanMutation = useMutation({
+    mutationFn: ({ file, force }: { file: File; force?: boolean }) =>
+      api.scanTransaction(file, force),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Paragon przesłany!", { description: "Analiza AI w toku." });
+    },
+    onError: (error: AxiosError) => {
+      if (error.response?.status === 409) {
+        toast.warning("Duplikat!", {
+          description: "Ten paragon już istnieje. Dodać mimo to?",
+          action: {
+            label: "Tak",
+            onClick: () => {
+              const formData = error.config?.data as FormData | undefined;
+              const file = formData?.get('file') as File | null;
+              if (file) scanMutation.mutate({ file, force: true });
+            }
+          }
+        });
+      } else {
+        toast.error("Błąd wysyłania.");
       }
-    }
+    },
   });
 
-  if (isTransactionsLoading || isBudgetLoading) {
+  const handleScanClick = () => fileInputRef.current?.click();
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Wybierz zdjęcie.");
+        return;
+      }
+      scanMutation.mutate({ file });
+      e.target.value = "";
+    }
+  };
+
+  // --- DATA AGGREGATION ---
+
+  const totalSpent = budgetSummary?.total_spent ?? 0;
+  const totalIncome = budgetSummary?.total_income ?? 0;
+  const budgetAmount = budgetSummary?.total_planned ?? 0;
+  const remainingBudget = budgetSummary?.total_remaining ?? 0;
+
+  // Pie Chart Data
+  const pieData = (budgetSummary?.categories ?? [])
+    .filter(c => c.spent > 0)
+    .map(c => {
+      const cat = categories.find(cat => cat.id === c.category_id);
+      return {
+        name: c.category_name,
+        value: c.spent,
+        color: cat?.color ?? "#9ca3af",
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+
+  // Top Envelopes Data
+  const envelopes = (budgetSummary?.categories ?? [])
+    .filter(c => c.planned > 0)
+    .map(c => {
+      const cat = categories.find(cat => cat.id === c.category_id);
+      return {
+        id: c.category_id,
+        name: c.category_name,
+        spent: c.spent,
+        limit: c.planned,
+        color: cat?.color ?? "#3b82f6",
+      };
+    })
+    .sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit))
+    .slice(0, 3);
+
+  if (isTransactionsLoading || isBudgetLoading || isCategoriesLoading) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
-        <div className="text-lg animate-pulse">
-          Ładowanie Twoich finansów... 💸
+      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">
+            Przygotowujemy Twój pulpit...
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-6">
-      {/* KPI Section - 2x2 on mobile, 1x4 on desktop */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KPICard
-          title={`Suma Wydatków - ${monthName}`}
-          value={totalSpent.toLocaleString(undefined, {
-            style: "currency",
-            currency: "PLN",
-          })}
-          icon={Wallet}
-          iconBgColor="bg-blue-100"
-          iconColor="text-blue-600"
-          action={{
-            label: "Historia wydatków",
-            icon: CalendarDays,
-            onClick: () => setIsMonthlyModalOpen(true),
-          }}
-        />
-
-        <UploadBox
-          totalCount={transactionsCount}
-          processingCount={processingCount}
-          onAddManual={() => setAddTxOpen(true)}
-        />
-
-        <KPICard
-          title={`BUDŻET - ${monthName.toUpperCase()}`}
-          value={
-            <div className="flex items-center gap-1 lg:gap-2">
-              <span className="truncate">
-                {budgetAmount > 0
-                  ? remainingBudget.toLocaleString(undefined, {
-                      style: "currency",
-                      currency: "PLN",
-                    })
-                  : "Brak"}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 lg:h-6 lg:w-6 rounded-full hover:bg-muted"
-                onClick={() => setIsBudgetModalOpen(true)}
-              >
-                {budgetAmount > 0 ? (
-                  <Pencil className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
-                ) : (
-                  <PlusCircle className="h-3 w-3 lg:h-3.5 lg:w-3.5" />
-                )}
-              </Button>
-            </div>
-          }
-          icon={PiggyBank}
-          iconBgColor="bg-pink-100"
-          iconColor="text-pink-600"
-          showProgress={budgetAmount > 0}
-          progressValue={budgetProgress}
-          highlight={budgetAmount > 0 && remainingBudget < 0}
-        />
-
-        <KPICard
-          title="Dominująca Kategoria"
-          value={topCategoryName}
-          icon={TrendingUp}
-          iconBgColor="bg-purple-100"
-          iconColor="text-purple-600"
-        />
-      </section>
-
-      {/* Main Content */}
-      <section className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3">
-          <TransactionsTable
-            transactions={transactions || []}
-            isLoading={isTransactionsLoading}
-            error={error}
-          />
+    <div className="p-4 lg:p-8 max-w-7xl mx-auto space-y-8">
+      {/* Header & Quick Actions */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">{capitalizedMonth} {curYear}</h1>
+          <p className="text-muted-foreground font-medium">Oto podsumowanie Twoich finansów.</p>
         </div>
-        <div className="lg:col-span-2 h-full">
-          <SpendingChart />
+        <div className="flex items-center gap-2">
+          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+          <Button 
+            onClick={handleScanClick} 
+            variant="outline" 
+            className="rounded-full font-bold border-2 hover:bg-primary/5 h-11 px-6 transition-all active:scale-95"
+            disabled={scanMutation.isPending}
+          >
+            {scanMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Camera className="mr-2 size-4" />}
+            Skanuj
+          </Button>
+          <Button 
+            onClick={() => setAddTxOpen(true)} 
+            className="rounded-full font-bold shadow-lg shadow-primary/20 h-11 px-6 transition-all active:scale-95"
+          >
+            <Plus className="mr-2 size-4" /> Dodaj
+          </Button>
         </div>
-      </section>
+      </div>
 
-      <MonthlySummaryModal
-        transactions={transactions}
-        isOpen={isMonthlyModalOpen}
-        onClose={() => setIsMonthlyModalOpen(false)}
+      {/* Row 1: Summary */}
+      <BudgetSummaryCard 
+        remaining={remainingBudget}
+        planned={budgetAmount}
+        spent={totalSpent}
+        income={totalIncome}
+        onSetUpBudget={() => setIsBudgetModalOpen(true)}
       />
+
+      {/* Row 2: Charts & Envelopes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <SpendingPieChart data={pieData} isLoading={isBudgetLoading} total={totalSpent} />
+        <TopEnvelopesCard envelopes={envelopes} isLoading={isBudgetLoading} />
+      </div>
+
+      {/* Row 3: Recent Transactions */}
+      <RecentTransactionsList transactions={transactions} isLoading={isTransactionsLoading} />
+
+      {/* Modals */}
       <BudgetModal
         isOpen={isBudgetModalOpen}
         onClose={() => setIsBudgetModalOpen(false)}

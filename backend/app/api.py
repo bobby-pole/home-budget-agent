@@ -5,12 +5,15 @@ import hashlib
 from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from sqlalchemy import extract
 from sqlmodel import Session, select, desc, col
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan,
-    MonthlyBudget, MonthlyBudgetUpdate,
+    MonthlyBudget, MonthlyBudgetUpdate, MonthlyBudgetRead,
+    BudgetCategoryLimit, BudgetCategoryLimitUpdate, BudgetCategoryLimitRead,
+    CategoryBudgetSummaryItem, MonthlyBudgetSummary,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink
 )
@@ -394,7 +397,7 @@ async def delete_transaction(
 
 # --- BUDGET ---
 
-@router.get("/budget/{year}/{month}", response_model=MonthlyBudget)
+@router.get("/budget/{year}/{month}", response_model=MonthlyBudgetRead)
 async def get_budget(
     year: int,
     month: int,
@@ -409,11 +412,11 @@ async def get_budget(
     )
     budget = session.exec(statement).first()
     if not budget:
-        return MonthlyBudget(year=year, month=month, amount=0.0, user_id=current_user.id)
+        return MonthlyBudgetRead(year=year, month=month, amount=0.0, user_id=current_user.id or 0)
     return budget
 
 
-@router.post("/budget/{year}/{month}", response_model=MonthlyBudget)
+@router.post("/budget/{year}/{month}", response_model=MonthlyBudgetRead)
 async def set_budget(
     year: int,
     month: int,
@@ -430,17 +433,208 @@ async def set_budget(
     existing = session.exec(statement).first()
 
     if existing:
-        existing.amount = budget_data.amount
+        if budget_data.amount is not None:
+            existing.amount = budget_data.amount
         session.add(existing)
         session.commit()
         session.refresh(existing)
         return existing
 
-    new_budget = MonthlyBudget(year=year, month=month, amount=budget_data.amount, user_id=current_user.id)
+    new_budget = MonthlyBudget(year=year, month=month, amount=budget_data.amount or 0.0, user_id=current_user.id)
     session.add(new_budget)
     session.commit()
     session.refresh(new_budget)
     return new_budget
+
+
+
+@router.get("/budget/{year}/{month}/limits", response_model=List[BudgetCategoryLimitRead])
+async def get_category_limits(
+    year: int,
+    month: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    budget_stmt = select(MonthlyBudget).where(
+        MonthlyBudget.year == year,
+        MonthlyBudget.month == month,
+        MonthlyBudget.user_id == current_user.id,
+    )
+    budget = session.exec(budget_stmt).first()
+    if not budget:
+        return []
+
+    limits_stmt = select(BudgetCategoryLimit).where(
+        BudgetCategoryLimit.monthly_budget_id == budget.id
+    )
+    return session.exec(limits_stmt).all()
+
+
+@router.put("/budget/{year}/{month}/limits/{category_id}", response_model=BudgetCategoryLimitRead)
+async def upsert_category_limit(
+    year: int,
+    month: int,
+    category_id: int,
+    limit_data: BudgetCategoryLimitUpdate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    # Ensure MonthlyBudget exists
+    budget_stmt = select(MonthlyBudget).where(
+        MonthlyBudget.year == year,
+        MonthlyBudget.month == month,
+        MonthlyBudget.user_id == current_user.id,
+    )
+    budget = session.exec(budget_stmt).first()
+    if not budget:
+        budget = MonthlyBudget(year=year, month=month, amount=0.0, user_id=current_user.id)
+        session.add(budget)
+        session.commit()
+        session.refresh(budget)
+
+    limit_stmt = select(BudgetCategoryLimit).where(
+        BudgetCategoryLimit.monthly_budget_id == budget.id,
+        BudgetCategoryLimit.category_id == category_id,
+    )
+    limit = session.exec(limit_stmt).first()
+
+    if limit:
+        limit.amount = limit_data.amount
+    else:
+        assert budget.id is not None, "Budget ID is None after commit"
+        limit = BudgetCategoryLimit(
+            monthly_budget_id=budget.id,
+            category_id=category_id,
+            amount=limit_data.amount,
+        )
+
+    session.add(limit)
+    session.commit()
+    session.refresh(limit)
+    return limit
+
+
+@router.delete("/budget/{year}/{month}/limits/{category_id}", status_code=204)
+async def delete_category_limit(
+    year: int,
+    month: int,
+    category_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    budget_stmt = select(MonthlyBudget).where(
+        MonthlyBudget.year == year,
+        MonthlyBudget.month == month,
+        MonthlyBudget.user_id == current_user.id,
+    )
+    budget = session.exec(budget_stmt).first()
+    if not budget:
+        raise HTTPException(status_code=404, detail="Limit not found")
+
+    limit_stmt = select(BudgetCategoryLimit).where(
+        BudgetCategoryLimit.monthly_budget_id == budget.id,
+        BudgetCategoryLimit.category_id == category_id,
+    )
+    limit = session.exec(limit_stmt).first()
+    if not limit:
+        raise HTTPException(status_code=404, detail="Limit not found")
+
+    session.delete(limit)
+    session.commit()
+    return None
+
+
+@router.get("/budget/{year}/{month}/summary", response_model=MonthlyBudgetSummary)
+async def get_budget_summary(
+    year: int,
+    month: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    # --- Fetch category limits for this month ---
+    budget_stmt = select(MonthlyBudget).where(
+        MonthlyBudget.year == year,
+        MonthlyBudget.month == month,
+        MonthlyBudget.user_id == current_user.id,
+    )
+    budget = session.exec(budget_stmt).first()
+
+    limits: dict[int, float] = {}  # category_id -> planned amount
+    if budget:
+        limits_stmt = select(BudgetCategoryLimit).where(
+            BudgetCategoryLimit.monthly_budget_id == budget.id
+        )
+        for lim in session.exec(limits_stmt).all():
+            limits[lim.category_id] = lim.amount
+
+    # --- Fetch transactions for this month/year belonging to current user ---
+    transactions_stmt = select(Transaction).where(
+        Transaction.uploaded_by == current_user.id,
+        extract("year", col(Transaction.date)) == year,
+        extract("month", col(Transaction.date)) == month,
+    )
+    month_transactions = session.exec(transactions_stmt).all()
+
+    # --- total_income: sum of income transactions ---
+    income_stmt = select(Transaction).where(
+        Transaction.uploaded_by == current_user.id,
+        Transaction.type == "income",
+        extract("year", col(Transaction.date)) == year,
+        extract("month", col(Transaction.date)) == month,
+    )
+    total_income = sum(t.total_amount for t in session.exec(income_stmt).all())
+
+    # --- Build spent per category from TransactionLines (non-income transactions) ---
+    expense_transaction_ids = {
+        t.id for t in month_transactions if t.type != "income" and t.id is not None
+    }
+
+    spent_per_category: dict[int, float] = {}
+    if expense_transaction_ids:
+        lines_stmt = select(TransactionLine).where(
+            col(TransactionLine.transaction_id).in_(expense_transaction_ids)
+        )
+        lines = session.exec(lines_stmt).all()
+        for line in lines:
+            if line.category_id is not None:
+                spent_per_category[line.category_id] = (
+                    spent_per_category.get(line.category_id, 0.0) + line.price
+                )
+
+    # --- Merge limits and spent into per-category summary ---
+    all_category_ids = set(limits.keys()) | set(spent_per_category.keys())
+
+    category_items: list[CategoryBudgetSummaryItem] = []
+    for cat_id in all_category_ids:
+        category = session.get(Category, cat_id)
+        cat_name = category.name if category else f"Category {cat_id}"
+        planned = limits.get(cat_id, 0.0)
+        spent = spent_per_category.get(cat_id, 0.0)
+        category_items.append(
+            CategoryBudgetSummaryItem(
+                category_id=cat_id,
+                category_name=cat_name,
+                planned=planned,
+                spent=spent,
+                remaining=planned - spent,
+            )
+        )
+
+    # Sort for stable ordering: categories with limits first, then by name
+    category_items.sort(key=lambda x: (x.planned == 0.0, x.category_name))
+
+    total_planned = sum(item.planned for item in category_items)
+    total_spent = sum(item.spent for item in category_items)
+
+    return MonthlyBudgetSummary(
+        year=year,
+        month=month,
+        total_planned=total_planned,
+        total_spent=total_spent,
+        total_remaining=total_planned - total_spent,
+        total_income=total_income,
+        categories=category_items,
+    )
 
 
 # --- CATEGORIES ---

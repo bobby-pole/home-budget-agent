@@ -1,6 +1,7 @@
 # backend/app/models.py
 from typing import List, Optional
 from datetime import datetime, timezone
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -155,9 +156,40 @@ class MonthlyBudget(SQLModel, table=True):
     user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
 
     budget: Optional[Budget] = Relationship(back_populates="monthly_budgets")
+    category_limits: List["BudgetCategoryLimit"] = Relationship(back_populates="monthly_budget")
+
+
+# ─── BudgetCategoryLimit (spending limit per category per month) ─────────────
+
+class BudgetCategoryLimit(SQLModel, table=True):
+    __tablename__: str = "budget_category_limit"  # type: ignore
+    __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_category_limit"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    monthly_budget_id: int = Field(foreign_key="monthly_budget.id", index=True)
+    category_id: int = Field(foreign_key="category.id", index=True)
+    amount: float = Field(default=0.0)
+
+    monthly_budget: Optional[MonthlyBudget] = Relationship(back_populates="category_limits")
+    category: Optional["Category"] = Relationship()
 
 
 # ─── API DTOs ────────────────────────────────────────────────────────────────
+
+class BudgetCategoryLimitRead(SQLModel):
+    id: int
+    category_id: int
+    amount: float
+
+
+class MonthlyBudgetRead(SQLModel):
+    id: Optional[int] = None
+    month: int
+    year: int
+    amount: float
+    user_id: int
+    category_limits: List[BudgetCategoryLimitRead] = []
+
 
 class TransactionLineRead(TransactionLineBase):
     id: int
@@ -221,7 +253,29 @@ class TransactionLineUpdate(SQLModel):
 
 
 class MonthlyBudgetUpdate(SQLModel):
+    amount: Optional[float] = None
+
+
+class BudgetCategoryLimitUpdate(SQLModel):
     amount: float
+
+
+class CategoryBudgetSummaryItem(SQLModel):
+    category_id: int
+    category_name: str
+    planned: float
+    spent: float
+    remaining: float
+
+
+class MonthlyBudgetSummary(SQLModel):
+    year: int
+    month: int
+    total_planned: float
+    total_spent: float
+    total_remaining: float
+    total_income: float
+    categories: List[CategoryBudgetSummaryItem]
 
 
 class CategoryCreate(CategoryBase):

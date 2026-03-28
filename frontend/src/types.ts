@@ -59,3 +59,36 @@ export interface Transaction {
   lines: TransactionLine[];
   receipt_scan?: ReceiptScan | null;
 }
+
+export interface BudgetCategoryLimit {
+  id: number;
+  category_id: number;
+  amount: number;
+}
+
+export interface MonthlyBudget {
+  id?: number;
+  month: number;
+  year: number;
+  amount: number;
+  user_id: number;
+  category_limits: BudgetCategoryLimit[];
+}
+
+export interface CategoryBudgetSummaryItem {
+  category_id: number;
+  category_name: string;
+  planned: number;
+  spent: number;
+  remaining: number;
+}
+
+export interface MonthlyBudgetSummary {
+  year: number;
+  month: number;
+  total_planned: number;
+  total_spent: number;
+  total_remaining: number;
+  total_income: number;
+  categories: CategoryBudgetSummaryItem[];
+}

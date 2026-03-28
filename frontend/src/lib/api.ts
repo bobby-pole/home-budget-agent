@@ -1,5 +1,5 @@
 // frontend/src/lib/api.ts
-import type { Transaction, AuthResponse, Category, Tag } from "@/types";
+import type { Transaction, AuthResponse, Category, Tag, MonthlyBudgetSummary } from "@/types";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 
@@ -109,6 +109,25 @@ export const api = {
   setBudget: async (data: { year: number; month: number; amount: number }) => {
     const response = await apiClient.post(`/budget/${data.year}/${data.month}`, { amount: data.amount });
     return response.data;
+  },
+
+  getBudgetSummary: async (year: number, month: number): Promise<MonthlyBudgetSummary> => {
+    const response = await apiClient.get(`/budget/${year}/${month}/summary`);
+    return response.data;
+  },
+
+  getBudgetLimits: async (year: number, month: number) => {
+    const response = await apiClient.get(`/budget/${year}/${month}/limits`);
+    return response.data;
+  },
+
+  setBudgetLimit: async (year: number, month: number, category_id: number, amount: number) => {
+    const response = await apiClient.put(`/budget/${year}/${month}/limits/${category_id}`, { amount });
+    return response.data;
+  },
+
+  deleteBudgetLimit: async (year: number, month: number, category_id: number) => {
+    await apiClient.delete(`/budget/${year}/${month}/limits/${category_id}`);
   },
 
   // --- CATEGORIES ---

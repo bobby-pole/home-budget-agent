@@ -97,12 +97,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" variant="sidebar">
       <SidebarHeader className="px-2 py-4">
         <div className={cn(
-          "flex items-center gap-2",
-          isCollapsed ? "justify-center" : "px-1"
+          "flex items-center",
+          isCollapsed ? "justify-center" : "px-2"
         )}>
           <Link to="/dashboard" className="flex items-center gap-2.5 min-w-0">
-            <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground shrink-0 shadow-sm">
-              <Wallet className="size-4" />
+            <div className="flex items-center justify-center size-9 rounded-lg bg-primary text-primary-foreground shrink-0 shadow-sm transition-all">
+              <Wallet className="size-5" />
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
@@ -120,7 +120,7 @@ export function AppSidebar() {
 
       <SidebarSeparator />
 
-      <SidebarContent className="px-1.5">
+      <SidebarContent className="px-2">
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -132,16 +132,17 @@ export function AppSidebar() {
                       asChild
                       isActive={isActive}
                       tooltip={item.title}
-                      size="default"
+                      size="lg"
                       className={cn(
-                        "transition-colors",
+                        "transition-all duration-200",
                         isActive &&
-                          "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+                        isCollapsed && "justify-center"
                       )}
                     >
                       <Link to={item.href}>
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
+                        <item.icon className={cn("shrink-0", isCollapsed ? "size-5" : "size-4")} />
+                        {!isCollapsed && <span>{item.title}</span>}
                       </Link>
                     </SidebarMenuButton>
                     {item.title === "AI Inbox" && pendingScansCount > 0 && (
@@ -157,97 +158,108 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="px-1.5 pb-3">
-        <SidebarMenu>
-          {bottomNavItems.map((item) => {
-            const isActive = pathname === item.href
-            return (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  tooltip={item.title}
-                  className={cn(
-                    "transition-colors",
-                    isActive &&
-                      "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                  )}
-                >
-                  <Link to={item.href}>
-                    <item.icon className="size-4" />
-                    <span>{item.title}</span>
-                  </Link>
-                </SidebarMenuButton>
+      <SidebarFooter className="px-2 pb-3">
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {bottomNavItems.map((item) => {
+                const isActive = pathname === item.href
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.title}
+                      size="lg"
+                      className={cn(
+                        "transition-all duration-200",
+                        isActive &&
+                          "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
+                        isCollapsed && "justify-center"
+                      )}
+                    >
+                      <Link to={item.href}>
+                        <item.icon className={cn("shrink-0", isCollapsed ? "size-5" : "size-4")} />
+                        {!isCollapsed && <span>{item.title}</span>}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
+            </SidebarMenu>
+
+            <SidebarSeparator className="my-2" />
+
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        "data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground transition-all duration-200",
+                        isCollapsed && "justify-center"
+                      )}
+                    >
+                      <Avatar className="size-8 shrink-0 rounded-lg shadow-sm">
+                        <AvatarFallback className="bg-primary text-primary-foreground text-xs font-black rounded-lg">
+                          {initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      {!isCollapsed && (
+                        <div className="grid flex-1 text-left text-sm leading-tight ml-2">
+                          <span className="truncate font-semibold text-sidebar-foreground">
+                            {user?.email?.split('@')[0]}
+                          </span>
+                          <span className="truncate text-[10px] text-muted-foreground">
+                            {user?.email}
+                          </span>
+                        </div>
+                      )}
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                    side="right"
+                    align="end"
+                    sideOffset={4}
+                  >
+                    <DropdownMenuLabel className="p-0 font-normal">
+                      <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                        <Avatar className="h-8 w-8 rounded-lg">
+                          <AvatarFallback className="bg-primary text-primary-foreground rounded-lg">
+                            {initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="grid flex-1 text-left text-sm leading-tight">
+                          <span className="truncate font-semibold">{user?.email?.split('@')[0]}</span>
+                          <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
+                        </div>
+                      </div>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      Profil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Ustawienia
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={handleLogout} 
+                      className="text-destructive focus:text-destructive cursor-pointer"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Wyloguj się
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SidebarMenuItem>
-            )
-          })}
-        </SidebarMenu>
-
-        <SidebarSeparator />
-
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
-                  <Avatar className="size-8 shrink-0 rounded-lg">
-                    <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium rounded-lg">
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-semibold text-sidebar-foreground">
-                      {user?.email?.split('@')[0]}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {user?.email}
-                    </span>
-                  </div>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-                side="right"
-                align="end"
-                sideOffset={4}
-              >
-                <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="bg-primary text-primary-foreground rounded-lg">
-                        {initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid flex-1 text-left text-sm leading-tight">
-                      <span className="truncate font-semibold">{user?.email?.split('@')[0]}</span>
-                      <span className="truncate text-xs text-muted-foreground">{user?.email}</span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
-                  <User className="mr-2 h-4 w-4" />
-                  Profil
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Ustawienia
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={handleLogout} 
-                  className="text-destructive focus:text-destructive cursor-pointer"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Wyloguj się
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

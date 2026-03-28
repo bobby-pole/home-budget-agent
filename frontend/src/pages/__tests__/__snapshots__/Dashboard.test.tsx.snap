@@ -3,57 +3,117 @@
 exports[`Dashboard > snapshot — loaded state 1`] = `
 <div>
   <div
-    class="p-4 lg:p-6 space-y-6"
+    class="p-4 lg:p-8 max-w-7xl mx-auto space-y-8"
   >
-    <section
-      class="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4"
-    >
-      <div
-        data-testid="mock-kpi-card"
-      >
-        KpiCard
-      </div>
-      <div
-        data-testid="mock-upload-box"
-      >
-        UploadBox
-      </div>
-      <div
-        data-testid="mock-kpi-card"
-      >
-        KpiCard
-      </div>
-      <div
-        data-testid="mock-kpi-card"
-      >
-        KpiCard
-      </div>
-    </section>
-    <section
-      class="grid grid-cols-1 gap-6 lg:grid-cols-5"
-    >
-      <div
-        class="lg:col-span-3"
-      >
-        <div
-          data-testid="mock-transactions-table"
-        >
-          TransactionsTable
-        </div>
-      </div>
-      <div
-        class="lg:col-span-2 h-full"
-      >
-        <div
-          data-testid="mock-spending-chart"
-        >
-          SpendingChart
-        </div>
-      </div>
-    </section>
     <div
-      data-testid="mock-monthly-summary-modal"
-    />
+      class="flex flex-col md:flex-row md:items-center justify-between gap-4"
+    >
+      <div>
+        <h1
+          class="text-3xl font-black tracking-tight"
+        >
+          Marzec
+           
+          2026
+        </h1>
+        <p
+          class="text-muted-foreground font-medium"
+        >
+          Oto podsumowanie Twoich finansów.
+        </p>
+      </div>
+      <div
+        class="flex items-center gap-2"
+      >
+        <input
+          accept="image/*"
+          class="hidden"
+          type="file"
+        />
+        <button
+          class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-background shadow-xs hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 py-2 has-[>svg]:px-3 rounded-full font-bold border-2 hover:bg-primary/5 h-11 px-6 transition-all active:scale-95"
+          data-size="default"
+          data-slot="button"
+          data-variant="outline"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-camera mr-2 size-4"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"
+            />
+            <circle
+              cx="12"
+              cy="13"
+              r="3"
+            />
+          </svg>
+          Skanuj
+        </button>
+        <button
+          class="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground hover:bg-primary/90 py-2 has-[>svg]:px-3 rounded-full font-bold shadow-lg shadow-primary/20 h-11 px-6 transition-all active:scale-95"
+          data-size="default"
+          data-slot="button"
+          data-variant="default"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-plus mr-2 size-4"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M5 12h14"
+            />
+            <path
+              d="M12 5v14"
+            />
+          </svg>
+           Dodaj
+        </button>
+      </div>
+    </div>
+    <div
+      data-testid="mock-budget-summary"
+    >
+      BudgetSummaryCard
+    </div>
+    <div
+      class="grid grid-cols-1 lg:grid-cols-2 gap-8"
+    >
+      <div
+        data-testid="mock-pie-chart"
+      >
+        SpendingPieChart
+      </div>
+      <div
+        data-testid="mock-top-envelopes"
+      >
+        TopEnvelopesCard
+      </div>
+    </div>
+    <div
+      data-testid="mock-recent-transactions"
+    >
+      RecentTransactionsList
+    </div>
     <div
       data-testid="mock-budget-modal"
     />
