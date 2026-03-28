@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { screen, waitFor, fireEvent } from "@testing-library/react";
 import { render } from "@/__tests__/test-utils";
 import { Dashboard } from "@/pages/Dashboard";
@@ -29,12 +29,12 @@ vi.mock("@/components/dashboard/AddTransactionModal", () => ({
 }));
 
 const mockGetTransactions = vi.fn();
-const mockGetBudget = vi.fn();
+const mockGetBudgetSummary = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   api: {
     getTransactions: () => mockGetTransactions(),
-    getBudget: () => mockGetBudget(),
+    getBudgetSummary: () => mockGetBudgetSummary(),
     getCategories: vi.fn().mockResolvedValue([]),
     scanTransaction: vi.fn(),
   },
@@ -42,8 +42,22 @@ vi.mock("@/lib/api", () => ({
 
 describe("Dashboard", () => {
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-01"));
     mockGetTransactions.mockResolvedValue([]);
-    mockGetBudget.mockResolvedValue({ amount: 0, year: 2026, month: 2, category_limits: [] });
+    mockGetBudgetSummary.mockResolvedValue({
+      year: 2026,
+      month: 3,
+      total_planned: 0,
+      total_spent: 0,
+      total_remaining: 0,
+      total_income: 0,
+      categories: [],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("shows loading state before data resolves", () => {
