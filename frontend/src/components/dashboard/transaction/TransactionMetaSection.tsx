@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
 import { CATEGORY_LABELS } from "@/lib/constants";
@@ -23,9 +23,10 @@ import { TagPicker } from "../shared/TagPicker";
 
 interface TransactionMetaSectionProps {
   control: Control<TransactionFormInput>;
+  hideCategory?: boolean;
 }
 
-export function TransactionMetaSection({ control }: TransactionMetaSectionProps) {
+export function TransactionMetaSection({ control, hideCategory = false }: TransactionMetaSectionProps) {
   const { data: categories } = useQuery({
     queryKey: ["categories"],
     queryFn: api.getCategories,
@@ -33,46 +34,53 @@ export function TransactionMetaSection({ control }: TransactionMetaSectionProps)
 
   return (
     <SectionGrid>
-      <FormField
-        control={control}
-        name="category_id"
-        render={({ field }) => (
-          <FormItem>
-            <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Kategoria
-            </FormLabel>
-            <Select onValueChange={field.onChange} value={field.value}>
-              <FormControl>
-                <SelectTrigger>
-                  <SelectValue placeholder="Wybierz kategorię" />
-                </SelectTrigger>
-              </FormControl>
-              <SelectContent>
-                {categories?.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id.toString()}>
-                    <span className="flex items-center gap-2">
-                      <span className="w-4 text-center">{cat.icon}</span>
-                      {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
+      {!hideCategory && (
+        <FormField
+          control={control}
+          name="category_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                Kategoria
+              </FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Wybierz kategorię" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {categories?.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id.toString()}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 text-center">{cat.icon}</span>
+                        {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
 
       <FormField
         control={control}
         name="note"
         render={({ field }) => (
-          <FormItem>
+          <FormItem className="col-span-full">
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Opis (opcjonalnie)
+              Notatka
             </FormLabel>
             <FormControl>
-              <Input placeholder="np. tygodniowe zakupy" {...field} />
+              <Textarea
+                placeholder="np. prezent dla mamy, rata 3/12..."
+                className="resize-none"
+                rows={2}
+                {...field}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>

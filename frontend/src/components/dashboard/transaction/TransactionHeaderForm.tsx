@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +30,7 @@ const formSchema = z.object({
   total_amount: z.coerce.number().min(0.01, "Kwota musi być większa od 0"),
   currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
   tag_ids: z.array(z.number()).default([]),
+  note: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -49,6 +51,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       total_amount: 0,
       currency: "PLN",
       tag_ids: [],
+      note: "",
     },
   });
 
@@ -59,6 +62,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       total_amount: transaction.total_amount,
       currency: transaction.currency,
       tag_ids: transaction.tags?.map(t => t.id) || [],
+      note: transaction.note ?? "",
     });
   }, [transaction, form]);
 
@@ -67,6 +71,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       api.updateTransaction(transaction.id, {
         ...values,
         date: new Date(values.date).toISOString(),
+        note: values.note || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -192,8 +197,8 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                   <div className="flex flex-wrap gap-2 pt-1">
                     {transaction.tags && transaction.tags.length > 0 ? (
                       transaction.tags.map(tag => (
-                        <Badge 
-                          key={tag.id} 
+                        <Badge
+                          key={tag.id}
                           variant="secondary"
                           className="text-white border-0 shadow-sm"
                           style={{ backgroundColor: tag.color || "#9ca3af" }}
@@ -204,6 +209,35 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                     ) : (
                       <span className="text-xs text-muted-foreground italic">Brak tagów</span>
                     )}
+                  </div>
+                )}
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="note"
+            render={({ field }) => (
+              <FormItem className="col-span-full">
+                <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                  Notatka
+                </FormLabel>
+                {isEditing ? (
+                  <>
+                    <FormControl>
+                      <Textarea
+                        placeholder="np. prezent dla mamy, rata 3/12..."
+                        className="resize-none"
+                        rows={2}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground italic">
+                    {field.value ? field.value : "Brak notatki"}
                   </div>
                 )}
               </FormItem>

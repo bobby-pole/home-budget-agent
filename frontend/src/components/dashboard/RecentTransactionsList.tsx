@@ -52,7 +52,12 @@ export function RecentTransactionsList({ transactions, isLoading }: RecentTransa
                       <span className="text-sm font-bold truncate leading-tight">
                         {tx.merchant_name}
                       </span>
-                      <div className="flex items-center gap-2">
+                      {tx.note && (
+                        <span className="text-[10px] text-muted-foreground truncate italic leading-tight">
+                          {tx.note}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[10px] text-muted-foreground font-medium">
                           {tx.date ? new Date(tx.date).toLocaleDateString("pl-PL") : "Brak daty"}
                         </span>
