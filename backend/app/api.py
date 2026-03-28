@@ -4,7 +4,7 @@ import os
 import hashlib
 from uuid import uuid4
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from sqlalchemy import extract
 from sqlmodel import Session, select, desc, col
 from .models import (
@@ -162,6 +162,7 @@ def create_manual_transaction(
         type=data.type,
         uploaded_by=current_user.id,
         category_id=data.category_id,
+        note=data.note,
     )
 
     if data.tag_ids:
@@ -199,6 +200,7 @@ def create_manual_transaction(
 async def scan_transaction(
     background_tasks: BackgroundTasks,
     force: bool = False,
+    note: str | None = Form(None),
     file: UploadFile = File(...),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
@@ -234,6 +236,7 @@ async def scan_transaction(
     new_transaction = Transaction(
         merchant_name="Processing...",
         uploaded_by=current_user.id,
+        note=note,
     )
     session.add(new_transaction)
     session.commit()
