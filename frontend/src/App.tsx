@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/lib/ThemeProvider";
@@ -20,7 +21,7 @@ function ProtectedLayout({ children }: { children: ReactNode }) {
   if (!token) return <Navigate to="/login" replace />;
 
   return (
-    <SidebarProvider>
+    <SidebarProvider style={{ '--sidebar-width-icon': '4rem' } as CSSProperties}>
       <div className="flex min-h-screen w-full">
         <AppSidebar />
         <SidebarInset>

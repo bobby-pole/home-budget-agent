@@ -1,6 +1,7 @@
 # backend/app/models.py
 from typing import List, Optional
 from datetime import datetime, timezone
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -162,6 +163,7 @@ class MonthlyBudget(SQLModel, table=True):
 
 class BudgetCategoryLimit(SQLModel, table=True):
     __tablename__: str = "budget_category_limit"  # type: ignore
+    __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_category_limit"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     monthly_budget_id: int = Field(foreign_key="monthly_budget.id", index=True)
@@ -255,7 +257,6 @@ class MonthlyBudgetUpdate(SQLModel):
 
 
 class BudgetCategoryLimitUpdate(SQLModel):
-    category_id: int
     amount: float
 
 
