@@ -54,6 +54,7 @@ export interface Transaction {
   currency: string;
   is_manual?: boolean;
   type: 'expense' | 'income' | 'transfer';
+  note?: string;
   category_id?: number;
   tags?: Tag[];
   lines: TransactionLine[];

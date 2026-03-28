@@ -25,6 +25,9 @@ __pycache__/
 .vscode/
 .DS_Store
 
+# Documentation and temporary workflow guides
+docs/
+
 # Local Claude Code cache (not committed)
 .claude/
 
