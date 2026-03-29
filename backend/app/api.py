@@ -306,6 +306,8 @@ async def retry_transaction(
 
 @router.get("/transactions", response_model=List[TransactionRead])
 async def get_transactions(
+    limit: int = 50,
+    offset: int = 0,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -313,6 +315,8 @@ async def get_transactions(
         select(Transaction)
         .where(Transaction.uploaded_by == current_user.id)
         .order_by(desc(Transaction.date))
+        .offset(offset)
+        .limit(limit)
     )
     results = session.exec(statement).all()
     return results
