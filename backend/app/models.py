@@ -122,6 +122,7 @@ class ReceiptScan(SQLModel, table=True):
     image_path: Optional[str] = None
     status: str = Field(default="processing")  # processing | done | error | needs_review
     content_hash: Optional[str] = Field(default=None, index=True)
+    keep_image: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")

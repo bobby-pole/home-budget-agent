@@ -128,15 +128,19 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         session.commit()
         print(f"✅ AI Processing finished for transaction #{transaction_id}")
 
-        if image_path and os.path.exists(image_path):
+        # --- LOGIKA OSZCZĘDZANIA MIEJSCA NA VPS ---
+        # Usuwamy plik tylko jeśli użytkownik NIE zaznaczył opcji zachowania obrazu (np. do gwarancji)
+        if not scan.keep_image and image_path and os.path.exists(image_path):
             try:
                 os.remove(image_path)
-                print(f"🗑️  Deleted processed image: {image_path}")
+                print(f"🗑️  Deleted processed image: {image_path} (Storage limit protection)")
                 scan.image_path = None
                 session.add(scan)
                 session.commit()
             except Exception as e:
                 print(f"⚠️  Failed to delete image {image_path}: {e}")
+        elif scan.keep_image:
+            print(f"💾 Image preserved for transaction #{transaction_id} (User request)")
 
 
 # --- TRANSACTIONS ---
@@ -200,6 +204,7 @@ def create_manual_transaction(
 async def scan_transaction(
     background_tasks: BackgroundTasks,
     force: bool = False,
+    keep_image: bool = Form(False),
     note: str | None = Form(None),
     file: UploadFile = File(...),
     session: Session = Depends(get_ops_session),
@@ -248,6 +253,7 @@ async def scan_transaction(
         image_path=file_path,
         status="processing",
         content_hash=file_hash,
+        keep_image=keep_image,
     )
     session.add(scan)
     session.commit()
