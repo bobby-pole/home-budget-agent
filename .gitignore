@@ -1,5 +1,3 @@
-GEMINI.md
-CLAUDE.md
 # --- Backend / Generated & Private Data ---
 
 # Ignore SQLite database files and data directory
@@ -26,11 +24,13 @@ __pycache__/
 .vscode/
 .DS_Store
 
-# Project documentation (local only — read by Claude Code, Gemini CLI, and subagents)
-# Path: docs/ — business-context.md, roadmap.md, project-analysis.md, decisions-log.md
+# --- Private Project Management (Moved to hba-project-context repo) ---
 docs/
-
-# Local Claude Code cache (not committed)
 .claude/
 
-/node_modules
+.github/workflows/sync-docs.yml
+
+# --- Frontend ---
+node_modules/
+dist/
+.eslintcache
