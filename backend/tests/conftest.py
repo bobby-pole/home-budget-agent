@@ -5,8 +5,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import get_session, get_ops_session
-from app.models import User
+from app.models import User, Budget, BudgetMember
 from app.auth import get_current_user
+from app.api import get_current_budget
 
 # In-memory database for testing
 sqlite_url = "sqlite:///:memory:"
@@ -31,18 +32,29 @@ def client_fixture(session: Session):
     def get_ops_session_override():
         return session
 
-    # Create a test user directly in the test database to satisfy foreign keys
+    # Create a test user and their default budget to satisfy foreign keys and auth deps
     test_user = User(email="test@example.com", hashed_password="hashed_password_mock")
     session.add(test_user)
     session.commit()
     session.refresh(test_user)
-        
+
+    test_budget = Budget(name="Domowy", owner_id=test_user.id)
+    session.add(test_budget)
+    session.commit()
+    session.refresh(test_budget)
+    session.add(BudgetMember(budget_id=test_budget.id, user_id=test_user.id, role="owner"))
+    session.commit()
+
     def get_current_user_override():
         return test_user
+
+    def get_current_budget_override():
+        return test_budget
 
     app.dependency_overrides[get_session] = get_session_override
     app.dependency_overrides[get_ops_session] = get_ops_session_override
     app.dependency_overrides[get_current_user] = get_current_user_override
+    app.dependency_overrides[get_current_budget] = get_current_budget_override
 
     client = TestClient(app)
     yield client
