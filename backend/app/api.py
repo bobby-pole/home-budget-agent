@@ -11,6 +11,7 @@ from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan,
+    Budget, BudgetMember,
     MonthlyBudget, MonthlyBudgetUpdate, MonthlyBudgetRead,
     BudgetCategoryLimit, BudgetCategoryLimitUpdate, BudgetCategoryLimitRead,
     CategoryBudgetSummaryItem, MonthlyBudgetSummary,
@@ -26,6 +27,32 @@ router = APIRouter()
 UPLOAD_DIR = "static/uploads"
 
 
+# --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
+
+def get_current_budget(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session),
+) -> Budget:
+    membership = session.exec(
+        select(BudgetMember).where(BudgetMember.user_id == current_user.id)
+    ).first()
+    if membership:
+        budget = session.get(Budget, membership.budget_id)
+        if budget:
+            return budget
+
+    # Lazy migration: user existed before multi-tenancy — create a default budget on the fly
+    new_budget = Budget(name="Domowy", owner_id=current_user.id)
+    session.add(new_budget)
+    session.commit()
+    session.refresh(new_budget)
+    if new_budget.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create budget")
+    session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
+    session.commit()
+    return new_budget
+
+
 # --- AUTH ---
 
 @router.post("/auth/register", response_model=Token)
@@ -37,7 +64,19 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     session.add(user)
     session.commit()
     session.refresh(user)
-    assert user.id is not None
+    if user.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create user")
+
+    # Create default budget for the new user and link user as owner
+    new_budget = Budget(name="Domowy", owner_id=user.id)
+    session.add(new_budget)
+    session.commit()
+    session.refresh(new_budget)
+    if new_budget.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create budget")
+    session.add(BudgetMember(budget_id=new_budget.id, user_id=user.id, role="owner"))
+    session.commit()
+
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
 
@@ -47,7 +86,8 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.email == user_data.email)).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    assert user.id is not None
+    if user.id is None:
+        raise HTTPException(status_code=500, detail="Invalid user state")
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
 
@@ -150,7 +190,10 @@ def create_manual_transaction(
     data: ManualTransactionCreate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     total = (
         sum(line.price * line.quantity for line in data.lines)
         if data.lines
@@ -165,6 +208,7 @@ def create_manual_transaction(
         is_manual=True,
         type=data.type,
         uploaded_by=current_user.id,
+        budget_id=current_budget.id,
         category_id=data.category_id,
         note=data.note,
     )
@@ -209,7 +253,10 @@ async def scan_transaction(
     file: UploadFile = File(...),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     file_content = await file.read()
     file_hash = hashlib.sha256(file_content).hexdigest()
 
@@ -220,7 +267,7 @@ async def scan_transaction(
             select(ReceiptScan).where(
                 ReceiptScan.content_hash == file_hash,
                 ReceiptScan.transaction_id.in_(  # type: ignore
-                    select(Transaction.id).where(Transaction.uploaded_by == current_user.id)
+                    select(Transaction.id).where(Transaction.budget_id == current_budget.id)
                 ),
             )
         ).first()
@@ -241,13 +288,15 @@ async def scan_transaction(
     new_transaction = Transaction(
         merchant_name="Processing...",
         uploaded_by=current_user.id,
+        budget_id=current_budget.id,
         note=note,
     )
     session.add(new_transaction)
     session.commit()
     session.refresh(new_transaction)
 
-    assert new_transaction.id is not None
+    if new_transaction.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create transaction")
     scan = ReceiptScan(
         transaction_id=new_transaction.id,
         image_path=file_path,
@@ -259,7 +308,8 @@ async def scan_transaction(
     session.commit()
     session.refresh(scan)
 
-    assert scan.id is not None
+    if scan.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create receipt scan")
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
     session.refresh(new_transaction)
@@ -272,12 +322,15 @@ async def retry_transaction(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     transaction = session.get(Transaction, transaction_id)
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if transaction.uploaded_by != current_user.id:
+    if transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to retry this transaction")
 
     scan = session.exec(
@@ -297,8 +350,10 @@ async def retry_transaction(
     session.commit()
     session.refresh(transaction)
 
-    assert transaction.id is not None
-    assert scan.id is not None
+    if transaction.id is None:
+        raise HTTPException(status_code=500, detail="Invalid transaction state")
+    if scan.id is None:
+        raise HTTPException(status_code=500, detail="Invalid scan state")
     background_tasks.add_task(process_transaction_in_background, transaction.id, scan.id, scan.image_path)
 
     return transaction
@@ -310,10 +365,13 @@ async def get_transactions(
     offset: int = 0,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     statement = (
         select(Transaction)
-        .where(Transaction.uploaded_by == current_user.id)
+        .where(Transaction.budget_id == current_budget.id)
         .order_by(desc(Transaction.date))
         .offset(offset)
         .limit(limit)
@@ -328,12 +386,15 @@ async def update_transaction(
     transaction_update: TransactionUpdate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     db_transaction = session.get(Transaction, transaction_id)
     if not db_transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if db_transaction.uploaded_by != current_user.id:
+    if db_transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this transaction")
 
     transaction_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
@@ -357,13 +418,16 @@ async def update_line(
     line_update: TransactionLineUpdate,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     db_line = session.get(TransactionLine, line_id)
     if not db_line or db_line.transaction_id != transaction_id:
         raise HTTPException(status_code=404, detail="Transaction line not found")
 
     parent_transaction = session.get(Transaction, transaction_id)
-    if not parent_transaction or parent_transaction.uploaded_by != current_user.id:
+    if not parent_transaction or parent_transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this line")
 
     line_data = line_update.model_dump(exclude_unset=True)
@@ -381,12 +445,15 @@ async def delete_transaction(
     transaction_id: int,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     transaction = session.get(Transaction, transaction_id)
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
-    if transaction.uploaded_by != current_user.id:
+    if transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this transaction")
 
     scan = session.exec(
@@ -415,18 +482,20 @@ async def get_budget(
     year: int,
     month: int,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     statement = (
         select(MonthlyBudget)
         .where(MonthlyBudget.year == year)
         .where(MonthlyBudget.month == month)
-        .where(MonthlyBudget.user_id == current_user.id)
+        .where(MonthlyBudget.budget_id == current_budget.id)
     )
-    budget = session.exec(statement).first()
-    if not budget:
-        return MonthlyBudgetRead(year=year, month=month, amount=0.0, user_id=current_user.id or 0)
-    return budget
+    monthly = session.exec(statement).first()
+    if not monthly:
+        return MonthlyBudgetRead(year=year, month=month, amount=0.0, budget_id=current_budget.id)
+    return monthly
 
 
 @router.post("/budget/{year}/{month}", response_model=MonthlyBudgetRead)
@@ -435,13 +504,15 @@ async def set_budget(
     month: int,
     budget_data: MonthlyBudgetUpdate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     statement = (
         select(MonthlyBudget)
         .where(MonthlyBudget.year == year)
         .where(MonthlyBudget.month == month)
-        .where(MonthlyBudget.user_id == current_user.id)
+        .where(MonthlyBudget.budget_id == current_budget.id)
     )
     existing = session.exec(statement).first()
 
@@ -453,12 +524,12 @@ async def set_budget(
         session.refresh(existing)
         return existing
 
-    new_budget = MonthlyBudget(year=year, month=month, amount=budget_data.amount or 0.0, user_id=current_user.id)
-    session.add(new_budget)
+    # Create new monthly budget if one doesn't exist
+    new_monthly = MonthlyBudget(year=year, month=month, amount=budget_data.amount or 0.0, budget_id=current_budget.id)
+    session.add(new_monthly)
     session.commit()
-    session.refresh(new_budget)
-    return new_budget
-
+    session.refresh(new_monthly)
+    return new_monthly
 
 
 @router.get("/budget/{year}/{month}/limits", response_model=List[BudgetCategoryLimitRead])
@@ -466,19 +537,21 @@ async def get_category_limits(
     year: int,
     month: int,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     budget_stmt = select(MonthlyBudget).where(
         MonthlyBudget.year == year,
         MonthlyBudget.month == month,
-        MonthlyBudget.user_id == current_user.id,
+        MonthlyBudget.budget_id == current_budget.id,
     )
-    budget = session.exec(budget_stmt).first()
-    if not budget:
+    monthly = session.exec(budget_stmt).first()
+    if not monthly:
         return []
 
     limits_stmt = select(BudgetCategoryLimit).where(
-        BudgetCategoryLimit.monthly_budget_id == budget.id
+        BudgetCategoryLimit.monthly_budget_id == monthly.id
     )
     return session.exec(limits_stmt).all()
 
@@ -490,23 +563,23 @@ async def upsert_category_limit(
     category_id: int,
     limit_data: BudgetCategoryLimitUpdate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     # Ensure MonthlyBudget exists
     budget_stmt = select(MonthlyBudget).where(
         MonthlyBudget.year == year,
         MonthlyBudget.month == month,
-        MonthlyBudget.user_id == current_user.id,
+        MonthlyBudget.budget_id == current_budget.id,
     )
-    budget = session.exec(budget_stmt).first()
-    if not budget:
-        budget = MonthlyBudget(year=year, month=month, amount=0.0, user_id=current_user.id)
-        session.add(budget)
+    monthly = session.exec(budget_stmt).first()
+    if not monthly:
+        monthly = MonthlyBudget(year=year, month=month, amount=0.0, budget_id=current_budget.id)
+        session.add(monthly)
         session.commit()
-        session.refresh(budget)
+        session.refresh(monthly)
 
     limit_stmt = select(BudgetCategoryLimit).where(
-        BudgetCategoryLimit.monthly_budget_id == budget.id,
+        BudgetCategoryLimit.monthly_budget_id == monthly.id,
         BudgetCategoryLimit.category_id == category_id,
     )
     limit = session.exec(limit_stmt).first()
@@ -514,9 +587,10 @@ async def upsert_category_limit(
     if limit:
         limit.amount = limit_data.amount
     else:
-        assert budget.id is not None, "Budget ID is None after commit"
+        if monthly.id is None:
+            raise HTTPException(status_code=500, detail="MonthlyBudget ID is None after commit")
         limit = BudgetCategoryLimit(
-            monthly_budget_id=budget.id,
+            monthly_budget_id=monthly.id,
             category_id=category_id,
             amount=limit_data.amount,
         )
@@ -533,19 +607,19 @@ async def delete_category_limit(
     month: int,
     category_id: int,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     budget_stmt = select(MonthlyBudget).where(
         MonthlyBudget.year == year,
         MonthlyBudget.month == month,
-        MonthlyBudget.user_id == current_user.id,
+        MonthlyBudget.budget_id == current_budget.id,
     )
-    budget = session.exec(budget_stmt).first()
-    if not budget:
+    monthly = session.exec(budget_stmt).first()
+    if not monthly:
         raise HTTPException(status_code=404, detail="Limit not found")
 
     limit_stmt = select(BudgetCategoryLimit).where(
-        BudgetCategoryLimit.monthly_budget_id == budget.id,
+        BudgetCategoryLimit.monthly_budget_id == monthly.id,
         BudgetCategoryLimit.category_id == category_id,
     )
     limit = session.exec(limit_stmt).first()
@@ -563,26 +637,29 @@ async def get_budget_summary(
     month: int,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
     # --- Fetch category limits for this month ---
     budget_stmt = select(MonthlyBudget).where(
         MonthlyBudget.year == year,
         MonthlyBudget.month == month,
-        MonthlyBudget.user_id == current_user.id,
+        MonthlyBudget.budget_id == current_budget.id,
     )
-    budget = session.exec(budget_stmt).first()
+    monthly = session.exec(budget_stmt).first()
 
     limits: dict[int, float] = {}  # category_id -> planned amount
-    if budget:
+    if monthly:
         limits_stmt = select(BudgetCategoryLimit).where(
-            BudgetCategoryLimit.monthly_budget_id == budget.id
+            BudgetCategoryLimit.monthly_budget_id == monthly.id
         )
         for lim in session.exec(limits_stmt).all():
             limits[lim.category_id] = lim.amount
 
-    # --- Fetch transactions for this month/year belonging to current user ---
+    # --- Fetch transactions for this month/year belonging to current budget ---
     transactions_stmt = select(Transaction).where(
-        Transaction.uploaded_by == current_user.id,
+        Transaction.budget_id == current_budget.id,
         extract("year", col(Transaction.date)) == year,
         extract("month", col(Transaction.date)) == month,
     )
@@ -590,7 +667,7 @@ async def get_budget_summary(
 
     # --- total_income: sum of income transactions ---
     income_stmt = select(Transaction).where(
-        Transaction.uploaded_by == current_user.id,
+        Transaction.budget_id == current_budget.id,
         Transaction.type == "income",
         extract("year", col(Transaction.date)) == year,
         extract("month", col(Transaction.date)) == month,
@@ -655,10 +732,10 @@ async def get_budget_summary(
 @router.get("/categories", response_model=List[CategoryRead])
 async def get_categories(
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     statement = select(Category).where(
-        (Category.owner_id == current_user.id) | (Category.is_system)
+        (Category.budget_id == current_budget.id) | (Category.is_system)
     )
     categories = session.exec(statement).all()
     return categories
@@ -667,12 +744,12 @@ async def get_categories(
 async def create_category(
     category_data: CategoryCreate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     dump_data = category_data.model_dump(exclude={"is_system"})
     category = Category(
         **dump_data,
-        owner_id=current_user.id,
+        budget_id=current_budget.id,
         is_system=False
     )
     session.add(category)
@@ -685,12 +762,12 @@ async def update_category(
     category_id: int,
     category_update: CategoryUpdate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     category = session.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if not category.is_system and category.owner_id != current_user.id:
+    if not category.is_system and category.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this category")
 
     update_data = category_update.model_dump(exclude_unset=True)
@@ -707,18 +784,18 @@ async def delete_category(
     category_id: int,
     reassign_to: int | None = None,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     category = session.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if category.is_system or category.owner_id != current_user.id:
+    if category.is_system or category.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this category")
 
     target_category_id = reassign_to
     if target_category_id is not None:
         target_category = session.get(Category, target_category_id)
-        if not target_category or (target_category.owner_id != current_user.id and not target_category.is_system):
+        if not target_category or (target_category.budget_id != current_budget.id and not target_category.is_system):
             raise HTTPException(status_code=400, detail="Invalid target category for reassignment")
     else:
         target_category_id = category.parent_id
@@ -745,18 +822,18 @@ async def delete_category(
 @router.get("/tags", response_model=List[TagRead])
 async def get_tags(
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
-    statement = select(Tag).where(Tag.owner_id == current_user.id)
+    statement = select(Tag).where(Tag.budget_id == current_budget.id)
     return session.exec(statement).all()
 
 @router.post("/tags", response_model=TagRead)
 async def create_tag(
     tag_data: TagCreate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
-    tag = Tag(**tag_data.model_dump(), owner_id=current_user.id)
+    tag = Tag(**tag_data.model_dump(), budget_id=current_budget.id)
     session.add(tag)
     session.commit()
     session.refresh(tag)
@@ -767,12 +844,12 @@ async def update_tag(
     tag_id: int,
     tag_update: TagUpdate,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     tag = session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
-    if tag.owner_id != current_user.id:
+    if tag.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this tag")
 
     update_data = tag_update.model_dump(exclude_unset=True)
@@ -788,12 +865,12 @@ async def update_tag(
 async def delete_tag(
     tag_id: int,
     session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
 ):
     tag = session.get(Tag, tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="Tag not found")
-    if tag.owner_id != current_user.id:
+    if tag.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this tag")
 
     links_statement = select(TransactionTagLink).where(TransactionTagLink.tag_id == tag_id)
