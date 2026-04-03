@@ -57,7 +57,7 @@ class CategoryBase(SQLModel):
 
 class Category(CategoryBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    budget_id: Optional[int] = Field(default=None, foreign_key="budget.id")
 
     parent: Optional["Category"] = Relationship(
         back_populates="subcategories",
@@ -79,7 +79,7 @@ class TransactionTagLink(SQLModel, table=True):
 
 class Tag(TagBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    budget_id: Optional[int] = Field(default=None, foreign_key="budget.id")
 
     transactions: List["Transaction"] = Relationship(back_populates="tags", link_model=TransactionTagLink)
 
@@ -155,7 +155,6 @@ class MonthlyBudget(SQLModel, table=True):
     year: int = Field(index=True)
     amount: float = Field(default=0.0)
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
-    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
 
     budget: Optional[Budget] = Relationship(back_populates="monthly_budgets")
     category_limits: List["BudgetCategoryLimit"] = Relationship(back_populates="monthly_budget")
@@ -189,7 +188,7 @@ class MonthlyBudgetRead(SQLModel):
     month: int
     year: int
     amount: float
-    user_id: int
+    budget_id: Optional[int] = None
     category_limits: List[BudgetCategoryLimitRead] = []
 
 
@@ -296,7 +295,7 @@ class CategoryUpdate(SQLModel):
 
 class CategoryRead(CategoryBase):
     id: int
-    owner_id: Optional[int] = None
+    budget_id: Optional[int] = None
 
 
 class TagCreate(TagBase):
@@ -310,7 +309,7 @@ class TagUpdate(SQLModel):
 
 class TagRead(TagBase):
     id: int
-    owner_id: Optional[int] = None
+    budget_id: Optional[int] = None
 
 
 # ─── Auth DTOs ────────────────────────────────────────────────────────────────
