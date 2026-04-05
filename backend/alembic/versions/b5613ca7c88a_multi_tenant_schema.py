@@ -20,15 +20,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_category")
     with op.batch_alter_table('category', schema=None) as batch_op:
         batch_op.add_column(sa.Column('budget_id', sa.Integer(), nullable=True))
         batch_op.create_foreign_key('fk_category_budget_id', 'budget', ['budget_id'], ['id'])
         batch_op.drop_column('owner_id')
 
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_monthly_budget")
     with op.batch_alter_table('monthly_budget', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_monthly_budget_user_id'))
         batch_op.drop_column('user_id')
 
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_tag")
     with op.batch_alter_table('tag', schema=None) as batch_op:
         batch_op.add_column(sa.Column('budget_id', sa.Integer(), nullable=True))
         batch_op.create_foreign_key('fk_tag_budget_id', 'budget', ['budget_id'], ['id'])
