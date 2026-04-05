@@ -97,6 +97,79 @@ def _run_migrations() -> None:
         print("✅ Database stamped to head. Future migrations will apply incrementally.")
 
     alembic_command.upgrade(alembic_cfg, "head")
+    
+    # After migrations, fix any data issues from the multi-tenant migration
+    # This handles cases where the 6687268e50ab migration was empty when first run
+    _fix_migration_data_issues()
+
+
+def _fix_migration_data_issues() -> None:
+    """Fix data issues from the multi-tenant migration transition.
+    
+    Specifically handles:
+    1. Transactions with NULL budget_id (should be set based on user's budget)
+    2. Users without budget membership (should create default budget)
+    """
+    from sqlalchemy import create_engine, text
+    
+    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
+    engine = create_engine(database_url)
+    
+    try:
+        with engine.connect() as conn:
+            # Check if this is SQLite (needs specific syntax for certain operations)
+            is_sqlite = "sqlite" in database_url
+            
+            # Fix 1: Ensure all users have a budget
+            # Find users without budget membership
+            users_without_budget = conn.execute(text("""
+                SELECT u.id, u.email 
+                FROM user u
+                LEFT JOIN budgetmember bm ON bm.user_id = u.id
+                WHERE bm.id IS NULL
+            """)).fetchall()
+            
+            for user_id, email in users_without_budget:
+                print(f"⚠️  User {email} (id={user_id}) has no budget. Creating default budget...")
+                
+                # Create budget for user
+                conn.execute(text("""
+                    INSERT INTO budget (name, owner_id, created_at)
+                    VALUES (:name, :owner_id, datetime('now'))
+                """), {"name": "Domowy", "owner_id": user_id})
+                
+                if is_sqlite:
+                    budget_id = conn.execute(text("SELECT last_insert_rowid()")).scalar()
+                else:
+                    budget_id = conn.execute(text("SELECT LASTVAL()")).scalar()
+                
+                # Add user as owner of budget
+                conn.execute(text("""
+                    INSERT INTO budgetmember (budget_id, user_id, role)
+                    VALUES (:budget_id, :user_id, 'owner')
+                """), {"budget_id": budget_id, "user_id": user_id})
+                conn.commit()
+                print(f"✅ Created budget {budget_id} for user {user_id}")
+            
+            # Fix 2: Update transactions with NULL budget_id
+            result = conn.execute(text("""
+                UPDATE "transaction" 
+                SET budget_id = (
+                    SELECT bm.budget_id 
+                    FROM budgetmember bm 
+                    WHERE bm.user_id = "transaction".uploaded_by
+                    LIMIT 1
+                )
+                WHERE budget_id IS NULL AND uploaded_by IS NOT NULL
+            """))
+            
+            if result.rowcount > 0:
+                print(f"✅ Fixed {result.rowcount} transactions with NULL budget_id")
+            
+            conn.commit()
+            
+    finally:
+        engine.dispose()
 
 
 # --- LIFESPAN (Start serwera) ---
