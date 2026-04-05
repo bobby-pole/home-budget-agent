@@ -2,6 +2,7 @@
 import os
 import json
 import base64
+from typing import Optional
 from openai import OpenAI
 
 # API setup
@@ -14,7 +15,7 @@ MODEL_NAME = "gpt-4o-mini"
 
 class AIService:
     @staticmethod
-    def parse_receipt(image_path: str) -> dict | None:
+    def parse_receipt(image_path: str) -> Optional[dict]:
         """
         Sends image to OpenAI and enforces JSON response.
         """
