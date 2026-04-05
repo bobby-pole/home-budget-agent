@@ -4,18 +4,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from alembic.config import Config as AlembicConfig
-from alembic import command as alembic_command
 
 # 1. Importujemy silniki bazy danych
 # identity_engine — dane tożsamości (User, auth)
 # operations_engine — dane operacyjne (Transaction, TransactionLine, Budget)
 # Przy przyszłym splicie: zmienić URL w database.py i dodać migration script.
-from sqlmodel import Session, select
+from sqlmodel import Session, select, SQLModel
 from .database import identity_engine, operations_engine
 
 # 2. ### WAŻNE ### Importujemy modele.
-# Wymagane żeby SQLModel.metadata było wypełnione przed migracjami Alembica.
+# Wymagane żeby SQLModel.metadata było wypełnione.
 from .models import User, Category, Transaction, TransactionLine  # noqa: F401
 
 # 3. ### WAŻNE ### Importujemy router z api.py
@@ -62,122 +60,17 @@ def seed_default_categories():
             session.commit()
             print("🌱 System default categories seeded.")
 
-
-def _run_migrations() -> None:
-    """Apply all pending Alembic migrations at application startup.
-
-    If the database already has tables but no alembic_version (i.e. it was
-    created by the old create_all() approach), stamp it to head first so that
-    Alembic does not try to recreate existing tables.
-    """
-    from sqlalchemy import create_engine, inspect
-
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    alembic_ini_path = os.path.join(base_dir, "alembic.ini")
-    alembic_cfg = AlembicConfig(alembic_ini_path)
-
-    # Use the same DATABASE_URL that Alembic env.py reads — keeps legacy-check
-    # and Alembic migrations on the exact same connection.
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
-    check_engine = create_engine(database_url)
-    try:
-        with check_engine.connect() as conn:
-            inspector = inspect(conn)
-            existing_tables = inspector.get_table_names()
-            has_alembic_version = "alembic_version" in existing_tables
-            has_app_tables = any(t for t in existing_tables if t != "alembic_version")
-    finally:
-        check_engine.dispose()
-
-    if has_app_tables and not has_alembic_version:
-        # Legacy database created by SQLModel.metadata.create_all() — stamp it
-        # to head so Alembic knows the schema is already up to date.
-        print("⚠️  Legacy database detected (no alembic_version). Stamping to head...")
-        alembic_command.stamp(alembic_cfg, "head")
-        print("✅ Database stamped to head. Future migrations will apply incrementally.")
-
-    alembic_command.upgrade(alembic_cfg, "head")
-    
-    # After migrations, fix any data issues from the multi-tenant migration
-    # This handles cases where the 6687268e50ab migration was empty when first run
-    _fix_migration_data_issues()
-
-
-def _fix_migration_data_issues() -> None:
-    """Fix data issues from the multi-tenant migration transition.
-    
-    Specifically handles:
-    1. Transactions with NULL budget_id (should be set based on user's budget)
-    2. Users without budget membership (should create default budget)
-    """
-    from sqlalchemy import create_engine, text
-    
-    database_url = os.getenv("DATABASE_URL", "sqlite:///./data/database.db")
-    engine = create_engine(database_url)
-    
-    try:
-        with engine.connect() as conn:
-            # Check if this is SQLite (needs specific syntax for certain operations)
-            is_sqlite = "sqlite" in database_url
-            
-            # Fix 1: Ensure all users have a budget
-            # Find users without budget membership
-            users_without_budget = conn.execute(text("""
-                SELECT u.id, u.email 
-                FROM user u
-                LEFT JOIN budgetmember bm ON bm.user_id = u.id
-                WHERE bm.id IS NULL
-            """)).fetchall()
-            
-            for user_id, email in users_without_budget:
-                print(f"⚠️  User {email} (id={user_id}) has no budget. Creating default budget...")
-                
-                # Create budget for user
-                conn.execute(text("""
-                    INSERT INTO budget (name, owner_id, created_at)
-                    VALUES (:name, :owner_id, datetime('now'))
-                """), {"name": "Domowy", "owner_id": user_id})
-                
-                if is_sqlite:
-                    budget_id = conn.execute(text("SELECT last_insert_rowid()")).scalar()
-                else:
-                    budget_id = conn.execute(text("SELECT LASTVAL()")).scalar()
-                
-                # Add user as owner of budget
-                conn.execute(text("""
-                    INSERT INTO budgetmember (budget_id, user_id, role)
-                    VALUES (:budget_id, :user_id, 'owner')
-                """), {"budget_id": budget_id, "user_id": user_id})
-                conn.commit()
-                print(f"✅ Created budget {budget_id} for user {user_id}")
-            
-            # Fix 2: Update transactions with NULL budget_id
-            result = conn.execute(text("""
-                UPDATE "transaction" 
-                SET budget_id = (
-                    SELECT bm.budget_id 
-                    FROM budgetmember bm 
-                    WHERE bm.user_id = "transaction".uploaded_by
-                    LIMIT 1
-                )
-                WHERE budget_id IS NULL AND uploaded_by IS NOT NULL
-            """))
-            
-            if result.rowcount > 0:
-                print(f"✅ Fixed {result.rowcount} transactions with NULL budget_id")
-            
-            conn.commit()
-            
-    finally:
-        engine.dispose()
-
+def create_db_and_tables():
+    """Create all tables defined in SQLModel.metadata."""
+    SQLModel.metadata.create_all(identity_engine)
+    SQLModel.metadata.create_all(operations_engine)
+    print("✅ Database tables created (SQLModel.metadata.create_all).")
 
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Run Alembic migrations on startup (applies any pending migrations automatically)
-    _run_migrations()
-    print("✅ Database migrations applied (alembic upgrade head).")
+    # Tworzymy tabele przy starcie (brak Alembica)
+    create_db_and_tables()
 
     seed_default_categories()
 
