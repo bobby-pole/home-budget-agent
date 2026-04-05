@@ -21,7 +21,7 @@ from .models import (
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
 from .auth import get_current_user, hash_password, verify_password, create_access_token
-from typing import List
+from typing import List, Optional
 
 router = APIRouter()
 UPLOAD_DIR = "static/uploads"
@@ -249,7 +249,7 @@ async def scan_transaction(
     background_tasks: BackgroundTasks,
     force: bool = False,
     keep_image: bool = Form(False),
-    note: str | None = Form(None),
+    note: Optional[str] = Form(None),
     file: UploadFile = File(...),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
@@ -782,7 +782,7 @@ async def update_category(
 @router.delete("/categories/{category_id}", status_code=204)
 async def delete_category(
     category_id: int,
-    reassign_to: int | None = None,
+    reassign_to: Optional[int] = None,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
 ):
