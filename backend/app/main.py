@@ -69,8 +69,7 @@ def create_db_and_tables():
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tworzymy tabele przy starcie (brak Alembica)
-    create_db_and_tables()
+    # Tabele są tworzone przez Alembic
 
     seed_default_categories()
 
