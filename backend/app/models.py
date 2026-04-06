@@ -249,6 +249,18 @@ class EnvelopeAllocationUpdate(SQLModel):
     amount: float
 
 
+class BudgetMemberRead(SQLModel):
+    id: int
+    budget_id: int
+    user_id: int
+    role: str
+
+
+class BudgetMemberCreate(SQLModel):
+    email: str
+    role: str = "viewer"
+
+
 class CategoryBudgetSummaryItem(SQLModel):
     category_id: int
     category_name: str

@@ -61,6 +61,18 @@ export interface Transaction {
   receipt_scan?: ReceiptScan | null;
 }
 
+export interface BudgetMember {
+  id: number;
+  budget_id: number;
+  user_id: number;
+  role: 'owner' | 'editor' | 'viewer';
+}
+
+export interface BudgetMemberCreate {
+  email: string;
+  role: 'owner' | 'editor' | 'viewer';
+}
+
 export interface EnvelopeAllocation {
   id: number;
   budget_id: number;
