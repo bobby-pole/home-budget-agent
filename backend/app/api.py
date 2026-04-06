@@ -13,7 +13,8 @@ from .models import (
     Budget, BudgetMember,
     MonthlyBudgetSummary,
     User, UserCreate, UserRead, Token,
-    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink
+    Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
+    BudgetMemberCreate, BudgetMemberRead
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -533,6 +534,60 @@ def delete_limit_dummy(year: int, month: int, category_id: int):
 @router.get("/budget/{year}/{month}/summary", response_model=MonthlyBudgetSummary)
 def get_summary_dummy(year: int, month: int):
     return MonthlyBudgetSummary(year=year, month=month, total_planned=0, total_spent=0, total_remaining=0, total_income=0, categories=[])
+
+
+@router.post("/budget/members", response_model=BudgetMemberRead)
+async def invite_member(
+    member_data: BudgetMemberCreate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    # Verify if current user is owner/editor of the budget
+    # We need to query from identity_engine to find the user by email, 
+    # but the membership is in operations_engine. 
+    # Actually User is in identity_engine, and BudgetMember is in operations_engine.
+    # Our get_ops_session and get_session point to the same DB for now.
+
+    # Find the user to invite by email
+    from .database import identity_engine
+    with Session(identity_engine) as auth_session:
+        target_user = auth_session.exec(select(User).where(User.email == member_data.email)).first()
+    
+    if not target_user:
+        raise HTTPException(status_code=404, detail=f"User with email {member_data.email} not found")
+
+    # Check permissions and existing membership in ops session
+    membership = session.exec(
+        select(BudgetMember).where(
+            BudgetMember.budget_id == current_budget.id,
+            BudgetMember.user_id == current_user.id
+        )
+    ).first()
+    
+    if not membership or membership.role not in ["owner", "editor"]:
+        raise HTTPException(status_code=403, detail="Only owners or editors can invite members")
+
+    # Check if already a member
+    existing = session.exec(
+        select(BudgetMember).where(
+            BudgetMember.budget_id == current_budget.id,
+            BudgetMember.user_id == target_user.id
+        )
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="User is already a member of this budget")
+
+    new_member = BudgetMember(
+        budget_id=current_budget.id,
+        user_id=target_user.id,
+        role=member_data.role
+    )
+    session.add(new_member)
+    session.commit()
+    session.refresh(new_member)
+    return new_member
 
 @router.get("/categories", response_model=List[CategoryRead])
 async def get_categories(

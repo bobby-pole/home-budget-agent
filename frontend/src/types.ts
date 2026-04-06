@@ -61,19 +61,25 @@ export interface Transaction {
   receipt_scan?: ReceiptScan | null;
 }
 
-export interface BudgetCategoryLimit {
+export interface BudgetMember {
   id: number;
-  category_id: number;
-  amount: number;
+  budget_id: number;
+  user_id: number;
+  role: 'owner' | 'editor' | 'viewer';
 }
 
-export interface MonthlyBudget {
-  id?: number;
+export interface BudgetMemberCreate {
+  email: string;
+  role: 'owner' | 'editor' | 'viewer';
+}
+
+export interface EnvelopeAllocation {
+  id: number;
+  budget_id: number;
+  category_id: number;
   month: number;
   year: number;
   amount: number;
-  user_id: number;
-  category_limits: BudgetCategoryLimit[];
 }
 
 export interface CategoryBudgetSummaryItem {

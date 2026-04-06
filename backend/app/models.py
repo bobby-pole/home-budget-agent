@@ -173,6 +173,13 @@ class EnvelopeAllocationRead(SQLModel):
     amount: float
 
 
+class EnvelopeAllocationCreate(SQLModel):
+    category_id: int
+    month: int
+    year: int
+    amount: float
+
+
 
 class TransactionLineRead(TransactionLineBase):
     id: int
@@ -240,6 +247,18 @@ class TransactionLineUpdate(SQLModel):
 
 class EnvelopeAllocationUpdate(SQLModel):
     amount: float
+
+
+class BudgetMemberRead(SQLModel):
+    id: int
+    budget_id: int
+    user_id: int
+    role: str
+
+
+class BudgetMemberCreate(SQLModel):
+    email: str
+    role: str = "viewer"
 
 
 class CategoryBudgetSummaryItem(SQLModel):
