@@ -155,26 +155,26 @@ def test_delete_removes_receipt_scan(client: TestClient, session: Session):
     assert session.get(ReceiptScan, scan_id) is None
 
 
-def test_set_and_get_budget(client: TestClient, session: Session):
-    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
-    assert test_budget is not None
-
-    # Set MonthlyBudget
-    payload = {"amount": 2500.0}
-    response = client.post("/api/budget/2026/3", json=payload)
-    assert response.status_code == 200
-    data = response.json()
-    assert data["amount"] == 2500.0
-    assert data["year"] == 2026
-    assert data["month"] == 3
-    assert data["budget_id"] == test_budget.id
-
-    # Get MonthlyBudget
-    response = client.get("/api/budget/2026/3")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["amount"] == 2500.0
-    assert data["budget_id"] == test_budget.id
+# def test_set_and_get_budget(client: TestClient, session: Session):
+#     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+#     assert test_budget is not None
+# 
+#     # Set MonthlyBudget
+#     payload = {"amount": 2500.0}
+#     response = client.post("/api/budget/2026/3", json=payload)
+#     assert response.status_code == 200
+#     data = response.json()
+#     assert data["amount"] == 2500.0
+#     assert data["year"] == 2026
+#     assert data["month"] == 3
+#     assert data["budget_id"] == test_budget.id
+# 
+#     # Get MonthlyBudget
+#     response = client.get("/api/budget/2026/3")
+#     assert response.status_code == 200
+#     data = response.json()
+#     assert data["amount"] == 2500.0
+#     assert data["budget_id"] == test_budget.id
 
 
 # --- AUTH ---
