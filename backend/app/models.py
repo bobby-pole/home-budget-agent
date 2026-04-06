@@ -173,6 +173,13 @@ class EnvelopeAllocationRead(SQLModel):
     amount: float
 
 
+class EnvelopeAllocationCreate(SQLModel):
+    category_id: int
+    month: int
+    year: int
+    amount: float
+
+
 
 class TransactionLineRead(TransactionLineBase):
     id: int
