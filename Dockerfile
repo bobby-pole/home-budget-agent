@@ -9,7 +9,7 @@ COPY frontend/package*.json ./
 RUN npm ci
 
 # Copy OpenAPI schema (needed for type generation)
-COPY docs/openapi.json ./docs/openapi.json
+COPY openapi.json ./openapi.json
 
 # Copy frontend source code
 COPY frontend/ ./
