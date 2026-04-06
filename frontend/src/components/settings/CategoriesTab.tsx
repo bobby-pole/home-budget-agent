@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import type { Category } from "@/types";
+import type { CategoryRead as Category } from "@/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lock, Trash2, Edit2, Plus, ChevronRight, ChevronDown, Save, X, GripVertical, ArrowUp, ArrowDown } from "lucide-react";

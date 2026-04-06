@@ -3,11 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Store, ArrowRight, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { Transaction } from "@/types";
+import type { TransactionRead } from "@/client";
 import { cn } from "@/lib/utils";
 
 interface RecentTransactionsListProps {
-  transactions: Transaction[];
+  transactions: TransactionRead[];
   isLoading: boolean;
 }
 
@@ -72,7 +72,7 @@ export function RecentTransactionsList({ transactions, isLoading }: RecentTransa
                       "text-sm font-black tabular-nums",
                       isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"
                     )}>
-                      {isIncome ? "+" : "-"}{tx.total_amount.toLocaleString("pl-PL", { minimumFractionDigits: 2 })} {tx.currency}
+                      {isIncome ? "+" : "-"}{(tx.total_amount ?? 0).toLocaleString("pl-PL", { minimumFractionDigits: 2 })} {tx.currency ?? "PLN"}
                     </span>
                     <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">
                       {tx.type}

@@ -1,4 +1,4 @@
-import type { TransactionLine } from "@/types";
+import type { TransactionLineRead as TransactionLine } from "@/client";
 import { TransactionItemRow } from "../TransactionItemRow";
 
 interface TransactionItemsSectionProps {

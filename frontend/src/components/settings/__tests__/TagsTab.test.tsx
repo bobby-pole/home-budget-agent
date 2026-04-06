@@ -13,8 +13,8 @@ vi.mock("@/lib/api", () => ({
 }));
 
 const mockTags = [
-  { id: 1, name: "wakacje", owner_id: 1 },
-  { id: 2, name: "remont", owner_id: 1 },
+  { id: 1, name: "wakacje", budget_id: 1 },
+  { id: 2, name: "remont", budget_id: 1 },
 ];
 
 describe("TagsTab", () => {
@@ -30,7 +30,7 @@ describe("TagsTab", () => {
   });
 
   it("allows adding a new tag", async () => {
-    vi.mocked(api.createTag).mockResolvedValue({ id: 3, name: "nowytag", owner_id: 1 });
+    vi.mocked(api.createTag).mockResolvedValue({ id: 3, name: "nowytag", budget_id: 1 });
     render(<TagsTab />);
     
     const input = await screen.findByPlaceholderText(/Dodaj nowy tag/i);

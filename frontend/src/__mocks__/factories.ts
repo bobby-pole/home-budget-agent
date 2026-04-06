@@ -1,6 +1,6 @@
-import type { Transaction, TransactionLine, User, AuthResponse } from "@/types";
+import type { TransactionRead, TransactionLineRead, UserRead, Token } from "@/client";
 
-export function makeUser(overrides?: Partial<User>): User {
+export function makeUser(overrides?: Partial<UserRead>): UserRead {
   return {
     id: 1,
     email: "test@example.com",
@@ -9,7 +9,7 @@ export function makeUser(overrides?: Partial<User>): User {
   };
 }
 
-export function makeTransactionLine(overrides?: Partial<TransactionLine>): TransactionLine {
+export function makeTransactionLine(overrides?: Partial<TransactionLineRead>): TransactionLineRead {
   return {
     id: 1,
     name: "Mleko",
@@ -20,7 +20,7 @@ export function makeTransactionLine(overrides?: Partial<TransactionLine>): Trans
   };
 }
 
-export function makeTransaction(overrides?: Partial<Transaction>): Transaction {
+export function makeTransaction(overrides?: Partial<TransactionRead>): TransactionRead {
   return {
     id: 1,
     merchant_name: "Biedronka",
@@ -35,7 +35,7 @@ export function makeTransaction(overrides?: Partial<Transaction>): Transaction {
   };
 }
 
-export function makeAuthResponse(overrides?: Partial<AuthResponse>): AuthResponse {
+export function makeAuthResponse(overrides?: Partial<Token>): Token {
   return {
     access_token: "mock-jwt-token",
     token_type: "bearer",

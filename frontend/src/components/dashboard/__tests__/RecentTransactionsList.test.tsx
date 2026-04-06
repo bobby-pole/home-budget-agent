@@ -2,7 +2,7 @@ import { render, screen } from "../../../__tests__/test-utils";
 import { describe, it, expect } from "vitest";
 import { RecentTransactionsList } from "../RecentTransactionsList";
 import { MemoryRouter } from "react-router-dom";
-import type { Transaction } from "@/types";
+import type { TransactionRead as Transaction } from "@/client";
 
 describe("RecentTransactionsList", () => {
   const mockTransactions: Transaction[] = [
