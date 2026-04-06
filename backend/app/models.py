@@ -29,7 +29,7 @@ class Budget(SQLModel, table=True):
     owner: Optional[User] = Relationship(back_populates="owned_budgets")
     members: List["BudgetMember"] = Relationship(back_populates="budget")
     transactions: List["Transaction"] = Relationship(back_populates="budget")
-    monthly_budgets: List["MonthlyBudget"] = Relationship(back_populates="budget")
+    envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="budget")
 
 
 # ─── BudgetMember ─────────────────────────────────────────────────────────────
@@ -65,6 +65,7 @@ class Category(CategoryBase, table=True):
     )
     subcategories: List["Category"] = Relationship(back_populates="parent")
     transactions: List["Transaction"] = Relationship(back_populates="category")
+    envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="category")
 
 
 class TagBase(SQLModel):
@@ -145,51 +146,32 @@ class TransactionLine(TransactionLineBase, table=True):
     transaction: Optional[Transaction] = Relationship(back_populates="lines")
 
 
-# ─── MonthlyBudget (spending limit per month) ────────────────────────────────
+# ─── EnvelopeAllocation (Zero-Based Budgeting per Category) ───────────────────
 
-class MonthlyBudget(SQLModel, table=True):
-    __tablename__: str = "monthly_budget"  # type: ignore
+class EnvelopeAllocation(SQLModel, table=True):
+    __tablename__: str = "envelope_allocation"  # type: ignore
+    __table_args__ = (UniqueConstraint("budget_id", "category_id", "month", "year", name="uq_envelope_allocation"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+    category_id: int = Field(foreign_key="category.id", index=True)
     month: int = Field(index=True)
     year: int = Field(index=True)
     amount: float = Field(default=0.0)
-    budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
 
-    budget: Optional[Budget] = Relationship(back_populates="monthly_budgets")
-    category_limits: List["BudgetCategoryLimit"] = Relationship(back_populates="monthly_budget")
-
-
-# ─── BudgetCategoryLimit (spending limit per category per month) ─────────────
-
-class BudgetCategoryLimit(SQLModel, table=True):
-    __tablename__: str = "budget_category_limit"  # type: ignore
-    __table_args__ = (UniqueConstraint("monthly_budget_id", "category_id", name="uq_budget_category_limit"),)
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    monthly_budget_id: int = Field(foreign_key="monthly_budget.id", index=True)
-    category_id: int = Field(foreign_key="category.id", index=True)
-    amount: float = Field(default=0.0)
-
-    monthly_budget: Optional[MonthlyBudget] = Relationship(back_populates="category_limits")
-    category: Optional["Category"] = Relationship()
-
+    budget: Optional[Budget] = Relationship(back_populates="envelope_allocations")
+    category: Optional["Category"] = Relationship(back_populates="envelope_allocations")
 
 # ─── API DTOs ────────────────────────────────────────────────────────────────
 
-class BudgetCategoryLimitRead(SQLModel):
+class EnvelopeAllocationRead(SQLModel):
     id: int
+    budget_id: int
     category_id: int
-    amount: float
-
-
-class MonthlyBudgetRead(SQLModel):
-    id: Optional[int] = None
     month: int
     year: int
     amount: float
-    budget_id: Optional[int] = None
-    category_limits: List[BudgetCategoryLimitRead] = []
+
 
 
 class TransactionLineRead(TransactionLineBase):
@@ -255,11 +237,8 @@ class TransactionLineUpdate(SQLModel):
     category_id: Optional[int] = None
 
 
-class MonthlyBudgetUpdate(SQLModel):
-    amount: Optional[float] = None
 
-
-class BudgetCategoryLimitUpdate(SQLModel):
+class EnvelopeAllocationUpdate(SQLModel):
     amount: float
 
 
