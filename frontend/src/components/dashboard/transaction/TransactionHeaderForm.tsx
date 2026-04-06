@@ -17,7 +17,7 @@ import { Loader2, Save, Pencil } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import type { Transaction } from "@/types";
+import type { TransactionRead as Transaction } from "@/client";
 import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
 import { TagPicker } from "../shared/TagPicker";
@@ -59,8 +59,8 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     form.reset({
       merchant_name: transaction.merchant_name,
       date: transaction.date ? new Date(transaction.date).toISOString().split("T")[0] : "",
-      total_amount: transaction.total_amount,
-      currency: transaction.currency,
+      total_amount: transaction.total_amount ?? 0,
+      currency: transaction.currency ?? "PLN",
       tag_ids: transaction.tags?.map(t => t.id) || [],
       note: transaction.note ?? "",
     });

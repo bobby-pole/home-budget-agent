@@ -26,6 +26,7 @@ __pycache__/
 
 # --- Private Project Management (Moved to hba-project-context repo) ---
 docs/
+!docs/openapi.json
 .claude/
 
 .github/workflows/sync-docs.yml

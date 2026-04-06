@@ -5,11 +5,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { Transaction } from "@/types";
+import type { TransactionRead } from "@/client";
 import { CalendarDays } from "lucide-react";
 
 interface MonthlySummaryModalProps {
-  transactions: Transaction[];
+  transactions: TransactionRead[];
   isOpen: boolean;
   onClose: () => void;
 }
@@ -26,7 +26,7 @@ export function MonthlySummaryModal({
     if (r.date && (!r.receipt_scan || r.receipt_scan.status === "done")) {
       const date = new Date(r.date);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      monthlyData[key] = (monthlyData[key] || 0) + r.total_amount;
+      monthlyData[key] = (monthlyData[key] || 0) + (r.total_amount ?? 0);
     }
   });
 

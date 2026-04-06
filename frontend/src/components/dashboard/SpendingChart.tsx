@@ -54,8 +54,8 @@ export function SpendingChart() {
     if (rDate.getMonth() !== curMonth || rDate.getFullYear() !== curYear)
       return;
 
-    transaction.lines.forEach((item) => {
-      const displayCat = getCategoryById(item.category_id);
+    transaction.lines?.forEach((item) => {
+      const displayCat = getCategoryById(item.category_id ?? null);
 
       if (item.price > 0) {
         if (!categoryTotals[displayCat.name]) {
