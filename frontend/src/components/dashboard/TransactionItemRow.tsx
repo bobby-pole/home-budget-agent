@@ -17,7 +17,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/constants";
-import type { TransactionLine } from "@/types";
+import type { TransactionLineRead } from "@/client";
 
 const itemSchema = z.object({
   name: z.string().min(1, "Nazwa wymagana"),
@@ -29,7 +29,7 @@ const itemSchema = z.object({
 type FormValues = z.infer<typeof itemSchema>;
 
 interface TransactionItemRowProps {
-  item: TransactionLine;
+  item: TransactionLineRead;
   transactionId: number;
   currency: string;
 }
@@ -48,8 +48,8 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
     defaultValues: {
       name: item.name,
       price: item.price,
-      quantity: item.quantity,
-      category_id: item.category_id,
+      quantity: item.quantity ?? 1,
+      category_id: item.category_id ?? null,
     },
   });
 
@@ -82,7 +82,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
   };
 
   if (!isEditing) {
-    const displayCat = getDisplayCategory(item.category_id);
+    const displayCat = getDisplayCategory(item.category_id ?? null);
 
     return (
       <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors min-w-[450px]">
@@ -101,7 +101,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
               </span>
             )}
             <span className="w-12 text-right">
-              {item.quantity} szt.
+              {item.quantity ?? 1} szt.
             </span>
           </div>
         </div>

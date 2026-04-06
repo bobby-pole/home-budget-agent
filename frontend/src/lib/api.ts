@@ -1,5 +1,13 @@
 // frontend/src/lib/api.ts
-import type { Transaction, AuthResponse, Category, Tag, MonthlyBudgetSummary, BudgetMember, BudgetMemberCreate } from "@/types";
+import type { 
+  TransactionRead as Transaction, 
+  Token as AuthResponse, 
+  CategoryRead as Category, 
+  TagRead as Tag, 
+  MonthlyBudgetSummary, 
+  BudgetMemberRead as BudgetMember, 
+  BudgetMemberCreate 
+} from "@/client";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 

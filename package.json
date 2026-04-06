@@ -2,11 +2,12 @@
   "name": "home-budget-agent",
   "private": true,
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "generate:types": "python3 backend/scripts/export_openapi.py && npm run --prefix frontend generate:types"
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [
-      "bash -c 'cd frontend && npx eslint --max-warnings=0 \"${@}\"' --"
+      "bash -c 'cd frontend && npx eslint --no-warn-ignored --max-warnings=0 \"${@}\"' --"
     ],
     "backend/**/*.py": [
       "bash -c 'cd backend && source venv/bin/activate && ruff check \"${@}\"' --"

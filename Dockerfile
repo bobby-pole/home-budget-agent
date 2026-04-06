@@ -8,10 +8,13 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 
+# Copy OpenAPI schema (needed for type generation)
+COPY docs/openapi.json ./docs/openapi.json
+
 # Copy frontend source code
 COPY frontend/ ./
-# Build the application (output will go to /app/dist)
-RUN npm run build
+# Build the application (includes type generation)
+RUN cd frontend && npm run build
 
 # --- STAGE 2: Backend Base (Python dependencies & Security) ---
 FROM python:3.11-slim as backend-base

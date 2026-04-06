@@ -37,9 +37,9 @@ import { Loader2, UserPlus } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { type BudgetMemberCreate } from "@/types";
+import { type BudgetMemberCreate } from "@/client";
 
-const inviteSchema = z.z.object({
+const inviteSchema = z.object({
   email: z.string().email("Niepoprawny format email"),
   role: z.enum(["owner", "editor", "viewer"]),
 });

@@ -1,5 +1,5 @@
 // frontend/src/lib/auth.ts
-import type { User } from "@/types";
+import type { UserRead as User } from "@/client";
 
 const TOKEN_KEY = "budget_token";
 const USER_KEY = "budget_user";

@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import type { Transaction } from "@/types";
+import type { TransactionRead as Transaction } from "@/client";
 import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -237,7 +237,7 @@ export function TransactionsTable({
                         })()}
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {transaction.total_amount.toFixed(2)} {transaction.currency}
+                        {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

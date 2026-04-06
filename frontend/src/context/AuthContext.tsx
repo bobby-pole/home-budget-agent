@@ -1,7 +1,7 @@
 // frontend/src/context/AuthContext.tsx
 import { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
-import type { User, AuthResponse } from "@/types";
+import type { UserRead as User, Token as AuthResponse } from "@/client";
 import { getToken, setToken, getStoredUser, setStoredUser, clearAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
 

@@ -6,12 +6,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import type { Transaction } from "@/types";
+import type { TransactionRead } from "@/client";
 import { TransactionHeaderForm } from "./transaction/TransactionHeaderForm";
 import { TransactionItemsSection } from "./transaction/TransactionItemsSection";
 
 interface TransactionDetailModalProps {
-  transaction: Transaction | null;
+  transaction: TransactionRead | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -28,7 +28,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
 
         <div className="flex-1 overflow-y-auto p-1 space-y-6">
           <TransactionHeaderForm transaction={transaction} />
-          <TransactionItemsSection lines={transaction.lines} currency={transaction.currency} transactionId={transaction.id} />
+          <TransactionItemsSection lines={transaction.lines ?? []} currency={transaction.currency ?? "PLN"} transactionId={transaction.id} />
         </div>
 
         <DialogFooter className="mt-4 pt-2 border-t">
