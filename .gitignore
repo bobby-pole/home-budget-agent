@@ -25,7 +25,7 @@ __pycache__/
 .DS_Store
 
 # --- Private Project Management (Moved to hba-project-context repo) ---
-docs/
+docs/*
 !docs/openapi.json
 .claude/
 
