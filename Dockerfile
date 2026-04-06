@@ -49,7 +49,7 @@ ENV PATH="/home/appuser/.local/bin:$PATH"
 EXPOSE 8000
 
 # Default command (can be overridden)
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
 # --- STAGE 3: Production (Combine Frontend & Backend) ---
 FROM backend-base as production
