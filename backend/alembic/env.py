@@ -63,9 +63,31 @@ def run_migrations_online() -> None:
 
     """
     from app.database import DATABASE_URL
+    from sqlalchemy import create_engine, inspect
 
     config_section = config.get_section(config.config_ini_section, {})
     config_section["sqlalchemy.url"] = DATABASE_URL
+    
+    # Self-healing logic for old MVP schema
+    repair_engine = create_engine(DATABASE_URL)
+    needs_delete = False
+    with repair_engine.begin():
+        try:
+            insp = inspect(repair_engine)
+            tables = insp.get_table_names()
+            if "monthly_budget" in tables:
+                needs_delete = True
+        except Exception as e:
+            print(f"Schema check skipped: {e}")
+    repair_engine.dispose()
+    
+    if needs_delete:
+        print("DETECTED OLD SCHEMA. STARTING FRESH AND DELETING OLD DB FILE...")
+        db_path = DATABASE_URL.replace("sqlite:///", "")
+        import os
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            
     connectable = engine_from_config(
         config_section,
         prefix="sqlalchemy.",
