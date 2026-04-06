@@ -1,5 +1,5 @@
 // frontend/src/lib/api.ts
-import type { Transaction, AuthResponse, Category, Tag, MonthlyBudgetSummary } from "@/types";
+import type { Transaction, AuthResponse, Category, Tag, MonthlyBudgetSummary, BudgetMember, BudgetMemberCreate } from "@/types";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 
@@ -172,5 +172,12 @@ export const api = {
 
   deleteTag: async (id: number) => {
     await apiClient.delete(`/tags/${id}`);
+  },
+
+  // --- MEMBERS ---
+
+  inviteMember: async (data: BudgetMemberCreate): Promise<BudgetMember> => {
+    const response = await apiClient.post<BudgetMember>("/budget/members", data);
+    return response.data;
   },
 };
