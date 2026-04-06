@@ -72,6 +72,36 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     if new_budget.id is None:
         raise HTTPException(status_code=500, detail="Failed to create budget")
     session.add(BudgetMember(budget_id=new_budget.id, user_id=user.id, role="owner"))
+
+    default_cats = [
+        {"name": "Food", "icon": "🍔", "color": "#f87171"},
+        {"name": "Housing", "icon": "🏠", "color": "#fb923c"},
+        {"name": "Transport", "icon": "🚗", "color": "#60a5fa"},
+        {"name": "Utilities", "icon": "💡", "color": "#facc15"},
+        {"name": "Entertainment", "icon": "🎬", "color": "#c084fc"},
+        {"name": "Health", "icon": "⚕️", "color": "#4ade80"},
+        {"name": "Clothing", "icon": "👕", "color": "#f472b6"},
+        {"name": "Kids", "icon": "🧸", "color": "#38bdf8"},
+        {"name": "Pets", "icon": "🐕", "color": "#a78bfa"},
+        {"name": "Travel", "icon": "✈️", "color": "#34d399"},
+        {"name": "Education", "icon": "📚", "color": "#818cf8"},
+        {"name": "Savings", "icon": "💰", "color": "#fbbf24"},
+        {"name": "Gifts", "icon": "🎁", "color": "#fb7185"},
+        {"name": "Alcohol", "icon": "🍻", "color": "#fcd34d"},
+        {"name": "Other", "icon": "📦", "color": "#9ca3af"},
+        {"name": "Salary", "icon": "💵", "color": "#10b981"},
+    ]
+    for i, cat_data in enumerate(default_cats):
+        cat = Category(
+            name=cat_data["name"],
+            icon=cat_data["icon"],
+            color=cat_data["color"],
+            is_system=False,
+            budget_id=new_budget.id,
+            order_index=i
+        )
+        session.add(cat)
+
     session.commit()
 
     token = create_access_token({"sub": user.email})
@@ -111,7 +141,11 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
                 session.commit()
             return
 
-        data = AIService.parse_receipt(image_path)
+        # Fetch categories for the current budget to pass to AI
+        db_categories = session.exec(select(Category).where((Category.budget_id == transaction.budget_id) | (Category.is_system))).all()
+        cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
+
+        data = AIService.parse_receipt(image_path, categories=cat_dicts)
 
         if not data:
             print("❌ AI Failed to parse receipt")
@@ -146,17 +180,19 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
             except (ValueError, TypeError):
                 print(f"⚠️ Could not parse AI date: {ai_date_str}")
 
+        # Map AI returned category names back to DB category IDs
+        cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
+
         items_data = data.get("items", [])
         for item_raw in items_data:
-            category_name = item_raw.get("category", "Other")
-            category = session.exec(
-                select(Category).where(Category.name == category_name)
-            ).first()
+            category_name = item_raw.get("category", "")
+            cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
+
             session.add(TransactionLine(
-                name=item_raw["name"],
-                price=item_raw["price"],
-                quantity=item_raw.get("quantity", 1),
-                category_id=category.id if category else None,
+                name=item_raw.get("name", "Unknown item"),
+                price=float(item_raw.get("price", 0.0)),
+                quantity=float(item_raw.get("quantity", 1.0)),
+                category_id=cat_id,
                 transaction_id=transaction.id,
             ))
 

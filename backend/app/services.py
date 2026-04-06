@@ -15,9 +15,10 @@ MODEL_NAME = "gpt-4o-mini"
 
 class AIService:
     @staticmethod
-    def parse_receipt(image_path: str) -> Optional[dict]:
+    def parse_receipt(image_path: str, categories: Optional[list[dict]] = None) -> Optional[dict]:
         """
         Sends image to OpenAI and enforces JSON response.
+        If categories are provided, instructs AI to use exactly one of the provided category names.
         """
         
         # 1. Encode image to base64
@@ -28,8 +29,16 @@ class AIService:
             print(f"❌ Error reading image: {e}")
             return None
 
+        # Prepare Categories Context
+        cat_context = ""
+        if categories:
+            cat_list_str = ", ".join([f'"{c["name"]}"' for c in categories])
+            cat_context = f"\nCRITICAL: You MUST assign a category to each item strictly from this exact list: [{cat_list_str}]. Do NOT invent new categories. Pick the closest match."
+        else:
+            cat_context = "\nAssign a category to each item (e.g., Food, Fast Food, Snacks, Transport, Utilities, Entertainment, Health, Other)."
+
         # 2. Prepare Prompt
-        system_prompt = """
+        system_prompt = f"""
         You are an expert receipt parser. 
         Extract data from the receipt image into a strict JSON format.
         Identify:
@@ -38,21 +47,20 @@ class AIService:
         3. Total amount (as a number).
         4. Currency (PLN, EUR, USD, etc.).
         5. List of items (name, price, quantity, category).
-        
-        Assign a category to each item (e.g., Food, Fast Food, Snacks, Transport, Utilities, Entertainment, Health, Other).
+        {cat_context}
         
         Return ONLY valid JSON.
         Structure:
-        {
+        {{
             "merchant_name": "Store Name",
             "date": "2024-01-01",
             "total_amount": 123.45,
             "currency": "PLN",
             "items": [
-                {"name": "Milk", "price": 3.50, "quantity": 1, "category": "Food"},
-                {"name": "Beer", "price": 5.00, "quantity": 2, "category": "Alcohol"}
+                {{"name": "Milk", "price": 3.50, "quantity": 1, "category": "Food"}},
+                {{"name": "Beer", "price": 5.00, "quantity": 2, "category": "Alcohol"}}
             ]
-        }
+        }}
         """
 
         try:
