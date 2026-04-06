@@ -10,9 +10,8 @@ from app.main import app
 def export_openapi():
     openapi_schema = app.openapi()
     
-    # Ensure the output directory exists
-    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "docs"))
-    os.makedirs(output_dir, exist_ok=True)
+    # Ensure the output directory exists (root of the project)
+    output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     
     output_path = os.path.join(output_dir, "openapi.json")
     
