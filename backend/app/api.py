@@ -541,8 +541,8 @@ def get_summary(
     income_stmt = select(func.sum(Transaction.total_amount)).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "income",
-        extract('year', Transaction.date) == year,
-        extract('month', Transaction.date) == month
+        extract('year', col(Transaction.date)) == year,
+        extract('month', col(Transaction.date)) == month
     )
     total_income = session.scalar(income_stmt) or 0.0
 
@@ -550,8 +550,8 @@ def get_summary(
     expense_stmt = select(func.sum(Transaction.total_amount)).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
-        extract('year', Transaction.date) == year,
-        extract('month', Transaction.date) == month
+        extract('year', col(Transaction.date)) == year,
+        extract('month', col(Transaction.date)) == month
     )
     total_spent = session.scalar(expense_stmt) or 0.0
 
@@ -571,9 +571,9 @@ def get_summary(
     ).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
-        extract('year', Transaction.date) == year,
-        extract('month', Transaction.date) == month
-    ).group_by(Transaction.category_id)
+        extract('year', col(Transaction.date)) == year,
+        extract('month', col(Transaction.date)) == month
+    ).group_by(col(Transaction.category_id))
     
     spent_by_category = dict(session.exec(expenses_by_cat_stmt).all())
 
@@ -587,6 +587,8 @@ def get_summary(
     allocations_by_cat = {a.category_id: a.amount for a in allocations}
     
     for cat in all_categories:
+        if cat.id is None:
+            continue
         planned = allocations_by_cat.get(cat.id, 0.0)
         spent = spent_by_category.get(cat.id, 0.0)
         
