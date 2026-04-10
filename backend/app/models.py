@@ -94,6 +94,7 @@ class TransactionBase(SQLModel):
     currency: str = Field(default="PLN")
     is_manual: bool = Field(default=False)
     type: str = Field(default="expense")  # expense | income | transfer
+    import_hash: Optional[str] = Field(default=None, index=True)
 
 
 class Transaction(TransactionBase, table=True):
@@ -196,6 +197,7 @@ class ReceiptScanRead(SQLModel):
 class TransactionRead(TransactionBase):
     id: int
     note: Optional[str] = None
+    category_id: Optional[int] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None

@@ -473,6 +473,51 @@
         }
       }
     },
+    "/api/transactions/import": {
+      "post": {
+        "summary": "Import Transactions",
+        "operationId": "import_transactions_api_transactions_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_transactions_api_transactions_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Import Transactions Api Transactions Import Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/api/budget/{year}/{month}/limits": {
       "get": {
         "summary": "Get Limits Dummy",
@@ -1125,6 +1170,20 @@
   },
   "components": {
     "schemas": {
+      "Body_import_transactions_api_transactions_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_transactions_api_transactions_import_post"
+      },
       "Body_scan_transaction_api_transactions_scan_post": {
         "properties": {
           "keep_image": {
@@ -1935,6 +1994,17 @@
             "title": "Type",
             "default": "expense"
           },
+          "import_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Hash"
+          },
           "id": {
             "type": "integer",
             "title": "Id"
@@ -1949,6 +2019,17 @@
               }
             ],
             "title": "Note"
+          },
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
           },
           "lines": {
             "items": {
