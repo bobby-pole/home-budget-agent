@@ -1,4 +1,5 @@
 import type { Control } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import {
   FormControl,
   FormField,
@@ -30,6 +31,9 @@ export function TransactionHeaderSection({
   computedTotal,
   currency,
 }: TransactionHeaderSectionProps) {
+  const txType = useWatch({ control, name: "type" });
+  const isIncome = txType === "income";
+
   return (
     <SectionGrid>
       <FormField
@@ -38,10 +42,10 @@ export function TransactionHeaderSection({
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Sklep / Odbiorca
+              {isIncome ? "Źródło / Nadawca" : "Sklep / Odbiorca"}
             </FormLabel>
             <FormControl>
-              <Input placeholder="np. Biedronka" {...field} />
+              <Input placeholder={isIncome ? "np. Pracodawca XYZ" : "np. Biedronka"} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>

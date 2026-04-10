@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal";
-import { BudgetModal } from "@/components/dashboard/BudgetModal";
 import { BudgetSummaryCard } from "@/components/dashboard/BudgetSummaryCard";
 import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
 import { TopEnvelopesCard } from "@/components/dashboard/TopEnvelopesCard";
@@ -17,7 +16,6 @@ import { toast } from "sonner";
 import type { AxiosError } from "axios";
 
 export function Dashboard() {
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [addTxOpen, setAddTxOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -181,7 +179,7 @@ export function Dashboard() {
         planned={budgetAmount}
         spent={totalSpent}
         income={totalIncome}
-        onSetUpBudget={() => setIsBudgetModalOpen(true)}
+        onAddTransaction={() => setAddTxOpen(true)}
       />
 
       {/* Row 2: Charts & Envelopes */}
@@ -194,13 +192,6 @@ export function Dashboard() {
       <RecentTransactionsList transactions={transactions} isLoading={isTransactionsLoading} />
 
       {/* Modals */}
-      <BudgetModal
-        isOpen={isBudgetModalOpen}
-        onClose={() => setIsBudgetModalOpen(false)}
-        currentAmount={budgetAmount}
-        year={curYear}
-        month={curMonth + 1}
-      />
       <AddTransactionModal open={addTxOpen} onOpenChange={setAddTxOpen} />
     </div>
   );

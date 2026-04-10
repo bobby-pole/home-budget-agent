@@ -2,6 +2,7 @@ import hashlib
 from unittest.mock import patch, mock_open
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
+from datetime import datetime, timezone
 from app.models import Transaction, TransactionLine, ReceiptScan, User, Budget, BudgetMember, Category, Tag
 
 
@@ -355,3 +356,42 @@ def test_tag_from_other_budget_not_visible(client: TestClient, session: Session)
     assert response.status_code == 200
     names = [t["name"] for t in response.json()]
     assert "hidden-tag" not in names
+
+
+def test_get_summary_calculates_income(client: TestClient, session: Session):
+    """Monthly summary must calculate total_income from transactions where type='income'."""
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_budget is not None
+
+    # Create an income transaction
+    tx_income = Transaction(
+        merchant_name="Salary",
+        total_amount=5000.0,
+        currency="PLN",
+        date=datetime(2026, 4, 15, 12, 0, 0, tzinfo=timezone.utc),
+        type="income",
+        budget_id=test_budget.id,
+        uploaded_by=test_user.id
+    )
+    # Create an expense transaction
+    tx_expense = Transaction(
+        merchant_name="Groceries",
+        total_amount=200.0,
+        currency="PLN",
+        date=datetime(2026, 4, 10, 10, 0, 0, tzinfo=timezone.utc),
+        type="expense",
+        budget_id=test_budget.id,
+        uploaded_by=test_user.id
+    )
+    
+    session.add(tx_income)
+    session.add(tx_expense)
+    session.commit()
+
+    response = client.get("/api/budget/2026/4/summary")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_income"] == 5000.0
+    assert data["total_spent"] == 200.0

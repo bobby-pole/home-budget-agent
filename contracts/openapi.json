@@ -275,6 +275,22 @@
               "default": 0,
               "title": "Offset"
             }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
+            }
           }
         ],
         "responses": {
@@ -457,104 +473,6 @@
         }
       }
     },
-    "/api/budget/{year}/{month}": {
-      "get": {
-        "summary": "Get Monthly Budget Dummy",
-        "operationId": "get_monthly_budget_dummy_api_budget__year___month__get",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Year"
-            }
-          },
-          {
-            "name": "month",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Month"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Monthly Budget Dummy Api Budget  Year   Month  Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create Monthly Budget Dummy",
-        "operationId": "create_monthly_budget_dummy_api_budget__year___month__post",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Year"
-            }
-          },
-          {
-            "name": "month",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Month"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Create Monthly Budget Dummy Api Budget  Year   Month  Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/budget/{year}/{month}/limits": {
       "get": {
         "summary": "Get Limits Dummy",
@@ -719,8 +637,13 @@
     },
     "/api/budget/{year}/{month}/summary": {
       "get": {
-        "summary": "Get Summary Dummy",
-        "operationId": "get_summary_dummy_api_budget__year___month__summary_get",
+        "summary": "Get Summary",
+        "operationId": "get_summary_api_budget__year___month__summary_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "year",
@@ -728,8 +651,12 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "maximum": 2100,
+              "minimum": 2000,
+              "description": "Year of the budget",
               "title": "Year"
-            }
+            },
+            "description": "Year of the budget"
           },
           {
             "name": "month",
@@ -737,8 +664,12 @@
             "required": true,
             "schema": {
               "type": "integer",
+              "maximum": 12,
+              "minimum": 1,
+              "description": "Month of the budget (1-12)",
               "title": "Month"
-            }
+            },
+            "description": "Month of the budget (1-12)"
           }
         ],
         "responses": {

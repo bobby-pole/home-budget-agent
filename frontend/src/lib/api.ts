@@ -110,16 +110,6 @@ export const api = {
 
   // --- BUDGET ---
 
-  getBudget: async (year: number, month: number) => {
-    const response = await apiClient.get(`/budget/${year}/${month}`);
-    return response.data;
-  },
-
-  setBudget: async (data: { year: number; month: number; amount: number }) => {
-    const response = await apiClient.post(`/budget/${data.year}/${data.month}`, { amount: data.amount });
-    return response.data;
-  },
-
   getBudgetSummary: async (year: number, month: number): Promise<MonthlyBudgetSummary> => {
     const response = await apiClient.get(`/budget/${year}/${month}/summary`);
     return response.data;

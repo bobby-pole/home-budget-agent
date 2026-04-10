@@ -115,28 +115,7 @@ describe("api service", () => {
     });
   });
 
-  describe("budget endpoints", () => {
-    it("getBudget — wysyła GET /budget/:year/:month", async () => {
-      const budget = { year: 2024, month: 3, amount: 2000 };
-      mockAxios.get.mockResolvedValueOnce({ data: budget });
 
-      const result = await api.getBudget(2024, 3);
-
-      expect(mockAxios.get).toHaveBeenCalledWith("/budget/2024/3");
-      expect(result).toEqual(budget);
-    });
-
-    it("setBudget — wysyła POST /budget/:year/:month z amount", async () => {
-      const budget = { year: 2024, month: 3, amount: 3000 };
-      mockAxios.post.mockResolvedValueOnce({ data: budget });
-
-      await api.setBudget({ year: 2024, month: 3, amount: 3000 });
-
-      expect(mockAxios.post).toHaveBeenCalledWith("/budget/2024/3", {
-        amount: 3000,
-      });
-    });
-  });
 
   describe("axios interceptors", () => {
     it("interceptor request.use i response.use są funkcjami (zarejestrowane przy imporcie)", () => {
