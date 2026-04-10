@@ -2,6 +2,10 @@
 import shutil
 import os
 import hashlib
+import csv
+import io
+import re
+from pypdf import PdfReader
 from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path
@@ -513,6 +517,310 @@ async def delete_transaction(
     return None
 
 
+# --- IMPORT ---
+
+def parse_ing_pdf_text(text: str) -> list[dict]:
+    """
+    Robust multiline parser for ING individual bank statements.
+    Refined to strictly separate Contractor, Title, and Amount.
+    """
+    transactions = []
+    
+    # 1. Pattern starts with two dates (DD.MM.YYYY)
+    # 2. Mid text is captured lazily
+    # 3. Amount is strictly matched: optional minus, then 1-3 digits, then optional groups of 3 digits separated by space, then comma, then 2 digits.
+    # This prevents merging long transaction IDs with the amount.
+    pattern = re.compile(
+        r"(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})\s+(.*?)\s+(-?\d{1,3}(?:[\s\xa0]\d{3})*[.,]\d{2})\s+PLN",
+        re.DOTALL | re.MULTILINE
+    )
+    
+    for match in pattern.finditer(text):
+        date_str, posting_date, mid_text, amount_str = match.groups()
+        
+        # Clean amount: "1 234,56" -> "1234.56"
+        clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
+        try:
+            amount = float(clean_amount)
+        except ValueError:
+            continue
+
+        # Convert DD.MM.YYYY -> YYYY-MM-DD
+        try:
+            d_parts = date_str.split(".")
+            iso_date = f"{d_parts[2]}-{d_parts[1]}-{d_parts[0]}"
+        except IndexError:
+            continue
+            
+        # --- CLEANING MID_TEXT (Separating Contractor and Title) ---
+        lines = [line.strip() for line in mid_text.split("\n") if line.strip()]
+        
+        # Noise filters for technical bank data:
+        noise_patterns = [
+            r"^\d{8}-\d+.*",           # Technical IDs (10500031-...)
+            r"^\d{10,}.*",             # Long unspaced account numbers or IDs
+            r"^\d{2}[\s\xa0]\d{4}.*",  # Spaced account numbers
+            r"^Nazwa i adres.*",       # Field labels
+            r"^Data księgowania.*",    # Header leftovers
+            r"^Szczegóły / nr.*",      # Header leftovers
+            r"^(TR\.KART|TR\.BLIK|PRZELEW|P\.BLIK|ST\.ZLEC).*", # Transaction types (Details column)
+        ]
+        
+        clean_lines = []
+        for line in lines:
+            # Check if line is purely technical noise
+            is_noise = any(re.match(p, line, re.IGNORECASE) for p in noise_patterns)
+            if not is_noise:
+                # Remove static labels if they appear inline
+                line = re.sub(r"Nazwa i adres (odbiorcy|płatnika):\s*", "", line, flags=re.IGNORECASE)
+                clean_lines.append(line.strip())
+        
+        if not clean_lines:
+            merchant = "Przelew/Transakcja"
+            title = mid_text.strip().replace("\n", " ")[:100]
+        else:
+            # First line is usually the Contractor/Merchant
+            merchant = clean_lines[0]
+            # Rest is the Title/Description
+            title = " ".join(clean_lines[1:]) if len(clean_lines) > 1 else merchant
+        
+        transactions.append({
+            "date": iso_date,
+            "merchant": merchant[:100],
+            "title": title[:200],
+            "amount": amount,
+            "currency": "PLN"
+        })
+        
+    return transactions
+
+
+@router.post("/transactions/import", response_model=dict)
+async def import_transactions(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+        
+    content = await file.read()
+    filename = file.filename or ""
+    
+    rows_to_process = []
+    
+    if filename.lower().endswith(".pdf"):
+        # --- PDF Functional Parsing ---
+        try:
+            reader = PdfReader(io.BytesIO(content))
+            full_text = ""
+            for page in reader.pages:
+                full_text += page.extract_text() + "\n"
+            
+            # Use regex-based parser (no AI here)
+            extracted_rows = parse_ing_pdf_text(full_text)
+            
+            for row in extracted_rows:
+                date_str = row["date"]
+                merchant = row["merchant"]
+                title = row["title"]
+                amount = row["amount"]
+                currency = row["currency"]
+                
+                # Unique hash for deduplication
+                raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
+                row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
+                
+                rows_to_process.append({
+                    "date_str": date_str,
+                    "amount": amount,
+                    "merchant": merchant,
+                    "title": title,
+                    "currency": currency,
+                    "hash": row_hash
+                })
+        except Exception as e:
+            print(f"❌ PDF Parse Error: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
+            
+    else:
+        # --- CSV Parsing logic (ING fallback) ---
+        text_content = ""
+        for encoding in ["utf-8", "windows-1250", "iso-8859-2"]:
+            try:
+                text_content = content.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+                
+        if not text_content:
+            raise HTTPException(status_code=400, detail="Could not decode CSV file. Use UTF-8 or Windows-1250.")
+            
+        f = io.StringIO(text_content)
+        try:
+            dialect = csv.Sniffer().sniff(text_content[:2000]) if len(text_content) > 10 else "excel"
+        except Exception:
+            dialect = "excel"
+            
+        reader = csv.DictReader(f, dialect=dialect)
+        headers = reader.fieldnames or []
+        
+        ing_keys = {
+            "date": ["Data transakcji", "Transaction date", "Data"],
+            "merchant": ["Dane kontrahenta", "Contractor details", "Kontrahent"],
+            "title": ["Tytuł", "Title", "Opis"],
+            "amount": ["Kwota transakcji (waluta)", "Transaction amount", "Kwota"],
+            "currency": ["Waluta", "Currency"]
+        }
+        
+        def find_key(headers, targets):
+            for h in headers:
+                for t in targets:
+                    if t.lower() in h.lower():
+                        return h
+            return None
+
+        mapped_keys = {k: find_key(headers, v) for k, v in ing_keys.items()}
+        
+        if not mapped_keys["date"] or not mapped_keys["amount"]:
+             raise HTTPException(status_code=400, detail=f"Required columns not found. Headers: {headers}")
+
+        for row in reader:
+            try:
+                date_str = row.get(mapped_keys["date"])
+                merchant = row.get(mapped_keys["merchant"], "")
+                title = row.get(mapped_keys["title"], "")
+                amount_str = row.get(mapped_keys["amount"], "0")
+                currency = row.get(mapped_keys["currency"], "PLN")
+                
+                if not date_str or not amount_str:
+                    continue
+                    
+                clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
+                amount = float(clean_amount)
+                
+                raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
+                row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
+                
+                rows_to_process.append({
+                    "date_str": date_str,
+                    "amount": amount,
+                    "merchant": merchant,
+                    "title": title,
+                    "currency": currency,
+                    "hash": row_hash
+                })
+            except (ValueError, TypeError):
+                continue
+
+    # --- Common processing (Deduplication, AI Categorization) ---
+    
+    if not rows_to_process:
+        return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
+
+    hashes_to_check = [r["hash"] for r in rows_to_process]
+    
+    existing_hashes = set(session.exec(
+        select(Transaction.import_hash).where(
+            Transaction.budget_id == current_budget.id,
+            col(Transaction.import_hash).in_(hashes_to_check)
+        )
+    ).all())
+    
+    final_rows = [r for r in rows_to_process if r["hash"] not in existing_hashes]
+    skipped_count = len(rows_to_process) - len(final_rows)
+    
+    if not final_rows:
+        return {"created": 0, "skipped": skipped_count, "failed": 0, "summary": f"All {len(rows_to_process)} transactions already imported."}
+
+    # Prepare for AI Categorization (Batching with Local Cache)
+    is_pdf = filename.lower().endswith(".pdf")
+    unique_descriptions = list(set([f"{r['merchant']} {r['title']}".strip() for r in final_rows]))
+    
+    db_categories = session.exec(select(Category).where((Category.budget_id == current_budget.id) | (Category.is_system))).all()
+    cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
+    cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
+    id_to_cat_name = {c.id: c.name for c in db_categories}
+    
+    ai_mapping = {}
+    
+    if not is_pdf:
+        # --- LOCAL CACHE: Check history for these descriptions ---
+        # Fetch recent transactions with categories to learn from them
+        history_stmt = select(Transaction.merchant_name, Transaction.category_id).where(
+            Transaction.budget_id == current_budget.id,
+            Transaction.category_id is not None
+        ).order_by(desc(Transaction.date)).limit(500)
+        history = session.exec(history_stmt).all()
+        
+        # Map: "description" -> "category_name"
+        local_mapping = {h[0].lower(): id_to_cat_name.get(h[1]) for h in history if h[1] in id_to_cat_name}
+        
+        descriptions_to_query = []
+        
+        for desc_text in unique_descriptions:
+            cached_cat = local_mapping.get(desc_text.lower())
+            if cached_cat:
+                ai_mapping[desc_text] = cached_cat
+            else:
+                descriptions_to_query.append(desc_text)
+                
+        # AI Batching ONLY for unknown descriptions
+        if descriptions_to_query:
+            print(f"🧠 Asking AI for {len(descriptions_to_query)} new descriptions...")
+            for i in range(0, len(descriptions_to_query), 50):
+                batch = descriptions_to_query[i : i+50]
+                ai_mapping.update(AIService.categorize_descriptions(batch, categories=cat_dicts))
+        else:
+            print("⚡ All descriptions found in local cache. Skipping AI.")
+    else:
+        print("📄 PDF import detected. Skipping auto-categorization as requested.")
+    
+    created_count = 0
+    for row_data in final_rows:
+        desc_key = f"{row_data['merchant']} {row_data['title']}".strip()
+        if is_pdf:
+            cat_id = None
+        else:
+            cat_name = ai_mapping.get(desc_key, "Other")
+            cat_id = cat_name_to_id.get(cat_name.lower())
+        
+        t_type = "expense" if row_data["amount"] < 0 else "income"
+        
+        try:
+            if "-" in row_data["date_str"]:
+                t_date = datetime.strptime(row_data["date_str"], "%Y-%m-%d")
+            else:
+                t_date = datetime.strptime(row_data["date_str"], "%d.%m.%Y")
+        except ValueError:
+            t_date = datetime.now(timezone.utc)
+
+        transaction = Transaction(
+            merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
+            total_amount=abs(row_data["amount"]),
+            currency=row_data["currency"],
+            date=t_date,
+            is_manual=False,
+            type=t_type,
+            uploaded_by=current_user.id,
+            budget_id=current_budget.id,
+            category_id=cat_id,
+            note=row_data["title"],
+            import_hash=row_data["hash"]
+        )
+        session.add(transaction)
+        created_count += 1
+        
+    session.commit()
+    return {
+        "created": created_count, 
+        "skipped": skipped_count, 
+        "failed": 0, 
+        "summary": f"Zaimportowano {created_count} transakcji z pliku {filename}. Pominięto {skipped_count} duplikatów."
+    }
+
+
 # --- BUDGET ---
 
 @router.get("/budget/{year}/{month}/limits", response_model=list)
@@ -634,7 +942,7 @@ async def invite_member(
         target_user = auth_session.exec(select(User).where(User.email == member_data.email)).first()
     
     if not target_user:
-        raise HTTPException(status_code=404, detail=f"User with email {member_data.email} not found")
+        raise HTTPException(status_code=404, detail=f"User with email {member_data.email} found")
 
     # Check permissions and existing membership in ops session
     membership = session.exec(

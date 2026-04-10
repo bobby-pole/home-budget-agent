@@ -93,6 +93,20 @@ export const api = {
     await apiClient.delete(`/transactions/${id}`);
   },
 
+  importTransactions: async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiClient.post<{ 
+      created: number; 
+      skipped: number; 
+      failed: number; 
+      summary: string 
+    }>("/transactions/import", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
   createManualTransaction: async (data: {
     merchant_name: string;
     total_amount: number;

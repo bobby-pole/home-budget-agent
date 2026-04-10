@@ -15,3 +15,4 @@ pytest-mock>=3.12.0
 ruff>=0.3.0
 pyright>=1.1.350
 alembic>=1.13.1
+pypdf>=4.0.0
