@@ -1,13 +1,10 @@
 import { defineConfig } from '@hey-api/openapi-ts';
 
 export default defineConfig({
-  input: '../openapi.json',
+  input: '../contracts/openapi.json',
   output: './src/client',
   plugins: [
     '@hey-api/typescript',
-    {
-      name: '@hey-api/sdk',
-      asClass: true,
-    },
+    '@hey-api/sdk',
   ],
 });
