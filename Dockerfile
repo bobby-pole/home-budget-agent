@@ -1,23 +1,23 @@
-# Dockerfile
-
 # --- STAGE 1: Build Frontend (React + Vite) ---
-FROM node:20-alpine as build-frontend
+FROM node:20-alpine AS build-frontend
 
 WORKDIR /app
-# Copy frontend dependencies
-COPY frontend/package*.json ./
+# Copy OpenAPI schema (needed for type generation)
+COPY contracts/ ./contracts/
+
+# Copy frontend source code keeping the directory structure
+# This ensures that relative paths like '../contracts/openapi.json' work as expected
+COPY frontend/ ./frontend/
+
+WORKDIR /app/frontend
+# Install dependencies
 RUN npm ci
 
-# Copy OpenAPI schema (needed for type generation)
-COPY openapi.json ./openapi.json
-
-# Copy frontend source code
-COPY frontend/ ./
 # Build the application (includes type generation)
-RUN cd frontend && npm run build
+RUN npm run build
 
 # --- STAGE 2: Backend Base (Python dependencies & Security) ---
-FROM python:3.11-slim as backend-base
+FROM python:3.11-slim AS backend-base
 
 WORKDIR /app
 
@@ -55,13 +55,13 @@ EXPOSE 8000
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
 
 # --- STAGE 3: Production (Combine Frontend & Backend) ---
-FROM backend-base as production
+FROM backend-base AS production
 
 # Switch to root temporarily to copy files
 USER root
 
 # Copy the built frontend from Stage 1
-COPY --from=build-frontend --chown=appuser:appgroup /app/dist /app/static
+COPY --from=build-frontend --chown=appuser:appgroup /app/frontend/dist /app/static
 
 # Switch back to non-root user
 USER appuser
