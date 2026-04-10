@@ -236,7 +236,11 @@ export function TransactionsTable({
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="text-right font-semibold">
+                      <TableCell className={cn(
+                        "text-right font-semibold whitespace-nowrap",
+                        transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : ""
+                      )}>
+                        {transaction.type === 'income' ? "+" : "-"}
                         {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
                       </TableCell>
                       <TableCell className="text-right">

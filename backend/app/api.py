@@ -4,14 +4,15 @@ import os
 import hashlib
 from uuid import uuid4
 from datetime import datetime, timezone
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path
 from sqlmodel import Session, select, desc, col
+from sqlalchemy import extract, func
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan,
     Budget, BudgetMember,
-    MonthlyBudgetSummary,
+    MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead
@@ -397,6 +398,7 @@ async def retry_transaction(
 async def get_transactions(
     limit: int = 50,
     offset: int = 0,
+    type: Optional[str] = None,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
@@ -406,10 +408,12 @@ async def get_transactions(
     statement = (
         select(Transaction)
         .where(Transaction.budget_id == current_budget.id)
-        .order_by(desc(Transaction.date))
-        .offset(offset)
-        .limit(limit)
     )
+    
+    if type:
+        statement = statement.where(Transaction.type == type)
+        
+    statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
     results = session.exec(statement).all()
     return results
 
@@ -511,14 +515,6 @@ async def delete_transaction(
 
 # --- BUDGET ---
 
-@router.get("/budget/{year}/{month}", response_model=dict)
-def get_monthly_budget_dummy(year: int, month: int):
-    return {}
-
-@router.post("/budget/{year}/{month}", response_model=dict)
-def create_monthly_budget_dummy(year: int, month: int):
-    return {}
-
 @router.get("/budget/{year}/{month}/limits", response_model=list)
 def get_limits_dummy(year: int, month: int):
     return []
@@ -532,8 +528,89 @@ def delete_limit_dummy(year: int, month: int, category_id: int):
     return {}
 
 @router.get("/budget/{year}/{month}/summary", response_model=MonthlyBudgetSummary)
-def get_summary_dummy(year: int, month: int):
-    return MonthlyBudgetSummary(year=year, month=month, total_planned=0, total_spent=0, total_remaining=0, total_income=0, categories=[])
+def get_summary(
+    year: int = Path(..., ge=2000, le=2100, description="Year of the budget"),
+    month: int = Path(..., ge=1, le=12, description="Month of the budget (1-12)"),
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    # 1. Calculate total income
+    income_stmt = select(func.sum(Transaction.total_amount)).where(
+        Transaction.budget_id == current_budget.id,
+        Transaction.type == "income",
+        extract('year', Transaction.date) == year,
+        extract('month', Transaction.date) == month
+    )
+    total_income = session.scalar(income_stmt) or 0.0
+
+    # 2. Calculate total spent (from expenses)
+    expense_stmt = select(func.sum(Transaction.total_amount)).where(
+        Transaction.budget_id == current_budget.id,
+        Transaction.type == "expense",
+        extract('year', Transaction.date) == year,
+        extract('month', Transaction.date) == month
+    )
+    total_spent = session.scalar(expense_stmt) or 0.0
+
+    # 3. Retrieve category allocations (planning)
+    allocations_stmt = select(EnvelopeAllocation).where(
+        EnvelopeAllocation.budget_id == current_budget.id,
+        EnvelopeAllocation.year == year,
+        EnvelopeAllocation.month == month
+    )
+    allocations = session.exec(allocations_stmt).all()
+    total_planned = sum(a.amount for a in allocations)
+
+    # Calculate category expenses breakdown
+    expenses_by_cat_stmt = select(
+        Transaction.category_id, 
+        func.sum(Transaction.total_amount)
+    ).where(
+        Transaction.budget_id == current_budget.id,
+        Transaction.type == "expense",
+        extract('year', Transaction.date) == year,
+        extract('month', Transaction.date) == month
+    ).group_by(Transaction.category_id)
+    
+    spent_by_category = dict(session.exec(expenses_by_cat_stmt).all())
+
+    # Build the category summary items
+    categories_summary = []
+    # Get all categories belonging to the budget
+    all_categories = session.exec(select(Category).where(Category.budget_id == current_budget.id)).all()
+    
+    # Also include system categories if they are somehow accessible or fallback
+    
+    allocations_by_cat = {a.category_id: a.amount for a in allocations}
+    
+    for cat in all_categories:
+        planned = allocations_by_cat.get(cat.id, 0.0)
+        spent = spent_by_category.get(cat.id, 0.0)
+        
+        # Only include if there is planned or spent amount
+        if planned > 0 or spent > 0:
+            categories_summary.append(CategoryBudgetSummaryItem(
+                category_id=cat.id,
+                category_name=cat.name,
+                planned=planned,
+                spent=spent,
+                remaining=planned - spent
+            ))
+
+    total_remaining = total_income - total_spent
+
+    return MonthlyBudgetSummary(
+        year=year, 
+        month=month, 
+        total_planned=total_planned, 
+        total_spent=total_spent, 
+        total_remaining=total_remaining, 
+        total_income=total_income, 
+        categories=categories_summary
+    )
 
 
 @router.post("/budget/members", response_model=BudgetMemberRead)

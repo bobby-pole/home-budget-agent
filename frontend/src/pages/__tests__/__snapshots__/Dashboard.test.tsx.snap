@@ -114,9 +114,6 @@ exports[`Dashboard > snapshot — loaded state 1`] = `
     >
       RecentTransactionsList
     </div>
-    <div
-      data-testid="mock-budget-modal"
-    />
   </div>
 </div>
 `;
