@@ -8,7 +8,7 @@ interface BudgetSummaryCardProps {
   planned: number;
   spent: number;
   income: number;
-  onSetUpBudget: () => void;
+  onAddTransaction: () => void;
 }
 
 export function BudgetSummaryCard({
@@ -16,11 +16,11 @@ export function BudgetSummaryCard({
   planned,
   spent,
   income,
-  onSetUpBudget,
+  onAddTransaction,
 }: BudgetSummaryCardProps) {
   const isOverBudget = remaining < 0;
 
-  if (planned === 0 && spent === 0) {
+  if (planned === 0 && spent === 0 && income === 0) {
     return (
       <Card className="rounded-3xl border border-dashed border-border p-8 bg-muted/30">
         <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -28,13 +28,13 @@ export function BudgetSummaryCard({
             <PiggyBank className="size-6 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">Nie masz jeszcze budżetu</h3>
+            <h3 className="text-lg font-semibold">Brak transakcji w tym miesiącu</h3>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              Zaplanuj swoje wydatki, aby lepiej kontrolować swoje finanse.
+              Dodaj swój pierwszy przychód lub wydatek, aby zacząć śledzić finanse.
             </p>
           </div>
-          <Button onClick={onSetUpBudget} className="rounded-full">
-            Skonfiguruj budżet <ArrowRight className="ml-2 size-4" />
+          <Button onClick={onAddTransaction} className="rounded-full">
+            Dodaj transakcję <ArrowRight className="ml-2 size-4" />
           </Button>
         </div>
       </Card>
@@ -60,7 +60,7 @@ export function BudgetSummaryCard({
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            z {planned.toLocaleString("pl-PL")} PLN zaplanowanych
+            z {income.toLocaleString("pl-PL")} PLN przychodów
           </p>
         </div>
 

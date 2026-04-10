@@ -19,10 +19,6 @@ vi.mock("@/components/dashboard/RecentTransactionsList", () => ({
   RecentTransactionsList: () => <div data-testid="mock-recent-transactions">RecentTransactionsList</div>,
 }));
 
-vi.mock("@/components/dashboard/BudgetModal", () => ({
-  BudgetModal: () => <div data-testid="mock-budget-modal" />,
-}));
-
 vi.mock("@/components/dashboard/AddTransactionModal", () => ({
   AddTransactionModal: ({ open }: { open: boolean }) =>
     open ? <div data-testid="mock-add-transaction-modal">AddTransactionModal</div> : null,
