@@ -59,7 +59,7 @@ export function TransactionsTable({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Ponawiam przetwarzanie...", {
-        description: "AI spróbuje ponownie przeanalizować ten transakcję.",
+        description: "AI spróbuje ponownie przeanalizować tę transakcję.",
       });
     },
     onError: (err) => {
@@ -75,13 +75,13 @@ export function TransactionsTable({
     mutationFn: api.deleteTransaction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transakcja usunięty");
+      toast.success("Transakcja usunięta");
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {
         setCurrentPage(prev => prev - 1);
       }
     },
-    onError: () => toast.error("Nie udało się usunąć transakcjęu"),
+    onError: () => toast.error("Nie udało się usunąć transakcji"),
   });
 
   const handleOpenModal = (transaction: Transaction) => {
