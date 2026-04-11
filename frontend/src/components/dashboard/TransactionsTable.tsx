@@ -43,10 +43,10 @@ export function TransactionsTable({
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
-  
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 5;
+  const ITEMS_PER_PAGE = 15;
 
   const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE) || 1;
   const paginatedTransactions = transactions.slice(
@@ -78,7 +78,7 @@ export function TransactionsTable({
       toast.success("Transakcja usunięty");
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {
-          setCurrentPage(prev => prev - 1);
+        setCurrentPage(prev => prev - 1);
       }
     },
     onError: () => toast.error("Nie udało się usunąć transakcjęu"),
@@ -100,34 +100,34 @@ export function TransactionsTable({
           <div className="flex items-center gap-3">
             <CardTitle className="text-lg font-semibold">Transakcje</CardTitle>
             <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] font-bold">
-                {transactions.length}
+              {transactions.length}
             </Badge>
           </div>
 
           <div className="flex items-center gap-3">
-              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                  Strona {currentPage} z {totalPages}
-              </span>
-              <div className="flex gap-1">
-                  <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg"
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                  >
-                      <ChevronLeft className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7 rounded-lg"
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages || totalPages === 1}
-                  >
-                      <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
-              </div>
+            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+              Strona {currentPage} z {totalPages}
+            </span>
+            <div className="flex gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7 rounded-lg"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-7 w-7 rounded-lg"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages || totalPages === 1}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -186,8 +186,8 @@ export function TransactionsTable({
                             </span>
                             <div className="flex flex-wrap gap-1 mt-0.5">
                               {transaction.tags?.map(tag => (
-                                <span 
-                                  key={tag.id} 
+                                <span
+                                  key={tag.id}
                                   className="text-[9px] text-white px-1.5 py-0 rounded-sm font-bold shadow-xs"
                                   style={{ backgroundColor: tag.color || "#9ca3af" }}
                                 >
@@ -196,21 +196,21 @@ export function TransactionsTable({
                               ))}
                             </div>
                           </div>
-                          </div>
-                          </TableCell>
-                          <TableCell>
-                          {transaction.type === 'expense' && (
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {transaction.type === 'expense' && (
                           <Badge variant="outline" className="text-red-500 bg-red-500/5 border-red-500/20 text-[10px] uppercase font-bold">Wydatek</Badge>
-                          )}
-                          {transaction.type === 'income' && (
+                        )}
+                        {transaction.type === 'income' && (
                           <Badge variant="outline" className="text-green-500 bg-green-500/5 border-green-500/20 text-[10px] uppercase font-bold">Przychód</Badge>
-                          )}
-                          {transaction.type === 'transfer' && (
+                        )}
+                        {transaction.type === 'transfer' && (
                           <Badge variant="outline" className="text-blue-500 bg-blue-500/5 border-blue-500/20 text-[10px] uppercase font-bold">Transfer</Badge>
-                          )}
-                          </TableCell>
-                          <TableCell className="text-gray-500 text-sm">
-                        {transaction.date 
+                        )}
+                      </TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {transaction.date
                           ? new Date(transaction.date).toLocaleDateString("pl-PL")
                           : "-"}
                       </TableCell>
@@ -238,9 +238,10 @@ export function TransactionsTable({
                       </TableCell>
                       <TableCell className={cn(
                         "text-right font-semibold whitespace-nowrap",
-                        transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" : ""
+                        transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" :
+                          transaction.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : ""
                       )}>
-                        {transaction.type === 'income' ? "+" : "-"}
+                        {transaction.type === 'income' ? "+" : transaction.type === 'transfer' ? "" : "-"}
                         {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
                       </TableCell>
                       <TableCell className="text-right">
@@ -271,8 +272,8 @@ export function TransactionsTable({
                             size="icon"
                             className="h-8 w-8 text-gray-500 hover:text-primary hover:bg-primary/10"
                             onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenModal(transaction);
+                              e.stopPropagation();
+                              handleOpenModal(transaction);
                             }}
                             title="Szczegóły / Edycja"
                           >
@@ -284,8 +285,8 @@ export function TransactionsTable({
                             size="icon"
                             className="h-8 w-8 text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                             onClick={(e) => {
-                                e.stopPropagation();
-                                setTransactionToDelete(transaction.id);
+                              e.stopPropagation();
+                              setTransactionToDelete(transaction.id);
                             }}
                             title="Usuń transakcję"
                           >
