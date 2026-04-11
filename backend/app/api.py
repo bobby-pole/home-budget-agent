@@ -645,7 +645,8 @@ async def import_transactions(
     user_names = []
     local_part = current_user.email.split("@")[0]
     clean_part = local_part.replace(".", " ").replace("-", " ").replace("_", " ").upper()
-    name_parts = [p.strip() for p in clean_part.split() if p.strip() and len(p) > 2]
+    # Only keep parts that are purely alphabetic (skip ALEX123)
+    name_parts = [p.strip() for p in clean_part.split() if p.strip() and len(p) > 2 and p.isalpha()]
     if len(name_parts) >= 2:
         user_names.append(f"{name_parts[0]} {name_parts[1]}")
         user_names.append(f"{name_parts[1]} {name_parts[0]}")
@@ -819,8 +820,33 @@ async def import_transactions(
     else:
         print("📄 PDF import detected. Skipping auto-categorization as requested.")
     
+    # --- PRE-FETCH MANUAL CANDIDATES for Deduplication (Optimized) ---
+    parsed_dates = []
+    for r in final_rows:
+        try:
+            if "-" in r["date_str"]:
+                parsed_dates.append(datetime.strptime(r["date_str"], "%Y-%m-%d"))
+            else:
+                parsed_dates.append(datetime.strptime(r["date_str"], "%d.%m.%Y"))
+        except ValueError:
+            pass
+            
+    manual_candidates = []
+    if parsed_dates:
+        min_date = min(parsed_dates) - timedelta(days=2)
+        max_date = max(parsed_dates) + timedelta(days=2)
+        
+        candidates_stmt = select(Transaction).where(
+            Transaction.budget_id == current_budget.id,
+            Transaction.is_manual,
+            col(Transaction.import_hash).is_(None),
+            col(Transaction.date) >= min_date,
+            col(Transaction.date) <= max_date
+        )
+        manual_candidates = list(session.exec(candidates_stmt).all())
+
     created_count = 0
-    for row_data in final_rows:
+    for i, row_data in enumerate(final_rows):
         desc_key = f"{row_data['merchant']} {row_data['title']}".strip()
         if is_pdf:
             cat_id = None
@@ -835,31 +861,22 @@ async def import_transactions(
             user_names=user_names
         )
         
-        try:
-            if "-" in row_data["date_str"]:
-                t_date = datetime.strptime(row_data["date_str"], "%Y-%m-%d")
-            else:
-                t_date = datetime.strptime(row_data["date_str"], "%d.%m.%Y")
-        except ValueError:
-            t_date = datetime.now(timezone.utc)
-            
+        # Use pre-parsed date if available
+        t_date = parsed_dates[i] if i < len(parsed_dates) else datetime.now(timezone.utc)
         t_amount = abs(row_data["amount"])
 
         # --- SMART DEDUPLICATION (Gap Analysis / MVP) ---
-        # Szukamy manualnej transakcji (paragonu) z tą samą kwotą, w promieniu +/- 2 dni, która nie jest jeszcze powiązana z wyciągiem
-        start_date = t_date - timedelta(days=2)
-        end_date = t_date + timedelta(days=2)
+        # Look for match in pre-fetched candidates
+        existing_duplicate = None
+        d_start = t_date - timedelta(days=2)
+        d_end = t_date + timedelta(days=2)
         
-        duplicate_stmt = select(Transaction).where(
-            Transaction.budget_id == current_budget.id,
-            Transaction.total_amount == t_amount,
-            Transaction.is_manual,
-            col(Transaction.import_hash).is_(None),
-            col(Transaction.date) >= start_date,
-            col(Transaction.date) <= end_date
-        )
-        
-        existing_duplicate = session.exec(duplicate_stmt).first()
+        for cand in manual_candidates:
+            # Match if same amount and within 2 days window
+            if cand.total_amount == t_amount and cand.date and d_start <= cand.date <= d_end:
+                existing_duplicate = cand
+                manual_candidates.remove(cand) # Don't match the same receipt twice
+                break
         
         if existing_duplicate:
             # Auto-Merge: Powiązanie paragonu z wpisem z banku
