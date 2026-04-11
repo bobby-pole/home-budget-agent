@@ -37,6 +37,7 @@ const formSchema = z.object({
   }),
   total_amount: z.coerce.number().min(0.01, "Kwota musi być większa od 0"),
   currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
+  type: z.enum(["expense", "income", "transfer"]).default("expense"),
   category_id: z.number().nullable().optional(),
   tag_ids: z.array(z.number()).default([]),
   note: z.string().optional(),
@@ -64,6 +65,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       date: "",
       total_amount: 0,
       currency: "PLN",
+      type: "expense",
       category_id: null,
       tag_ids: [],
       note: "",
@@ -76,6 +78,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       date: transaction.date ? new Date(transaction.date).toISOString().split("T")[0] : "",
       total_amount: transaction.total_amount ?? 0,
       currency: transaction.currency ?? "PLN",
+      type: (transaction.type as "expense" | "income" | "transfer") ?? "expense",
       category_id: transaction.category_id ?? null,
       tag_ids: transaction.tags?.map(t => t.id) || [],
       note: transaction.note ?? "",
@@ -89,6 +92,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
         date: new Date(values.date).toISOString(),
         note: values.note || undefined,
         category_id: values.category_id || undefined,
+        type: values.type || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
@@ -209,6 +213,39 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                 ) : (
                   <div className="text-lg font-medium">{field.value}</div>
                 )}
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                  Typ
+                </FormLabel>
+                {isEditing ? (
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Wybierz typ" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="expense">Wydatek</SelectItem>
+                        <SelectItem value="income">Przychód</SelectItem>
+                        <SelectItem value="transfer">Transfer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                ) : (
+                  <div className="pt-1">
+                    <span className="px-2 py-1 rounded text-xs uppercase tracking-wide font-bold flex items-center w-fit shadow-sm bg-muted text-muted-foreground">
+                      {field.value === "expense" ? "Wydatek" : field.value === "income" ? "Przychód" : "Transfer"}
+                    </span>
+                  </div>
+                )}
+                <FormMessage />
               </FormItem>
             )}
           />

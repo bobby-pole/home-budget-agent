@@ -70,9 +70,10 @@ export function RecentTransactionsList({ transactions, isLoading }: RecentTransa
                   <div className="text-right flex flex-col items-end">
                     <span className={cn(
                       "text-sm font-black tabular-nums",
-                      isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"
+                      isIncome ? "text-emerald-600 dark:text-emerald-400" : 
+                      tx.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : "text-foreground"
                     )}>
-                      {isIncome ? "+" : "-"}{(tx.total_amount ?? 0).toLocaleString("pl-PL", { minimumFractionDigits: 2 })} {tx.currency ?? "PLN"}
+                      {isIncome ? "+" : tx.type === 'transfer' ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString("pl-PL", { minimumFractionDigits: 2 })} {tx.currency ?? "PLN"}
                     </span>
                     <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">
                       {tx.type}

@@ -7,7 +7,7 @@ import io
 import re
 from pypdf import PdfReader
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path
 from sqlmodel import Session, select, desc, col
 from sqlalchemy import extract, func
@@ -563,7 +563,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
             r"^Nazwa i adres.*",       # Field labels
             r"^Data księgowania.*",    # Header leftovers
             r"^Szczegóły / nr.*",      # Header leftovers
-            r"^(TR\.KART|TR\.BLIK|PRZELEW|P\.BLIK|ST\.ZLEC).*", # Transaction types (Details column)
+            r"^(TR\.KART|TR\.BLIK|PRZELEW|P\.BLIK|ST\.ZLEC)$", # Transaction types (Details column)
         ]
         
         clean_lines = []
@@ -595,6 +595,39 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
     return transactions
 
 
+def detect_transaction_type(merchant: str, title: str, amount: float, user_names: list[str]) -> str:
+    """
+    Heurystyka do oznaczania transferów wewnętrznych i przelewów P2P.
+    """
+    merchant_upper = (merchant or "").upper()
+    title_upper = (title or "").upper()
+    combined_text = f"{merchant_upper} {title_upper}"
+    
+    # 1. Reguły słów kluczowych dla transferów
+    transfer_keywords = [
+        "PRZELEW WEWNĘTRZNY", "PRZELEW WŁASNY", "PRZELEW NA TELEFON",
+        "PRZELEW NA KONTO", "ZASILENIE", "WPŁATA WŁASNA", "SPLIT", 
+        "ROZLICZENIE", "PRZELEW WEW", "PRZELEW WŁASNY"
+    ]
+    
+    # Dla BLIKa sprawdzamy, czy to nie jest płatność w sklepie
+    if "PŁATNOŚĆ BLIK" not in combined_text and "ZAKUP" not in combined_text:
+        if "BLIK" in combined_text and ("PRZELEW" in combined_text or "TELEFON" in combined_text):
+            transfer_keywords.append("BLIK")
+
+    for keyword in transfer_keywords:
+        if keyword in combined_text:
+            return "transfer"
+            
+    # 2. Sprawdzanie obecności imienia i nazwiska z profilu
+    for name in user_names:
+        if name and name in combined_text:
+            return "transfer"
+            
+    # Domyślny fallback: jeśli nie jest to ewidentny transfer, to wydatek lub przychód
+    return "expense" if amount < 0 else "income"
+
+
 @router.post("/transactions/import", response_model=dict)
 async def import_transactions(
     file: UploadFile = File(...),
@@ -607,6 +640,15 @@ async def import_transactions(
         
     content = await file.read()
     filename = file.filename or ""
+    
+    # Extract potential full name from user's email to detect personal transfers
+    user_names = []
+    local_part = current_user.email.split("@")[0]
+    clean_part = local_part.replace(".", " ").replace("-", " ").replace("_", " ").upper()
+    name_parts = [p.strip() for p in clean_part.split() if p.strip() and len(p) > 2]
+    if len(name_parts) >= 2:
+        user_names.append(f"{name_parts[0]} {name_parts[1]}")
+        user_names.append(f"{name_parts[1]} {name_parts[0]}")
     
     rows_to_process = []
     
@@ -786,7 +828,12 @@ async def import_transactions(
             cat_name = ai_mapping.get(desc_key, "Other")
             cat_id = cat_name_to_id.get(cat_name.lower())
         
-        t_type = "expense" if row_data["amount"] < 0 else "income"
+        t_type = detect_transaction_type(
+            merchant=row_data["merchant"],
+            title=row_data["title"],
+            amount=row_data["amount"],
+            user_names=user_names
+        )
         
         try:
             if "-" in row_data["date_str"]:
@@ -795,22 +842,59 @@ async def import_transactions(
                 t_date = datetime.strptime(row_data["date_str"], "%d.%m.%Y")
         except ValueError:
             t_date = datetime.now(timezone.utc)
+            
+        t_amount = abs(row_data["amount"])
 
-        transaction = Transaction(
-            merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
-            total_amount=abs(row_data["amount"]),
-            currency=row_data["currency"],
-            date=t_date,
-            is_manual=False,
-            type=t_type,
-            uploaded_by=current_user.id,
-            budget_id=current_budget.id,
-            category_id=cat_id,
-            note=row_data["title"],
-            import_hash=row_data["hash"]
+        # --- SMART DEDUPLICATION (Gap Analysis / MVP) ---
+        # Szukamy manualnej transakcji (paragonu) z tą samą kwotą, w promieniu +/- 2 dni, która nie jest jeszcze powiązana z wyciągiem
+        start_date = t_date - timedelta(days=2)
+        end_date = t_date + timedelta(days=2)
+        
+        duplicate_stmt = select(Transaction).where(
+            Transaction.budget_id == current_budget.id,
+            Transaction.total_amount == t_amount,
+            Transaction.is_manual,
+            col(Transaction.import_hash).is_(None),
+            col(Transaction.date) >= start_date,
+            col(Transaction.date) <= end_date
         )
-        session.add(transaction)
-        created_count += 1
+        
+        existing_duplicate = session.exec(duplicate_stmt).first()
+        
+        if existing_duplicate:
+            # Auto-Merge: Powiązanie paragonu z wpisem z banku
+            existing_duplicate.import_hash = row_data["hash"]
+            # Aktualizacja typu, o ile paragon był np. "expense", a skrypt wykrył "transfer"
+            if existing_duplicate.type == "expense" and t_type == "transfer":
+                existing_duplicate.type = "transfer"
+            
+            # Wzbogacenie notatki o dane z banku, żeby nie stracić oryginalnego tytułu przelewu
+            bank_note = f"[Bank: {row_data['title']}]"
+            if existing_duplicate.note:
+                if "[Bank:" not in existing_duplicate.note:
+                    existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
+            else:
+                existing_duplicate.note = bank_note
+                
+            session.add(existing_duplicate)
+            created_count += 1
+            print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
+        else:
+            transaction = Transaction(
+                merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
+                total_amount=t_amount,
+                currency=row_data["currency"],
+                date=t_date,
+                is_manual=False,
+                type=t_type,
+                uploaded_by=current_user.id,
+                budget_id=current_budget.id,
+                category_id=cat_id,
+                note=row_data["title"],
+                import_hash=row_data["hash"]
+            )
+            session.add(transaction)
+            created_count += 1
         
     session.commit()
     return {
