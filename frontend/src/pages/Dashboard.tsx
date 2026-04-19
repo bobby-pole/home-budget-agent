@@ -1,24 +1,26 @@
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { 
-  Plus, 
-  Camera, 
+import {
+  Plus,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { QuickEntryDrawer } from "@/components/QuickEntryDrawer";
 import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal";
 import { BudgetSummaryCard } from "@/components/dashboard/BudgetSummaryCard";
 import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
 import { TopEnvelopesCard } from "@/components/dashboard/TopEnvelopesCard";
 import { RecentTransactionsList } from "@/components/dashboard/RecentTransactionsList";
-import { toast } from "sonner";
-import type { AxiosError } from "axios";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useScanReceipt } from "@/hooks/use-scan-receipt";
+import { useAddTransaction } from "@/hooks/use-add-transaction";
 
 export function Dashboard() {
-  const [addTxOpen, setAddTxOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
+  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
+  const { isAddTxOpen, setIsAddTxOpen, openAddTransaction } = useAddTransaction();
+  const { scanReceipt, isScanning } = useScanReceipt();
+  const isMobile = useIsMobile();
 
   const now = new Date();
   const curMonth = now.getMonth();
@@ -31,7 +33,7 @@ export function Dashboard() {
       if (e.key === "n" || e.key === "N") {
         const tag = (e.target as HTMLElement).tagName;
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        setAddTxOpen(true);
+        setQuickEntryOpen(true);
       }
     };
     window.addEventListener("keydown", handler);
@@ -56,45 +58,6 @@ export function Dashboard() {
     queryKey: ["budget-summary", curYear, curMonth + 1],
     queryFn: () => api.getBudgetSummary(curYear, curMonth + 1),
   });
-
-  const scanMutation = useMutation({
-    mutationFn: ({ file, force }: { file: File; force?: boolean }) =>
-      api.scanTransaction(file, force),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Paragon przesłany!", { description: "Analiza AI w toku." });
-    },
-    onError: (error: AxiosError) => {
-      if (error.response?.status === 409) {
-        toast.warning("Duplikat!", {
-          description: "Ten paragon już istnieje. Dodać mimo to?",
-          action: {
-            label: "Tak",
-            onClick: () => {
-              const formData = error.config?.data as FormData | undefined;
-              const file = formData?.get('file') as File | null;
-              if (file) scanMutation.mutate({ file, force: true });
-            }
-          }
-        });
-      } else {
-        toast.error("Błąd wysyłania.");
-      }
-    },
-  });
-
-  const handleScanClick = () => fileInputRef.current?.click();
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Wybierz zdjęcie.");
-        return;
-      }
-      scanMutation.mutate({ file });
-      e.target.value = "";
-    }
-  };
 
   // --- DATA AGGREGATION ---
 
@@ -153,33 +116,23 @@ export function Dashboard() {
           <h1 className="text-3xl font-black tracking-tight">{capitalizedMonth} {curYear}</h1>
           <p className="text-muted-foreground font-medium">Oto podsumowanie Twoich finansów.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-          <Button 
-            onClick={handleScanClick} 
-            variant="outline" 
-            className="rounded-full font-bold border-2 hover:bg-primary/5 h-11 px-6 transition-all active:scale-95"
-            disabled={scanMutation.isPending}
-          >
-            {scanMutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Camera className="mr-2 size-4" />}
-            Skanuj
-          </Button>
-          <Button 
-            onClick={() => setAddTxOpen(true)} 
+        {isMobile ? null : < div className="flex items-center gap-2">
+          <Button
+            onClick={() => setQuickEntryOpen(true)}
             className="rounded-full font-bold shadow-lg shadow-primary/20 h-11 px-6 transition-all active:scale-95"
           >
-            <Plus className="mr-2 size-4" /> Dodaj
+            <Plus className="mr-2 size-4" /> Dodaj transakcję
           </Button>
-        </div>
+        </div>}
       </div>
 
       {/* Row 1: Summary */}
-      <BudgetSummaryCard 
+      <BudgetSummaryCard
         remaining={remainingBudget}
         planned={budgetAmount}
         spent={totalSpent}
         income={totalIncome}
-        onAddTransaction={() => setAddTxOpen(true)}
+        onAddTransaction={() => setQuickEntryOpen(true)}
       />
 
       {/* Row 2: Charts & Envelopes */}
@@ -191,8 +144,15 @@ export function Dashboard() {
       {/* Row 3: Recent Transactions */}
       <RecentTransactionsList transactions={transactions} isLoading={isTransactionsLoading} />
 
-      {/* Modals */}
-      <AddTransactionModal open={addTxOpen} onOpenChange={setAddTxOpen} />
-    </div>
+      {/* Modals & Drawers */}
+      <QuickEntryDrawer
+        open={quickEntryOpen}
+        onOpenChange={setQuickEntryOpen}
+        onScanReceipt={scanReceipt}
+        onManualEntry={openAddTransaction}
+        scanPending={isScanning}
+      />
+      <AddTransactionModal open={isAddTxOpen} onOpenChange={setIsAddTxOpen} />
+    </div >
   );
 }

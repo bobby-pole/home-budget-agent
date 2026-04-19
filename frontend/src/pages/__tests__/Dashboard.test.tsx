@@ -24,6 +24,11 @@ vi.mock("@/components/dashboard/AddTransactionModal", () => ({
     open ? <div data-testid="mock-add-transaction-modal">AddTransactionModal</div> : null,
 }));
 
+vi.mock("@/components/QuickEntryDrawer", () => ({
+  QuickEntryDrawer: ({ open }: { open: boolean }) =>
+    open ? <div data-testid="mock-quick-entry-drawer">QuickEntryDrawer</div> : null,
+}));
+
 const mockGetTransactions = vi.fn();
 const mockGetBudgetSummary = vi.fn();
 
@@ -73,16 +78,16 @@ describe("Dashboard", () => {
     });
   });
 
-  it("pressing N key opens AddTransactionModal", async () => {
+  it("pressing N key opens QuickEntryDrawer", async () => {
     render(<Dashboard />);
 
     await waitFor(() => {
       expect(screen.getByTestId("mock-budget-summary")).toBeInTheDocument();
     });
 
-    expect(screen.queryByTestId("mock-add-transaction-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("mock-quick-entry-drawer")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "n" });
-    expect(screen.getByTestId("mock-add-transaction-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-quick-entry-drawer")).toBeInTheDocument();
   });
 
   it("snapshot — loaded state", async () => {
