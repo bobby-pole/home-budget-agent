@@ -13,7 +13,7 @@ interface RecentTransactionsListProps {
   isLoading: boolean;
 }
 
-function formatRelativeDate(dateString: string | undefined): string {
+function formatRelativeDate(dateString: string | null | undefined): string {
   if (!dateString) return "Brak daty";
   
   const date = new Date(dateString);
