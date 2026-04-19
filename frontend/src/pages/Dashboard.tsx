@@ -90,6 +90,7 @@ export function Dashboard() {
         spent: c.spent,
         limit: c.planned,
         color: cat?.color ?? "#3b82f6",
+        icon: cat?.icon ?? "💰",
       };
     })
     .sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit))
@@ -142,7 +143,7 @@ export function Dashboard() {
       </div>
 
       {/* Row 3: Recent Transactions */}
-      <RecentTransactionsList transactions={transactions} isLoading={isTransactionsLoading} />
+      <RecentTransactionsList transactions={transactions} categories={categories} isLoading={isTransactionsLoading} />
 
       {/* Modals & Drawers */}
       <QuickEntryDrawer

@@ -15,7 +15,7 @@ describe("BudgetSummaryCard", () => {
     render(<BudgetSummaryCard {...defaultProps} />);
     
     expect(screen.getByText(/1.*200,00.*zł/i)).toBeInTheDocument();
-    expect(screen.getByText(/z 5.*000.*PLN przychodów/i)).toBeInTheDocument();
+    expect(screen.getByText(/Wykorzystanie przychodów/i)).toBeInTheDocument();
     expect(screen.getByText(/5.*000,00.*zł/i)).toBeInTheDocument();
     expect(screen.getByText(/3.*800,00.*zł/i)).toBeInTheDocument();
   });
