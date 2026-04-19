@@ -1,30 +1,62 @@
 import { render, screen } from "../../__tests__/test-utils"
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { DashboardHeader } from "../DashboardHeader"
 import { SidebarProvider } from "../ui/sidebar"
+import { AuthProvider } from "../../context/AuthContext"
+import { MemoryRouter } from "react-router-dom"
 
 describe("DashboardHeader", () => {
-  it("should show app title on desktop", () => {
-    // Desktop: isMobile = false
+  beforeEach(() => {
+    localStorage.setItem("budget_user", JSON.stringify({ email: "test@example.com" }))
+  })
+
+  afterEach(() => {
+    localStorage.removeItem("budget_user")
+  })
+
+  it("should show dynamic page title", () => {
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
     
     render(
-      <SidebarProvider>
-        <DashboardHeader />
-      </SidebarProvider>
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <AuthProvider>
+          <SidebarProvider>
+            <DashboardHeader />
+          </SidebarProvider>
+        </AuthProvider>
+      </MemoryRouter>
     );
     
-    expect(screen.getByText(/Smart Budget AI/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dashboard/i)).toBeInTheDocument();
+  });
+
+  it("should show user avatar and dropdown menu", () => {
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1024 });
+    
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <SidebarProvider>
+            <DashboardHeader />
+          </SidebarProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    );
+    
+    expect(screen.getByText("TE")).toBeInTheDocument();
   });
 
   it("should show sidebar trigger on mobile", () => {
-    // Mobile: isMobile = true
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 500 });
     
     render(
-      <SidebarProvider>
-        <DashboardHeader />
-      </SidebarProvider>
+      <MemoryRouter>
+        <AuthProvider>
+          <SidebarProvider>
+            <DashboardHeader />
+          </SidebarProvider>
+        </AuthProvider>
+      </MemoryRouter>
     );
     
     const trigger = screen.getByRole("button", { name: /toggle sidebar/i });
