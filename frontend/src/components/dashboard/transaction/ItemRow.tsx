@@ -26,7 +26,7 @@ export function ItemRow({ item, currency, onRemove }: ItemRowProps) {
 
   const category = categories?.find((c) => c.id === item.category_id);
   const categoryLabel = category
-    ? (category.is_system ? (CATEGORY_LABELS[category.name] || category.name) : category.name)
+    ? (CATEGORY_LABELS[category.name] || category.name)
     : null;
 
   return (

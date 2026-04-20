@@ -60,7 +60,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
               
               const category = categories.find(c => c.id === tx.category_id);
               const categoryName = category 
-                ? (category.is_system ? (CATEGORY_LABELS[category.name] || category.name) : category.name)
+                ? (CATEGORY_LABELS[category.name] || category.name)
                 : "Brak kategorii";
               const categoryIcon = category?.icon;
 

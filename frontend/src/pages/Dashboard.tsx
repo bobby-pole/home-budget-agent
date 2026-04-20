@@ -72,7 +72,7 @@ export function Dashboard() {
     .filter(c => c.spent > 0)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
-      const displayName = cat?.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : (cat?.name ?? c.category_name);
+      const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
       return {
         name: displayName,
         value: c.spent,
@@ -86,7 +86,7 @@ export function Dashboard() {
     .filter(c => c.planned > 0)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
-      const displayName = cat?.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : (cat?.name ?? c.category_name);
+      const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
       return {
         id: c.category_id,
         name: displayName,
