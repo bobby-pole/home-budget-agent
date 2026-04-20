@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import type { TransactionRead, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 interface RecentTransactionsListProps {
   transactions: TransactionRead[];
@@ -56,11 +57,19 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
             transactions.slice(0, 5).map((tx) => {
               const isIncome = tx.type === 'income';
               const isExpense = tx.type === 'expense';
-              const isTransfer = tx.type === 'transfer';
               
               const category = categories.find(c => c.id === tx.category_id);
-              const categoryName = category?.name ?? (isIncome ? "Przychód" : isTransfer ? "Transfer" : "Inne");
+              const categoryName = category 
+                ? (category.is_system ? (CATEGORY_LABELS[category.name] || category.name) : category.name)
+                : "Brak kategorii";
               const categoryIcon = category?.icon;
+
+              const typeLabels: Record<string, string> = {
+                income: "Przychód",
+                expense: "Wydatek",
+                transfer: "Transfer"
+              };
+              const typeLabel = typeLabels[tx.type ?? "expense"] || "Wydatek";
 
               const relativeDate = formatRelativeDate(tx.date);
               
@@ -91,11 +100,13 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                         {tx.merchant_name}
                       </span>
                       <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground font-medium">
+                        <span className="truncate">{typeLabel}</span>
+                        <span>•</span>
                         <span className="truncate">{categoryName}</span>
                         <span>•</span>
                         <span>{relativeDate}</span>
                         <span>•</span>
-                        <span className="truncate">Dodał: {uploaderText}</span>
+                        <span className="truncate opacity-70">Dodał: {uploaderText}</span>
                       </div>
                       
                       {tx.receipt_scan?.status === "processing" && (

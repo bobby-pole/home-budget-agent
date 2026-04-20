@@ -1,7 +1,7 @@
 # backend/app/models.py
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, Index
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -99,6 +99,9 @@ class TransactionBase(SQLModel):
 
 class Transaction(TransactionBase, table=True):
     __tablename__: str = "transaction"  # type: ignore
+    __table_args__ = (
+        Index("ix_transaction_budget_type_date", "budget_id", "type", "date"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     note: Optional[str] = Field(default=None)
@@ -151,7 +154,10 @@ class TransactionLine(TransactionLineBase, table=True):
 
 class EnvelopeAllocation(SQLModel, table=True):
     __tablename__: str = "envelope_allocation"  # type: ignore
-    __table_args__ = (UniqueConstraint("budget_id", "category_id", "month", "year", name="uq_envelope_allocation"),)
+    __table_args__ = (
+        UniqueConstraint("budget_id", "category_id", "month", "year", name="uq_envelope_allocation"),
+        Index("ix_envelope_allocation_budget_date", "budget_id", "year", "month"),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     budget_id: int = Field(foreign_key="budget.id", index=True)
@@ -276,7 +282,7 @@ class MonthlyBudgetSummary(SQLModel):
     month: int
     total_planned: float
     total_spent: float
-    total_remaining: float
+    net_cash_flow: float
     total_income: float
     categories: List[CategoryBudgetSummaryItem]
 

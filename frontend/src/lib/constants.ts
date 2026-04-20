@@ -1,23 +1,29 @@
 export const CATEGORY_LABELS: Record<string, string> = {
   Food: "Jedzenie",
-  FastFood: "Fast Food",
-  Snacks: "Przekąski",
+  Housing: "Dom",
   Transport: "Transport",
   Utilities: "Rachunki",
   Entertainment: "Rozrywka",
   Health: "Zdrowie",
-  Other: "Inne",
-  
-  // Mapowania synonimów i starych danych (dla czytelności w UI)
-  "Fast Food": "Fast Food",
-  Snack: "Przekąski",
-  Snack_legacy: "Przekąski",
-  Vegetables: "Jedzenie",
-  Vegetable: "Jedzenie",
+  Clothing: "Odzież",
+  Kids: "Dzieci",
+  Pets: "Zwierzęta",
+  Travel: "Podróże",
+  Education: "Edukacja",
+  Savings: "Oszczędności",
+  Gifts: "Prezenty",
   Alcohol: "Alkohol",
+  Other: "Inne",
+  Salary: "Wypłata",
+  
+  // Synonimy i mapowania AI
+  FastFood: "Fast Food",
+  "Fast Food": "Fast Food",
+  Snacks: "Przekąski",
+  Snack: "Przekąski",
+  Vegetables: "Jedzenie",
   Chemicals: "Chemia",
   Electronics: "Elektronika",
-  Shopping: "Inne", // Zakupy mapujemy teraz do Inne lub ręcznie do Fast Food
 };
 
 export const CATEGORY_COLORS: Record<string, string> = {

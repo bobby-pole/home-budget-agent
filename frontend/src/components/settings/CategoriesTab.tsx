@@ -397,7 +397,7 @@ export function CategoriesTab() {
                 <SelectItem value="none">Oznacz jako Bez Kategorii</SelectItem>
                 {parents.filter(p => p.id !== deleteCatId).map(p => (
                   <SelectItem key={p.id} value={p.id.toString()}>
-                    Przenieś do: {p.name}
+                    Przenieś do: {p.is_system ? (CATEGORY_LABELS[p.name] || p.name) : p.name}
                   </SelectItem>
                 ))}
               </SelectContent>
