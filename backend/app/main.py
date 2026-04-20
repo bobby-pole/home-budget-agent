@@ -9,7 +9,7 @@ from sqlmodel import Session, select, SQLModel
 from .api import router
 from .database import operations_engine, identity_engine
 from .models import User
-from .auth import get_password_hash
+from .auth import hash_password
 
 TEST_USER_EMAIL = "test@example.com"
 TEST_USER_PASSWORD = "password123"
@@ -21,7 +21,7 @@ def seed_test_user():
         if not user:
             user = User(
                 email=TEST_USER_EMAIL,
-                hashed_password=get_password_hash(TEST_USER_PASSWORD)
+                hashed_password=hash_password(TEST_USER_PASSWORD)
             )
             session.add(user)
             session.commit()
