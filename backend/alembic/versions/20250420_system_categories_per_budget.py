@@ -54,8 +54,12 @@ def upgrade() -> None:
             )
         """)
         
-        # Skopiuj istniejące dane
-        op.execute("INSERT INTO category_new SELECT * FROM category")
+        # Skopiuj istniejące dane, jawnie wymieniając kolumny dla bezpieczeństwa
+        op.execute("""
+            INSERT INTO category_new (id, name, icon, color, is_system, parent_id, order_index, budget_id)
+            SELECT id, name, icon, color, is_system, parent_id, order_index, budget_id 
+            FROM category
+        """)
         
         # Usuń starą tabelę i zmień nazwę nowej
         op.drop_table('category')
