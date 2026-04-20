@@ -1184,7 +1184,7 @@ async def update_category(
     category = session.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if not category.is_system and category.budget_id != current_budget.id:
+    if category.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this category")
 
     update_data = category_update.model_dump(exclude_unset=True)
@@ -1206,13 +1206,13 @@ async def delete_category(
     category = session.get(Category, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    if category.is_system or category.budget_id != current_budget.id:
+    if category.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this category")
 
     target_category_id = reassign_to
     if target_category_id is not None:
         target_category = session.get(Category, target_category_id)
-        if not target_category or (target_category.budget_id != current_budget.id and not target_category.is_system):
+        if not target_category or target_category.budget_id != current_budget.id:
             raise HTTPException(status_code=400, detail="Invalid target category for reassignment")
     else:
         target_category_id = category.parent_id

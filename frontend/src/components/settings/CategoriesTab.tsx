@@ -277,7 +277,7 @@ export function CategoriesTab() {
 
               {!isEditing && (
                 <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                  {level === 0 && !cat.is_system && (
+                  {level === 0 && (
                     <Button 
                       size="sm" 
                       variant="ghost" 
@@ -290,16 +290,12 @@ export function CategoriesTab() {
                       <Plus className="h-3 w-3 mr-1" /> Podkategoria
                     </Button>
                   )}
-                  {!cat.is_system && (
-                    <>
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStartEdit(cat)}>
-                        <Edit2 className="h-3 w-3" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteCatId(cat.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </>
-                  )}
+                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStartEdit(cat)}>
+                    <Edit2 className="h-3 w-3" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteCatId(cat.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
               )}
             </div>
