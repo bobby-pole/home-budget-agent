@@ -15,6 +15,7 @@ import { RecentTransactionsList } from "@/components/dashboard/RecentTransaction
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useScanReceipt } from "@/hooks/use-scan-receipt";
 import { useAddTransaction } from "@/hooks/use-add-transaction";
+import { CATEGORY_LABELS } from "@/lib/constants";
 
 export function Dashboard() {
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
@@ -64,15 +65,16 @@ export function Dashboard() {
   const totalSpent = budgetSummary?.total_spent ?? 0;
   const totalIncome = budgetSummary?.total_income ?? 0;
   const budgetAmount = budgetSummary?.total_planned ?? 0;
-  const remainingBudget = budgetSummary?.total_remaining ?? 0;
+  const netCashFlow = budgetSummary?.net_cash_flow ?? 0;
 
   // Pie Chart Data
   const pieData = (budgetSummary?.categories ?? [])
     .filter(c => c.spent > 0)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
+      const displayName = cat?.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : (cat?.name ?? c.category_name);
       return {
-        name: c.category_name,
+        name: displayName,
         value: c.spent,
         color: cat?.color ?? "#9ca3af",
       };
@@ -84,9 +86,10 @@ export function Dashboard() {
     .filter(c => c.planned > 0)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
+      const displayName = cat?.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : (cat?.name ?? c.category_name);
       return {
         id: c.category_id,
-        name: c.category_name,
+        name: displayName,
         spent: c.spent,
         limit: c.planned,
         color: cat?.color ?? "#3b82f6",
@@ -129,7 +132,7 @@ export function Dashboard() {
 
       {/* Row 1: Summary */}
       <BudgetSummaryCard
-        remaining={remainingBudget}
+        remaining={netCashFlow}
         planned={budgetAmount}
         spent={totalSpent}
         income={totalIncome}

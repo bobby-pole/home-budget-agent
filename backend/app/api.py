@@ -16,7 +16,7 @@ from .models import (
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan,
     Budget, BudgetMember,
-    MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation,
+    MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead
@@ -28,6 +28,10 @@ from typing import List, Optional
 
 router = APIRouter()
 UPLOAD_DIR = "static/uploads"
+
+@router.get("/health")
+def health_check():
+    return {"status": "ok", "message": "Backend is running!"}
 
 
 # --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
@@ -93,20 +97,20 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
         {"name": "Education", "icon": "📚", "color": "#818cf8"},
         {"name": "Savings", "icon": "💰", "color": "#fbbf24"},
         {"name": "Gifts", "icon": "🎁", "color": "#fb7185"},
-        {"name": "Alcohol", "icon": "🍻", "color": "#fcd34d"},
+        {"name": "Snacks", "icon": "🥨", "color": "#fcd34d"},
         {"name": "Other", "icon": "📦", "color": "#9ca3af"},
         {"name": "Salary", "icon": "💵", "color": "#10b981"},
     ]
     for i, cat_data in enumerate(default_cats):
-        cat = Category(
+        new_category = Category(
             name=cat_data["name"],
             icon=cat_data["icon"],
             color=cat_data["color"],
-            is_system=False,
+            is_system=True,
             budget_id=new_budget.id,
             order_index=i
         )
-        session.add(cat)
+        session.add(new_category)
 
     session.commit()
 
@@ -924,17 +928,82 @@ async def import_transactions(
 
 # --- BUDGET ---
 
-@router.get("/budget/{year}/{month}/limits", response_model=list)
-def get_limits_dummy(year: int, month: int):
-    return []
+@router.get("/budget/{year}/{month}/limits", response_model=List[EnvelopeAllocation])
+def get_limits(
+    year: int, 
+    month: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    statement = select(EnvelopeAllocation).where(
+        EnvelopeAllocation.budget_id == current_budget.id,
+        EnvelopeAllocation.year == year,
+        EnvelopeAllocation.month == month
+    )
+    return session.exec(statement).all()
 
-@router.put("/budget/{year}/{month}/limits/{category_id}", response_model=dict)
-def put_limit_dummy(year: int, month: int, category_id: int):
-    return {}
+@router.put("/budget/{year}/{month}/limits/{category_id}", response_model=EnvelopeAllocation)
+def set_budget_limit(
+    year: int, 
+    month: int, 
+    category_id: int, 
+    limit_data: EnvelopeAllocationUpdate,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    # Check if category exists and belongs to this budget
+    category = session.get(Category, category_id)
+    if not category or category.budget_id != current_budget.id:
+        raise HTTPException(status_code=404, detail="Category not found in this budget")
 
-@router.delete("/budget/{year}/{month}/limits/{category_id}")
-def delete_limit_dummy(year: int, month: int, category_id: int):
-    return {}
+    if limit_data.amount < 0:
+        raise HTTPException(status_code=400, detail="Limit amount must be non-negative")
+
+    # Check for existing allocation
+    statement = select(EnvelopeAllocation).where(
+        EnvelopeAllocation.budget_id == current_budget.id,
+        EnvelopeAllocation.category_id == category_id,
+        EnvelopeAllocation.year == year,
+        EnvelopeAllocation.month == month
+    )
+    allocation = session.exec(statement).first()
+
+    if allocation:
+        allocation.amount = limit_data.amount
+    else:
+        assert current_budget.id is not None
+        allocation = EnvelopeAllocation(
+            budget_id=current_budget.id,
+            category_id=category_id,
+            year=year,
+            month=month,
+            amount=limit_data.amount
+        )
+    
+    session.add(allocation)
+    session.commit()
+    session.refresh(allocation)
+    return allocation
+
+@router.delete("/budget/{year}/{month}/limits/{category_id}", status_code=204)
+def delete_budget_limit(
+    year: int, 
+    month: int, 
+    category_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    statement = select(EnvelopeAllocation).where(
+        EnvelopeAllocation.budget_id == current_budget.id,
+        EnvelopeAllocation.category_id == category_id,
+        EnvelopeAllocation.year == year,
+        EnvelopeAllocation.month == month
+    )
+    allocation = session.exec(statement).first()
+    if allocation:
+        session.delete(allocation)
+        session.commit()
+    return None
 
 @router.get("/budget/{year}/{month}/summary", response_model=MonthlyBudgetSummary)
 def get_summary(
@@ -988,10 +1057,10 @@ def get_summary(
 
     # Build the category summary items
     categories_summary = []
-    # Get all categories belonging to the budget
-    all_categories = session.exec(select(Category).where(Category.budget_id == current_budget.id)).all()
-    
-    # Also include system categories if they are somehow accessible or fallback
+    # Get only categories belonging to this budget
+    all_categories = session.exec(
+        select(Category).where(Category.budget_id == current_budget.id)
+    ).all()
     
     allocations_by_cat = {a.category_id: a.amount for a in allocations}
     
@@ -1011,14 +1080,14 @@ def get_summary(
                 remaining=planned - spent
             ))
 
-    total_remaining = total_income - total_spent
+    net_cash_flow = total_income - total_spent
 
     return MonthlyBudgetSummary(
         year=year, 
         month=month, 
         total_planned=total_planned, 
         total_spent=total_spent, 
-        total_remaining=total_remaining, 
+        net_cash_flow=net_cash_flow, 
         total_income=total_income, 
         categories=categories_summary
     )

@@ -32,7 +32,7 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
         <CardTitle className="text-lg font-bold">Najważniejsze koperty</CardTitle>
         <Button variant="ghost" size="sm" asChild className="text-primary font-bold rounded-full">
           <Link to="/budget">
-            Wszystkie <ArrowRight className="ml-1 size-4" />
+            Zobacz wszystkie <ArrowRight className="ml-1 size-4" />
           </Link>
         </Button>
       </CardHeader>
@@ -45,21 +45,21 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
               const remaining = env.limit - env.spent;
 
               return (
-                <div key={env.id} className="py-4 space-y-3 first:pt-2 last:pb-2">
+                <div key={env.id} className="py-5 space-y-3 first:pt-2 last:pb-2 group">
                   <div className="flex justify-between items-center">
                     
                     <div className="flex items-center gap-4">
                       {/* Icon Circle */}
-                      <div className="size-10 rounded-full flex items-center justify-center bg-muted shrink-0 text-xl shadow-inner">
+                      <div className="size-11 rounded-full flex items-center justify-center bg-white dark:bg-muted shrink-0 text-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-shadow border border-border/10">
                         {env.icon || "💰"}
                       </div>
                       
                       {/* Name & Left Amount */}
                       <div className="flex flex-col">
-                        <span className="text-sm md:text-base font-bold truncate max-w-[140px] md:max-w-[180px]">
+                        <span className="text-base font-bold truncate max-w-[140px] md:max-w-[180px]">
                           {env.name}
                         </span>
-                        <span className="text-xs text-muted-foreground font-medium">
+                        <span className="text-xs text-muted-foreground font-bold tracking-tight">
                           Pozostało {(remaining > 0 ? remaining : 0).toLocaleString("pl-PL")} PLN
                         </span>
                       </div>
@@ -67,10 +67,10 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
 
                     {/* Spent & Limit */}
                     <div className="flex flex-col items-end text-right">
-                      <span className="text-sm md:text-base font-black">
+                      <span className="text-base font-black tracking-tight">
                         {env.spent.toLocaleString("pl-PL")} PLN
                       </span>
-                      <span className="text-xs text-muted-foreground font-medium">
+                      <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-70">
                         z {env.limit.toLocaleString("pl-PL")}
                       </span>
                     </div>
@@ -78,23 +78,14 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                   </div>
                   
                   {/* Progress Bar */}
-                  <div className="relative pt-1">
+                  <div className="w-full">
                     <Progress 
                       value={percentage} 
-                      className={cn(
-                        "h-1.5",
-                        isOverLimit ? "bg-destructive/20" : "bg-muted"
+                      className="h-1.5 bg-muted/50" 
+                      indicatorClassName={cn(
+                        isOverLimit ? "bg-destructive animate-pulse" : "bg-[var(--indicator-color)]"
                       )}
-                    />
-                    <div 
-                      className={cn(
-                        "absolute top-0 bottom-0 left-0 transition-all rounded-full",
-                        isOverLimit ? "bg-destructive" : ""
-                      )}
-                      style={{ 
-                        width: `${percentage}%`,
-                        backgroundColor: !isOverLimit ? env.color : undefined 
-                      }}
+                      style={{ "--indicator-color": !isOverLimit ? env.color : undefined } as React.CSSProperties}
                     />
                   </div>
                 </div>

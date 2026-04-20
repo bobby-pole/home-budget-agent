@@ -51,7 +51,7 @@ describe("Dashboard", () => {
       month: 3,
       total_planned: 0,
       total_spent: 0,
-      total_remaining: 0,
+      net_cash_flow: 0,
       total_income: 0,
       categories: [],
     });
