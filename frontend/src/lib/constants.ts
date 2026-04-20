@@ -12,14 +12,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
   Education: "Edukacja",
   Savings: "Oszczędności",
   Gifts: "Prezenty",
-  Alcohol: "Alkohol",
+  Snacks: "Przekąski",
   Other: "Inne",
   Salary: "Wypłata",
   
   // Synonimy i mapowania AI
   FastFood: "Fast Food",
   "Fast Food": "Fast Food",
-  Snacks: "Przekąski",
   Snack: "Przekąski",
   Vegetables: "Jedzenie",
   Chemicals: "Chemia",
@@ -39,7 +38,6 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Fast Food": "bg-orange-100 text-orange-700 hover:bg-orange-200",
   Snack: "bg-pink-100 text-pink-700 hover:bg-pink-200",
   Vegetables: "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
-  Alcohol: "bg-purple-100 text-purple-700 hover:bg-purple-200",
   Chemicals: "bg-blue-100 text-blue-700 hover:bg-blue-200",
   Electronics: "bg-pink-100 text-pink-700 hover:bg-pink-200",
 };
@@ -57,7 +55,6 @@ export const CATEGORY_HEX_COLORS: Record<string, string> = {
   "Fast Food": "#F97316",
   Snack: "#EC4899",
   Vegetables: "#10B981",
-  Alcohol: "#8B5CF6",
   Chemicals: "#3B82F6",
   Electronics: "#EC4899",
 };

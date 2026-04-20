@@ -1152,7 +1152,7 @@ async def get_categories(
     current_budget: Budget = Depends(get_current_budget),
 ):
     statement = select(Category).where(
-        (Category.budget_id == current_budget.id) | (Category.is_system)
+        Category.budget_id == current_budget.id
     )
     categories = session.exec(statement).all()
     return categories

@@ -109,7 +109,7 @@ export function CategoriesTab() {
 
   const handleStartEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setEditName(cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name);
+    setEditName(CATEGORY_LABELS[cat.name] || cat.name);
     setEditColor(cat.color || "#cccccc");
     setEditIcon(cat.icon || "📦");
   };
@@ -269,7 +269,7 @@ export function CategoriesTab() {
                     >
                       {cat.icon || "📦"}
                     </div>
-                    <span className="font-medium truncate">{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
+                    <span className="font-medium truncate">{CATEGORY_LABELS[cat.name] || cat.name}</span>
                     {cat.is_system && <div title="Kategoria systemowa"><Lock className="h-3 w-3 text-muted-foreground ml-1 shrink-0" /></div>}
                   </div>
                 )}

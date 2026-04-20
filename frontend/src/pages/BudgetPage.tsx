@@ -34,7 +34,7 @@ export function BudgetPage() {
 
   const envelopes: EnvelopeItem[] = categories.map(cat => {
     const summaryItem = (budgetSummary?.categories ?? []).find(c => c.category_id === cat.id);
-    const displayName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
+    const displayName = CATEGORY_LABELS[cat.name] || cat.name;
     return {
       categoryId: cat.id,
       categoryName: displayName,
