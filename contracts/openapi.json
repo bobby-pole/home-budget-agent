@@ -1,10 +1,26 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Smart Budget AI",
-    "version": "0.1.0"
+    "title": "Smart Budget AI API",
+    "version": "1.0.0"
   },
   "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/register": {
       "post": {
         "summary": "Register",
@@ -520,8 +536,13 @@
     },
     "/api/budget/{year}/{month}/limits": {
       "get": {
-        "summary": "Get Limits Dummy",
-        "operationId": "get_limits_dummy_api_budget__year___month__limits_get",
+        "summary": "Get Limits",
+        "operationId": "get_limits_api_budget__year___month__limits_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "year",
@@ -549,8 +570,10 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": {},
-                  "title": "Response Get Limits Dummy Api Budget  Year   Month  Limits Get"
+                  "items": {
+                    "$ref": "#/components/schemas/EnvelopeAllocation"
+                  },
+                  "title": "Response Get Limits Api Budget  Year   Month  Limits Get"
                 }
               }
             }
@@ -570,8 +593,13 @@
     },
     "/api/budget/{year}/{month}/limits/{category_id}": {
       "put": {
-        "summary": "Put Limit Dummy",
-        "operationId": "put_limit_dummy_api_budget__year___month__limits__category_id__put",
+        "summary": "Set Budget Limit",
+        "operationId": "set_budget_limit_api_budget__year___month__limits__category_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "year",
@@ -601,15 +629,23 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvelopeAllocationUpdate"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Put Limit Dummy Api Budget  Year   Month  Limits  Category Id  Put"
+                  "$ref": "#/components/schemas/EnvelopeAllocation"
                 }
               }
             }
@@ -627,8 +663,13 @@
         }
       },
       "delete": {
-        "summary": "Delete Limit Dummy",
-        "operationId": "delete_limit_dummy_api_budget__year___month__limits__category_id__delete",
+        "summary": "Delete Budget Limit",
+        "operationId": "delete_budget_limit_api_budget__year___month__limits__category_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "year",
@@ -659,13 +700,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1114,53 +1150,16 @@
         }
       }
     },
-    "/api/health": {
+    "/": {
       "get": {
         "summary": "Health Check",
-        "operationId": "health_check_api_health_get",
+        "operationId": "health_check__get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
-    "/{full_path}": {
-      "get": {
-        "summary": "Serve React App",
-        "operationId": "serve_react_app__full_path__get",
-        "parameters": [
-          {
-            "name": "full_path",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Full Path"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
               }
             }
           }
@@ -1482,6 +1481,63 @@
         "type": "object",
         "title": "CategoryUpdate"
       },
+      "EnvelopeAllocation": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "budget_id": {
+            "type": "integer",
+            "title": "Budget Id"
+          },
+          "category_id": {
+            "type": "integer",
+            "title": "Category Id"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "budget_id",
+          "category_id",
+          "month",
+          "year"
+        ],
+        "title": "EnvelopeAllocation"
+      },
+      "EnvelopeAllocationUpdate": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount"
+        ],
+        "title": "EnvelopeAllocationUpdate"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1589,9 +1645,9 @@
             "type": "number",
             "title": "Total Spent"
           },
-          "total_remaining": {
+          "net_cash_flow": {
             "type": "number",
-            "title": "Total Remaining"
+            "title": "Net Cash Flow"
           },
           "total_income": {
             "type": "number",
@@ -1611,7 +1667,7 @@
           "month",
           "total_planned",
           "total_spent",
-          "total_remaining",
+          "net_cash_flow",
           "total_income",
           "categories"
         ],
