@@ -64,38 +64,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount API routes
+# 1. Mount API routes FIRST
 app.include_router(router, prefix="/api")
 
-# --- STATIC FILES (Frontend) ---
-
-# Check if we are running in production (single container)
-# In Docker, files are copied to /app/static
+# 2. STATIC FILES (Frontend)
 STATIC_DIR = "/app/static"
 
 if os.path.exists(STATIC_DIR):
-    # Route for the main entry point
-    @app.get("/")
-    async def serve_index():
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    # Serve assets folder specifically
+    assets_dir = os.path.join(STATIC_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
-    # Mount static assets (JS, CSS, etc.)
-    # Important: this must be mounted AFTER API routes
-    app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")
-
-    # Catch-all route for SPA (React Router)
+    # Catch-all for SPA: serve index.html for all other routes
     @app.get("/{full_path:path}")
-    async def catch_all(request: Request, full_path: str):
-        # Allow API routes to be handled by the router
+    async def serve_react_app(request: Request, full_path: str):
+        # Skip if it looks like an API call (to return proper 404 instead of index.html)
         if full_path.startswith("api"):
-            return None
+            return {"detail": "Not Found"}
         
+        # Check if the path is a file that exists in the static dir (favicon, logo, etc)
         file_path = os.path.join(STATIC_DIR, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         
-        return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+        # Otherwise, always return index.html
+        index_path = os.path.join(STATIC_DIR, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        
+        return {"detail": "Static files not found"}
 else:
+    # Fallback for development/API-only mode
     @app.get("/")
     def health_check():
-        return {"status": "ok", "message": "Smart Budget AI API is running (Dev Mode)"}
+        return {"status": "ok", "message": "Smart Budget AI API is running (No frontend files found)"}
