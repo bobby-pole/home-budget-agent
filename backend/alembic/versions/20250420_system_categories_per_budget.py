@@ -33,6 +33,9 @@ def upgrade() -> None:
     """)).fetchone()
     
     if result and 'uq_category_name_budget' not in result[0]:
+        # Wyczyść ewentualne pozostałości po poprzednich próbach
+        op.execute("DROP TABLE IF EXISTS category_new")
+        
         # Utwórz nową tabelę z constraint
         op.execute("""
             CREATE TABLE category_new (
