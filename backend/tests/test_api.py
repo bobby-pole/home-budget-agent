@@ -395,3 +395,62 @@ def test_get_summary_calculates_income(client: TestClient, session: Session):
     data = response.json()
     assert data["total_income"] == 5000.0
     assert data["total_spent"] == 200.0
+
+def test_get_inbox_and_verify(client: TestClient, session: Session):
+    # Setup: Transaction with needs_review scan
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    
+    transaction = Transaction(
+        merchant_name="AI Merchant", 
+        uploaded_by=test_user.id, 
+        budget_id=test_budget.id, 
+        total_amount=50.0,
+        date=datetime.now(timezone.utc)
+    )
+    session.add(transaction)
+    session.commit()
+    session.refresh(transaction)
+    
+    scan = ReceiptScan(transaction_id=transaction.id, status="needs_review", content_hash="hash123")
+    session.add(scan)
+    
+    line = TransactionLine(name="AI Item", price=50.0, quantity=1.0, transaction_id=transaction.id)
+    session.add(line)
+    session.commit()
+
+    # 1. Test GET /api/transactions/inbox
+    response = client.get("/api/transactions/inbox")
+    assert response.status_code == 200
+    inbox = response.json()
+    assert len(inbox) >= 1
+    assert any(t["id"] == transaction.id for t in inbox)
+
+    # 2. Test POST /api/transactions/{id}/verify
+    verify_payload = {
+        "transaction_update": {
+            "merchant_name": "Verified Merchant",
+            "total_amount": 55.0
+        },
+        "lines_update": [
+            {
+                "name": "Verified Item",
+                "price": 55.0,
+                "quantity": 1.0
+            }
+        ]
+    }
+    
+    response = client.post(f"/api/transactions/{transaction.id}/verify", json=verify_payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["merchant_name"] == "Verified Merchant"
+    assert data["total_amount"] == 55.0
+    assert data["receipt_scan"]["status"] == "done"
+    assert len(data["lines"]) == 1
+    assert data["lines"][0]["name"] == "Verified Item"
+
+    # 3. Verify it's gone from inbox
+    response = client.get("/api/transactions/inbox")
+    inbox = response.json()
+    assert not any(t["id"] == transaction.id for t in inbox)

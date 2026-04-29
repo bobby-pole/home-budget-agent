@@ -6,12 +6,14 @@ import type {
   TagRead as Tag, 
   MonthlyBudgetSummary, 
   BudgetMemberRead as BudgetMember, 
-  BudgetMemberCreate 
+  BudgetMemberCreate,
+  TransactionUpdate,
+  TransactionLineUpdate
 } from "@/client";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
 
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: "/api",
   headers: {
     "Content-Type": "application/json",
@@ -67,6 +69,23 @@ export const api = {
 
   getTransactions: async () => {
     const response = await apiClient.get<Transaction[]>("/transactions");
+    return response.data;
+  },
+
+  getInbox: async () => {
+    const response = await apiClient.get<Transaction[]>("/transactions/inbox");
+    return response.data;
+  },
+
+  verifyTransaction: async (
+    id: number,
+    transaction_update: TransactionUpdate,
+    lines_update?: TransactionLineUpdate[]
+  ) => {
+    const response = await apiClient.post<Transaction>(`/transactions/${id}/verify`, {
+      transaction_update,
+      lines_update,
+    });
     return response.data;
   },
 

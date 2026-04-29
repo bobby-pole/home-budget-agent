@@ -337,6 +337,132 @@
         }
       }
     },
+    "/api/transactions/inbox": {
+      "get": {
+        "summary": "Get Inbox",
+        "description": "Fetch all transactions with status 'needs_review' or 'error' that require user attention.",
+        "operationId": "get_inbox_api_transactions_inbox_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransactionRead"
+                  },
+                  "type": "array",
+                  "title": "Response Get Inbox Api Transactions Inbox Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/transactions/{transaction_id}/receipt": {
+      "get": {
+        "summary": "Get Transaction Receipt",
+        "description": "Securely serve the receipt image file for a given transaction.",
+        "operationId": "get_transaction_receipt_api_transactions__transaction_id__receipt_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactions/{transaction_id}/verify": {
+      "post": {
+        "summary": "Verify Transaction",
+        "description": "Verify and finalize an AI-scanned transaction, updating categories/amounts and moving to 'done' status.",
+        "operationId": "verify_transaction_api_transactions__transaction_id__verify_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_verify_transaction_api_transactions__transaction_id__verify_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/transactions/{transaction_id}": {
       "patch": {
         "summary": "Update Transaction",
@@ -1173,7 +1299,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File"
           }
         },
@@ -1203,7 +1329,7 @@
           },
           "file": {
             "type": "string",
-            "contentMediaType": "application/octet-stream",
+            "format": "binary",
             "title": "File"
           }
         },
@@ -1212,6 +1338,32 @@
           "file"
         ],
         "title": "Body_scan_transaction_api_transactions_scan_post"
+      },
+      "Body_verify_transaction_api_transactions__transaction_id__verify_post": {
+        "properties": {
+          "transaction_update": {
+            "$ref": "#/components/schemas/TransactionUpdate"
+          },
+          "lines_update": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransactionLineUpdate"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines Update"
+          }
+        },
+        "type": "object",
+        "required": [
+          "transaction_update"
+        ],
+        "title": "Body_verify_transaction_api_transactions__transaction_id__verify_post"
       },
       "BudgetMemberCreate": {
         "properties": {

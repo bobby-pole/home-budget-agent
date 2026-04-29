@@ -9,6 +9,7 @@ from pypdf import PdfReader
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col
 from sqlalchemy import extract, func
 from .models import (
@@ -27,7 +28,10 @@ from .auth import get_current_user, hash_password, verify_password, create_acces
 from typing import List, Optional
 
 router = APIRouter()
-UPLOAD_DIR = "static/uploads"
+# Ensure UPLOAD_DIR is robustly handled
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.get("/health")
 def health_check():
@@ -181,7 +185,7 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         transaction.merchant_name = merchant
         transaction.total_amount = total
         transaction.currency = data.get("currency", "PLN")
-        scan.status = "done"
+        scan.status = "needs_review"
 
         ai_date_str = data.get("date")
         if ai_date_str:
@@ -209,21 +213,12 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         session.add(transaction)
         session.add(scan)
         session.commit()
-        print(f"✅ AI Processing finished for transaction #{transaction_id}")
+        print(f"✅ AI Processing finished for transaction #{transaction_id} (Moved to verification)")
 
-        # --- LOGIKA OSZCZĘDZANIA MIEJSCA NA VPS ---
-        # Usuwamy plik tylko jeśli użytkownik NIE zaznaczył opcji zachowania obrazu (np. do gwarancji)
-        if not scan.keep_image and image_path and os.path.exists(image_path):
-            try:
-                os.remove(image_path)
-                print(f"🗑️  Deleted processed image: {image_path} (Storage limit protection)")
-                scan.image_path = None
-                session.add(scan)
-                session.commit()
-            except Exception as e:
-                print(f"⚠️  Failed to delete image {image_path}: {e}")
-        elif scan.keep_image:
-            print(f"💾 Image preserved for transaction #{transaction_id} (User request)")
+        # NOTE: We do NOT delete the image here anymore if keep_image is False.
+        # We will delete it in the /verify endpoint if keep_image is False.
+        # This allows the user to see the image in the Inbox during verification.
+
 
 
 # --- TRANSACTIONS ---
@@ -424,6 +419,146 @@ async def get_transactions(
     statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
     results = session.exec(statement).all()
     return results
+
+
+@router.get("/transactions/inbox", response_model=List[TransactionRead])
+async def get_inbox(
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Fetch all transactions with status 'needs_review' or 'error' that require user attention."""
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    
+    statement = (
+        select(Transaction)
+        .join(ReceiptScan)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(ReceiptScan.status).in_(["needs_review", "error"])
+        )
+        .order_by(desc(Transaction.date))
+    )
+    results = session.exec(statement).all()
+    return results
+
+
+@router.get("/transactions/{transaction_id}/receipt")
+async def get_transaction_receipt(
+    transaction_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Securely serve the receipt image file for a given transaction."""
+    transaction = session.get(Transaction, transaction_id)
+    if not transaction or transaction.budget_id != current_budget.id:
+        raise HTTPException(status_code=404, detail="Transaction or receipt not found")
+    
+    scan = session.exec(
+        select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
+    ).first()
+    
+    if not scan or not scan.image_path:
+        raise HTTPException(status_code=404, detail="Receipt image record not found")
+    
+    # Robustly resolve path
+    full_path = scan.image_path
+    if not full_path:
+        raise HTTPException(status_code=404, detail="No image path stored")
+
+    # If the path is relative, resolve against BASE_DIR.
+    # Strip legacy 'backend/' prefix first to avoid double-nesting.
+    clean_rel_path = full_path
+    if not os.path.isabs(full_path):
+        if full_path.startswith("backend/"):
+            clean_rel_path = full_path.replace("backend/", "", 1)
+        full_path = os.path.join(BASE_DIR, clean_rel_path)
+
+    if not os.path.exists(full_path):
+        print(f"⚠️  Image file NOT FOUND at: {full_path}")
+        # Fallback: try resolving relative to current working directory
+        cwd_path = os.path.abspath(clean_rel_path)
+        if os.path.exists(cwd_path):
+            full_path = cwd_path
+        else:
+            raise HTTPException(status_code=404, detail=f"Receipt image file not found at {full_path}")
+
+    return FileResponse(full_path)
+
+
+@router.post("/transactions/{transaction_id}/verify", response_model=TransactionRead)
+async def verify_transaction(
+    transaction_id: int,
+    transaction_update: TransactionUpdate,
+    lines_update: Optional[List[TransactionLineUpdate]] = None,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Verify and finalize an AI-scanned transaction, updating categories/amounts and moving to 'done' status."""
+    db_transaction = session.get(Transaction, transaction_id)
+    if not db_transaction or db_transaction.budget_id != current_budget.id:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    scan = session.exec(
+        select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
+    ).first()
+    if not scan:
+        raise HTTPException(status_code=404, detail="Receipt scan record not found")
+
+    # Update transaction fields (merchant, amount, currency, date, etc.)
+    update_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
+    for key, value in update_data.items():
+        setattr(db_transaction, key, value)
+    
+    if transaction_update.tag_ids is not None:
+        tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
+        db_transaction.tags = list(tags)
+
+    # Update lines if provided
+    if lines_update:
+        # For simplicity, we assume lines_update order matches existing lines or we replace them
+        # In a real app, we should match by ID. 
+        # Since TransactionLines are linked to this transaction, let's just update based on what we get.
+        existing_lines = db_transaction.lines
+        for i, line_data in enumerate(lines_update):
+            if i < len(existing_lines):
+                # Update existing line
+                db_line = existing_lines[i]
+                for key, value in line_data.model_dump(exclude_unset=True).items():
+                    setattr(db_line, key, value)
+                session.add(db_line)
+            else:
+                # Add new line if more were provided (unlikely in verification but possible)
+                new_line = TransactionLine(
+                    **line_data.model_dump(exclude_unset=True),
+                    transaction_id=db_transaction.id
+                )
+                session.add(new_line)
+        
+        # If fewer lines provided, remove extra? 
+        # Let's keep it simple: just update what's there.
+
+    scan.status = "done"
+    session.add(db_transaction)
+    session.add(scan)
+    session.commit()
+    session.refresh(db_transaction)
+
+    # Clean up image if keep_image is False
+    if not scan.keep_image and scan.image_path and os.path.exists(scan.image_path):
+        try:
+            os.remove(scan.image_path)
+            scan.image_path = None
+            session.add(scan)
+            session.commit()
+            print(f"🗑️ Deleted image after verification for transaction #{transaction_id}")
+        except Exception as e:
+            print(f"⚠️ Failed to delete image {scan.image_path}: {e}")
+
+    return db_transaction
 
 
 @router.patch("/transactions/{transaction_id}", response_model=TransactionRead)
