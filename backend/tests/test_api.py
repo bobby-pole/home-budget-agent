@@ -400,18 +400,21 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     # Setup: Transaction with needs_review scan
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
-    
+    assert test_user is not None
+    assert test_budget is not None
+
     transaction = Transaction(
-        merchant_name="AI Merchant", 
-        uploaded_by=test_user.id, 
-        budget_id=test_budget.id, 
+        merchant_name="AI Merchant",
+        uploaded_by=test_user.id,
+        budget_id=test_budget.id,
         total_amount=50.0,
         date=datetime.now(timezone.utc)
     )
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
-    
+    assert transaction.id is not None
+
     scan = ReceiptScan(transaction_id=transaction.id, status="needs_review", content_hash="hash123")
     session.add(scan)
     
