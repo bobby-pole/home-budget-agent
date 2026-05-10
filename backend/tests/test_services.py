@@ -137,8 +137,9 @@ def test_parse_receipt_file_not_found(mock_file):
 
 @patch("builtins.open", mock_open(read_data=b"fake_image_bytes"))
 @patch("app.services.AIService._ai_structurize")
+@patch("app.ocr_pipeline.GoogleVisionOCRService.__init__", return_value=None)
 @patch("app.ocr_pipeline.GoogleVisionOCRService.extract")
-def test_parse_receipt_calls_ai_structurize_for_unknown_merchant(mock_extract, mock_structurize):
+def test_parse_receipt_calls_ai_structurize_for_unknown_merchant(mock_extract, mock_init, mock_structurize):
     from app.ocr_pipeline import OCRResult
     mock_extract.return_value = OCRResult(words=[], raw_text="Sklep XYZ\nChleb 3.50", source_engine="test")
     mock_structurize.return_value = {"merchant_name": "Sklep XYZ", "total_amount": 3.50, "items": []}
@@ -150,8 +151,9 @@ def test_parse_receipt_calls_ai_structurize_for_unknown_merchant(mock_extract, m
 
 @patch("builtins.open", mock_open(read_data=b"fake_image_bytes"))
 @patch("app.services.AIService._ai_vision_fallback")
+@patch("app.ocr_pipeline.GoogleVisionOCRService.__init__", return_value=None)
 @patch("app.ocr_pipeline.GoogleVisionOCRService.extract", side_effect=RuntimeError("not configured"))
-def test_parse_receipt_falls_back_to_ai_vision_when_ocr_unavailable(mock_extract, mock_fallback):
+def test_parse_receipt_falls_back_to_ai_vision_when_ocr_unavailable(mock_extract, mock_init, mock_fallback):
     mock_fallback.return_value = {"merchant_name": "Fallback", "total_amount": 10.0, "items": []}
     result = AIService.parse_receipt("receipt.jpg")
     assert result is not None
