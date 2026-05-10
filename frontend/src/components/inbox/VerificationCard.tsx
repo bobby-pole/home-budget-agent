@@ -8,7 +8,6 @@ import {
   Trash2,
   Plus,
   ImageIcon,
-  AlertCircle,
   Loader2,
   Calendar as CalendarIcon,
   Store,
@@ -66,6 +65,7 @@ const verificationSchema = z.object({
   total_amount: z.number().min(0),
   currency: z.string(),
   lines: z.array(lineSchema),
+  keep_image: z.boolean(),
 });
 
 type VerificationFormValues = z.infer<typeof verificationSchema>;
@@ -127,6 +127,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         quantity: l.quantity || 1,
         category_id: l.category_id?.toString() || "",
       })),
+      keep_image: false,
     },
   });
 
@@ -166,7 +167,8 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
           price: l.price,
           quantity: l.quantity,
           category_id: l.category_id ? parseInt(l.category_id) : undefined,
-        }))
+        })),
+        values.keep_image
       );
       toast.success("Transakcja zweryfikowana pomyślnie");
       onSuccess();
@@ -513,12 +515,32 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
             </CardContent>
 
             <CardFooter className="py-4 px-4 md:px-6 border-t bg-muted/30 shrink-0">
-              <div className="flex flex-col sm:flex-row justify-between items-center w-full gap-2">
-                <p className="text-[10px] md:text-xs text-muted-foreground flex items-center gap-2">
-                  <AlertCircle className="h-3 w-3 shrink-0" /> Sprawdź zgodność z paragonem
-                </p>
-                <div className="text-xs md:text-sm font-bold">
-                  Suma pozycji: {linesTotal.toFixed(2)} {form.getValues("currency")}
+              <div className="flex flex-col sm:flex-row justify-between items-center w-full gap-3">
+                <FormField
+                  control={form.control}
+                  name="keep_image"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center gap-2 space-y-0">
+                      <FormControl>
+                        <input
+                          type="checkbox"
+                          id="keep_image"
+                          checked={field.value}
+                          onChange={field.onChange}
+                          className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                        />
+                      </FormControl>
+                      <FormLabel
+                        htmlFor="keep_image"
+                        className="text-xs text-muted-foreground font-normal cursor-pointer select-none"
+                      >
+                        Zachowaj zdjęcie paragonu (np. dla celów gwarancyjnych)
+                      </FormLabel>
+                    </FormItem>
+                  )}
+                />
+                <div className="text-xs md:text-sm font-bold shrink-0">
+                  Suma: {linesTotal.toFixed(2)} {form.getValues("currency")}
                 </div>
               </div>
             </CardFooter>

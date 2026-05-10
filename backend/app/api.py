@@ -15,7 +15,7 @@ from sqlalchemy import extract, func
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
-    ReceiptScan,
+    ReceiptScan, VerifyRequest,
     Budget, BudgetMember,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
@@ -159,6 +159,7 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         db_categories = session.exec(select(Category).where((Category.budget_id == transaction.budget_id) | (Category.is_system))).all()
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
+        # GPT-4o Vision — parse receipt directly from image (handles complex layouts)
         data = AIService.parse_receipt(image_path, categories=cat_dicts)
 
         if not data:
@@ -168,13 +169,13 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
             session.commit()
             return
 
-        merchant = data.get("merchant_name")
+        merchant = data.get("merchant_name") or "Unknown"
         total = data.get("total_amount", 0.0)
 
-        if not merchant or merchant == "Unknown" or total <= 0:
-            print(f"⚠️ AI Validation Failed: Merchant='{merchant}', Total={total}")
+        if total <= 0:
+            print(f"⚠️ AI Validation Failed: Total={total}")
             scan.status = "error"
-            transaction.merchant_name = merchant or "Unknown"
+            transaction.merchant_name = merchant
             transaction.total_amount = total
             transaction.currency = data.get("currency", "PLN")
             session.add(scan)
@@ -286,7 +287,6 @@ def create_manual_transaction(
 async def scan_transaction(
     background_tasks: BackgroundTasks,
     force: bool = False,
-    keep_image: bool = Form(False),
     note: Optional[str] = Form(None),
     file: UploadFile = File(...),
     session: Session = Depends(get_ops_session),
@@ -340,7 +340,7 @@ async def scan_transaction(
         image_path=file_path,
         status="processing",
         content_hash=file_hash,
-        keep_image=keep_image,
+        # keep_image defaults to False; final decision is made by user at verify time
     )
     session.add(scan)
     session.commit()
@@ -491,13 +491,12 @@ async def get_transaction_receipt(
 @router.post("/transactions/{transaction_id}/verify", response_model=TransactionRead)
 async def verify_transaction(
     transaction_id: int,
-    transaction_update: TransactionUpdate,
-    lines_update: Optional[List[TransactionLineUpdate]] = None,
+    body: VerifyRequest,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    """Verify and finalize an AI-scanned transaction, updating categories/amounts and moving to 'done' status."""
+    """Verify and finalize an AI-scanned transaction. User confirms data and decides whether to keep the image."""
     db_transaction = session.get(Transaction, transaction_id)
     if not db_transaction or db_transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -508,46 +507,39 @@ async def verify_transaction(
     if not scan:
         raise HTTPException(status_code=404, detail="Receipt scan record not found")
 
-    # Update transaction fields (merchant, amount, currency, date, etc.)
-    update_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
+    # Apply transaction field updates
+    update_data = body.transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in update_data.items():
         setattr(db_transaction, key, value)
-    
-    if transaction_update.tag_ids is not None:
-        tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
+
+    if body.transaction_update.tag_ids is not None:
+        tags = session.exec(select(Tag).where(col(Tag.id).in_(body.transaction_update.tag_ids))).all()
         db_transaction.tags = list(tags)
 
-    # Update lines if provided
-    if lines_update:
-        # For simplicity, we assume lines_update order matches existing lines or we replace them
-        # In a real app, we should match by ID. 
-        # Since TransactionLines are linked to this transaction, let's just update based on what we get.
+    # Apply line updates
+    if body.lines_update:
         existing_lines = db_transaction.lines
-        for i, line_data in enumerate(lines_update):
+        for i, line_data in enumerate(body.lines_update):
             if i < len(existing_lines):
-                # Update existing line
                 db_line = existing_lines[i]
                 for key, value in line_data.model_dump(exclude_unset=True).items():
                     setattr(db_line, key, value)
                 session.add(db_line)
             else:
-                # Add new line if more were provided (unlikely in verification but possible)
-                new_line = TransactionLine(
+                session.add(TransactionLine(
                     **line_data.model_dump(exclude_unset=True),
-                    transaction_id=db_transaction.id
-                )
-                session.add(new_line)
-        
-        # If fewer lines provided, remove extra? 
-        # Let's keep it simple: just update what's there.
+                    transaction_id=db_transaction.id,
+                ))
 
+    # Persist user's keep_image decision and mark as done
+    scan.keep_image = body.keep_image
     scan.status = "done"
     session.add(db_transaction)
     session.add(scan)
     session.commit()
     session.refresh(db_transaction)
 
-    # Clean up image if keep_image is False
+    # Delete image only if user did not request to keep it
     if not scan.keep_image and scan.image_path and os.path.exists(scan.image_path):
         try:
             os.remove(scan.image_path)
