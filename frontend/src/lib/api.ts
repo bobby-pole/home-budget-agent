@@ -80,11 +80,13 @@ export const api = {
   verifyTransaction: async (
     id: number,
     transaction_update: TransactionUpdate,
-    lines_update?: TransactionLineUpdate[]
+    lines_update?: TransactionLineUpdate[],
+    keep_image: boolean = false
   ) => {
     const response = await apiClient.post<Transaction>(`/transactions/${id}/verify`, {
       transaction_update,
       lines_update,
+      keep_image,
     });
     return response.data;
   },

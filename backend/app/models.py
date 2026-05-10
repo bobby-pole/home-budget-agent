@@ -253,6 +253,13 @@ class TransactionLineUpdate(SQLModel):
 
 
 
+class VerifyRequest(SQLModel):
+    """Body for POST /transactions/{id}/verify — user confirms AI-parsed receipt."""
+    transaction_update: TransactionUpdate
+    lines_update: Optional[List[TransactionLineUpdate]] = None
+    keep_image: bool = False
+
+
 class EnvelopeAllocationUpdate(SQLModel):
     amount: float
 
