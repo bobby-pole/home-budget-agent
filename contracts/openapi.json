@@ -411,7 +411,7 @@
     "/api/transactions/{transaction_id}/verify": {
       "post": {
         "summary": "Verify Transaction",
-        "description": "Verify and finalize an AI-scanned transaction, updating categories/amounts and moving to 'done' status.",
+        "description": "Verify and finalize an AI-scanned transaction. User confirms data and decides whether to keep the image.",
         "operationId": "verify_transaction_api_transactions__transaction_id__verify_post",
         "security": [
           {
@@ -434,7 +434,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Body_verify_transaction_api_transactions__transaction_id__verify_post"
+                "$ref": "#/components/schemas/VerifyRequest"
               }
             }
           }
@@ -1311,11 +1311,6 @@
       },
       "Body_scan_transaction_api_transactions_scan_post": {
         "properties": {
-          "keep_image": {
-            "type": "boolean",
-            "title": "Keep Image",
-            "default": false
-          },
           "note": {
             "anyOf": [
               {
@@ -1338,32 +1333,6 @@
           "file"
         ],
         "title": "Body_scan_transaction_api_transactions_scan_post"
-      },
-      "Body_verify_transaction_api_transactions__transaction_id__verify_post": {
-        "properties": {
-          "transaction_update": {
-            "$ref": "#/components/schemas/TransactionUpdate"
-          },
-          "lines_update": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/TransactionLineUpdate"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lines Update"
-          }
-        },
-        "type": "object",
-        "required": [
-          "transaction_update"
-        ],
-        "title": "Body_verify_transaction_api_transactions__transaction_id__verify_post"
       },
       "BudgetMemberCreate": {
         "properties": {
@@ -2485,6 +2454,38 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VerifyRequest": {
+        "properties": {
+          "transaction_update": {
+            "$ref": "#/components/schemas/TransactionUpdate"
+          },
+          "lines_update": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransactionLineUpdate"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lines Update"
+          },
+          "keep_image": {
+            "type": "boolean",
+            "title": "Keep Image",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "transaction_update"
+        ],
+        "title": "VerifyRequest",
+        "description": "Body for POST /transactions/{id}/verify \u2014 user confirms AI-parsed receipt."
       }
     },
     "securitySchemes": {

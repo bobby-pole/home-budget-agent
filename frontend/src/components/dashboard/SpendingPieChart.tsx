@@ -84,7 +84,7 @@ export function SpendingPieChart({ data, isLoading, total }: SpendingPieChartPro
                     </Pie>
                     <Tooltip
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value: number | string | undefined) => value ? Number(value).toLocaleString("pl-PL", { style: "currency", currency: "PLN" }) : ""}
+                      formatter={(value) => value ? Number(value).toLocaleString("pl-PL", { style: "currency", currency: "PLN" }) : ""}
                     />
                   </PieChart>
                 </ResponsiveContainer>

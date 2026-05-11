@@ -166,10 +166,10 @@ docker-compose down             # Stop
 ### Frontend
 ```bash
 cd frontend
-npm install
-npm run dev       # http://localhost:5173
-npm run build
-npm run lint
+pnpm install
+pnpm dev       # http://localhost:5173
+pnpm build
+pnpm lint
 ```
 
 ### Database migrations (Alembic)
@@ -181,7 +181,7 @@ docker-compose exec backend alembic downgrade -1
 
 ### Production
 ```bash
-cd frontend && npm run build
+cd frontend && pnpm build
 docker-compose -f docker-compose.prod.yml up --build -d
 ```
 
@@ -254,3 +254,4 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/google-vision-credentials.json
 ENVIRONMENT=development
 SECRET_KEY=your_jwt_secret_here
 ```
+``

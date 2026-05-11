@@ -10,11 +10,14 @@ COPY contracts/ ./contracts/
 COPY frontend/ ./frontend/
 
 WORKDIR /app/frontend
+# Install pnpm
+RUN npm install -g pnpm@11
+
 # Install dependencies
-RUN npm ci
+RUN pnpm install --frozen-lockfile
 
 # Build the application (includes type generation)
-RUN npm run build
+RUN pnpm build
 
 # --- STAGE 2: Backend Base (Python dependencies & Security) ---
 FROM python:3.11-slim AS backend-base
