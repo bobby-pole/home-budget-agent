@@ -129,6 +129,7 @@ class ReceiptScan(SQLModel, table=True):
     content_hash: Optional[str] = Field(default=None, index=True)
     keep_image: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    validation_message: Optional[str] = Field(default=None)
 
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
 
@@ -198,6 +199,7 @@ class ReceiptScanRead(SQLModel):
     image_path: Optional[str] = None
     content_hash: Optional[str] = None
     created_at: datetime
+    validation_message: Optional[str] = None
 
 
 class TransactionRead(TransactionBase):

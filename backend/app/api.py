@@ -172,9 +172,16 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         merchant = data.get("merchant_name") or "Unknown"
         total = data.get("total_amount", 0.0)
 
-        if total <= 0:
-            print(f"⚠️ AI Validation Failed: Total={total}")
+        # Read validation result injected by _validate_and_annotate
+        validation = data.get("_validation", {})
+        val_is_valid = validation.get("is_valid", True)
+        val_issues = validation.get("issues", [])
+        val_message = validation.get("message")
+
+        if not val_is_valid:
+            print(f"❌ Validation failed: {val_message}")
             scan.status = "error"
+            scan.validation_message = val_message
             transaction.merchant_name = merchant
             transaction.total_amount = total
             transaction.currency = data.get("currency", "PLN")
@@ -187,6 +194,8 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
         transaction.total_amount = total
         transaction.currency = data.get("currency", "PLN")
         scan.status = "needs_review"
+        # Surface mismatch message so frontend can show alert
+        scan.validation_message = val_message if val_issues else None
 
         ai_date_str = data.get("date")
         if ai_date_str:

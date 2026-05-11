@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
 import {
+  AlertTriangle,
   Check,
   Trash2,
   Plus,
@@ -13,7 +14,7 @@ import {
   Store,
   DollarSign,
   ArrowLeft,
-  FileText
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -45,7 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { api, apiClient } from "@/lib/api"; // Added apiClient for blob fetch
+import { api, apiClient } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TransactionRead as Transaction } from "@/client";
 import { toast } from "sonner";
@@ -325,6 +326,13 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                 </div>
               </div>
             </CardHeader>
+
+            {transaction.receipt_scan?.validation_message && (
+              <div className="mx-4 md:mx-6 mt-4 flex items-start gap-3 rounded-lg border border-yellow-400/40 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-300">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{transaction.receipt_scan.validation_message}</span>
+              </div>
+            )}
 
             <CardContent className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
               <div className="bg-muted/30 p-4 rounded-xl border border-border/50 space-y-4">
