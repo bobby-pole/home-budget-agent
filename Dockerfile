@@ -1,5 +1,5 @@
 # --- STAGE 1: Build Frontend (React + Vite) ---
-FROM node:20-alpine AS build-frontend
+FROM node:22-alpine AS build-frontend
 
 WORKDIR /app
 # Copy OpenAPI schema (needed for type generation)
