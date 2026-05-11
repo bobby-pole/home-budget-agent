@@ -44,18 +44,50 @@ class AIService:
 
             if merchant == "lidl":
                 from .lidl_parser import LidlReceiptParser
-                return LidlReceiptParser().parse(lines).to_dict()
+                parsed = LidlReceiptParser().parse(lines)
+                data = parsed.to_dict()
+            else:
+                # AI structurizer fallback for all unknown / not-yet-parsed merchants.
+                data = AIService._ai_structurize("\n".join(lines), categories)
 
-            # AI structurizer fallback for all unknown / not-yet-parsed merchants.
-            return AIService._ai_structurize("\n".join(lines), categories)
+            return AIService._validate_and_annotate(data)
 
         except RuntimeError as e:
             # Google Vision not configured — fall back to direct AI vision (legacy path)
             print(f"⚠️ [Pipeline] OCR unavailable ({e}), falling back to AI vision")
-            return AIService._ai_vision_fallback(image_bytes, categories)
+            data = AIService._ai_vision_fallback(image_bytes, categories)
+            return AIService._validate_and_annotate(data)
         except Exception as e:
             print(f"❌ OCR Pipeline Error: {e}")
             return None
+
+    @staticmethod
+    def _validate_and_annotate(data: Optional[dict]) -> Optional[dict]:
+        """Run ReceiptValidator and attach validation metadata to the result dict."""
+        if data is None:
+            return None
+
+        from decimal import Decimal
+        from .receipt_validator import ReceiptValidator
+
+        ocr_total = Decimal(str(data.get("total_amount", 0)))
+        result = ReceiptValidator().validate(data, ocr_total)
+
+        data["_validation"] = {
+            "is_valid": result.is_valid,
+            "issues": [i.value for i in result.issues],
+            "confidence": result.confidence,
+            "message": result.message,
+        }
+
+        if not result.is_valid:
+            print(f"❌ [Validation] FAILED — {result.message}")
+        elif result.issues:
+            print(f"⚠️ [Validation] NEEDS_REVIEW — {result.message}")
+        else:
+            print(f"✅ [Validation] OK — confidence {result.confidence:.2f}")
+
+        return data
 
     @staticmethod
     def _ai_structurize(receipt_text: str, categories: Optional[list[dict]] = None) -> Optional[dict]:
