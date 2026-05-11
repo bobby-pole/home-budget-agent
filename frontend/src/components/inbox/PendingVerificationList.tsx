@@ -3,8 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
-import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { TransactionRead as Transaction } from "@/client";
+import { getStatusLabel, getStatusVariant, isInProgress } from "@/lib/receiptStatus";
 
 interface PendingVerificationListProps {
   transactions: Transaction[];
@@ -34,7 +35,10 @@ export function PendingVerificationList({
       {transactions.map((t) => {
         const isSelected = selectedId === t.id;
         const status = t.receipt_scan?.status || "processing";
-        
+        const variant = getStatusVariant(status);
+        const label = getStatusLabel(status);
+        const inProgress = isInProgress(status);
+
         return (
           <Card
             key={t.id}
@@ -59,22 +63,32 @@ export function PendingVerificationList({
                     {(t.total_amount ?? 0).toFixed(2)} {t.currency}
                   </div>
                   <div className="mt-2 flex justify-end">
-                    {status === "processing" && (
+                    {variant === "in-progress" && (
                       <Badge variant="secondary" className="text-[10px] h-5 bg-blue-500/10 text-blue-500 border-blue-500/20 gap-1">
-                        <Clock className="h-3 w-3 animate-pulse" />
-                        AI...
+                        {inProgress ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Clock className="h-3 w-3 animate-pulse" />
+                        )}
+                        {label}
                       </Badge>
                     )}
-                    {status === "needs_review" && (
+                    {variant === "success" && (
+                      <Badge variant="outline" className="text-[10px] h-5 bg-green-500/10 text-green-600 border-green-500/20 gap-1">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {label}
+                      </Badge>
+                    )}
+                    {variant === "warning" && (
                       <Badge variant="outline" className="text-[10px] h-5 bg-amber-500/10 text-amber-500 border-amber-500/20 gap-1">
                         <AlertCircle className="h-3 w-3" />
-                        Weryfikacja
+                        {label}
                       </Badge>
                     )}
-                    {status === "error" && (
+                    {variant === "error" && (
                       <Badge variant="destructive" className="text-[10px] h-5 gap-1">
                         <AlertCircle className="h-3 w-3" />
-                        Błąd
+                        {label}
                       </Badge>
                     )}
                   </div>

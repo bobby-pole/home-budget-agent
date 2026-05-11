@@ -1,10 +1,13 @@
 # backend/app/api.py
+import asyncio
+import logging
 import shutil
 import os
 import hashlib
 import csv
 import io
 import re
+import time
 from pypdf import PdfReader
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
@@ -15,7 +18,7 @@ from sqlalchemy import extract, func
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
-    ReceiptScan, VerifyRequest,
+    ReceiptScan, ScanStatus, VerifyRequest,
     Budget, BudgetMember,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
@@ -25,7 +28,12 @@ from .models import (
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
 from .auth import get_current_user, hash_password, verify_password, create_access_token
+from .config import settings
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
+
+_semaphore = asyncio.Semaphore(settings.OCR_WORKER_CONCURRENCY)
 
 router = APIRouter()
 # Ensure UPLOAD_DIR is robustly handled
@@ -138,80 +146,108 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-# --- BACKGROUND TASK ---
+# --- ASYNC OCR WORKER ---
 
-def process_transaction_in_background(transaction_id: int, scan_id: int, image_path: str):
-    print(f"🤖 AI Processing started for transaction #{transaction_id}...")
+def _set_scan_status(scan_id: int, status: ScanStatus, error_message: str | None = None) -> None:
+    with Session(operations_engine) as s:
+        scan = s.get(ReceiptScan, scan_id)
+        if scan:
+            scan.status = status
+            if error_message is not None:
+                scan.error_message = error_message
+            s.add(scan)
+            s.commit()
+
+
+async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> None:
+    _set_scan_status(scan_id, ScanStatus.RUNNING)
+    logger.info("OCR job started", extra={"scan_id": scan_id, "transaction_id": transaction_id})
 
     with Session(operations_engine) as session:
         transaction = session.get(Transaction, transaction_id)
         scan = session.get(ReceiptScan, scan_id)
 
         if not transaction or not scan:
-            print("❌ Transaction or ReceiptScan not found")
-            if scan:
-                scan.status = "error"
-                session.add(scan)
-                session.commit()
+            logger.error("Transaction or ReceiptScan not found", extra={"scan_id": scan_id})
+            _set_scan_status(scan_id, ScanStatus.FAILED, error_message="record not found")
             return
 
-        # Fetch categories for the current budget to pass to AI
-        db_categories = session.exec(select(Category).where((Category.budget_id == transaction.budget_id) | (Category.is_system))).all()
+        db_categories = session.exec(
+            select(Category).where(
+                (Category.budget_id == transaction.budget_id) | (Category.is_system)
+            )
+        ).all()
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
-        # GPT-4o Vision — parse receipt directly from image (handles complex layouts)
-        data = AIService.parse_receipt(image_path, categories=cat_dicts)
+        stage_start = time.monotonic()
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts)
+        )
+        logger.info(
+            "OCR completed",
+            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+        )
 
         if not data:
-            print("❌ AI Failed to parse receipt")
-            scan.status = "error"
-            session.add(scan)
-            session.commit()
+            logger.error("OCR pipeline returned no data", extra={"scan_id": scan_id})
+            _set_scan_status(scan_id, ScanStatus.FAILED, error_message="pipeline returned no data")
             return
+
+        _set_scan_status(scan_id, ScanStatus.OCR_OK)
 
         merchant = data.get("merchant_name") or "Unknown"
         total = data.get("total_amount", 0.0)
 
-        # Read validation result injected by _validate_and_annotate
         validation = data.get("_validation", {})
         val_is_valid = validation.get("is_valid", True)
         val_issues = validation.get("issues", [])
         val_message = validation.get("message")
 
+        stage_start = time.monotonic()
+        scan2 = session.get(ReceiptScan, scan_id)
+        if not scan2:
+            return
+        scan2.status = ScanStatus.PARSING_OK
+
         if not val_is_valid:
-            print(f"❌ Validation failed: {val_message}")
-            scan.status = "error"
-            scan.validation_message = val_message
+            logger.warning("Validation failed", extra={"scan_id": scan_id, "message": val_message})
+            scan2.status = ScanStatus.FAILED
+            scan2.validation_message = val_message
             transaction.merchant_name = merchant
             transaction.total_amount = total
             transaction.currency = data.get("currency", "PLN")
-            session.add(scan)
+            session.add(scan2)
             session.add(transaction)
             session.commit()
+            logger.info(
+                "Parsing stage completed (failed validation)",
+                extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+            )
             return
 
+        logger.info(
+            "Parsing stage completed",
+            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+        )
+
+        stage_start = time.monotonic()
         transaction.merchant_name = merchant
         transaction.total_amount = total
         transaction.currency = data.get("currency", "PLN")
-        scan.status = "needs_review"
-        # Surface mismatch message so frontend can show alert
-        scan.validation_message = val_message if val_issues else None
+        scan2.status = ScanStatus.NEEDS_REVIEW
+        scan2.validation_message = val_message if val_issues else None
 
         ai_date_str = data.get("date")
         if ai_date_str:
             try:
                 transaction.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
             except (ValueError, TypeError):
-                print(f"⚠️ Could not parse AI date: {ai_date_str}")
+                logger.warning("Could not parse AI date", extra={"scan_id": scan_id, "date": ai_date_str})
 
-        # Map AI returned category names back to DB category IDs
         cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
-
-        items_data = data.get("items", [])
-        for item_raw in items_data:
+        for item_raw in data.get("items", []):
             category_name = item_raw.get("category", "")
             cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
-
             session.add(TransactionLine(
                 name=item_raw.get("name", "Unknown item"),
                 price=float(item_raw.get("price", 0.0)),
@@ -221,13 +257,33 @@ def process_transaction_in_background(transaction_id: int, scan_id: int, image_p
             ))
 
         session.add(transaction)
-        session.add(scan)
+        session.add(scan2)
         session.commit()
-        print(f"✅ AI Processing finished for transaction #{transaction_id} (Moved to verification)")
+        logger.info(
+            "Categorization stage completed",
+            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+        )
+        logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
 
-        # NOTE: We do NOT delete the image here anymore if keep_image is False.
-        # We will delete it in the /verify endpoint if keep_image is False.
-        # This allows the user to see the image in the Inbox during verification.
+
+async def _run_with_semaphore(scan_id: int, transaction_id: int, image_path: str) -> None:
+    async with _semaphore:
+        try:
+            await asyncio.wait_for(
+                _process_scan(scan_id, transaction_id, image_path),
+                timeout=settings.OCR_JOB_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                "OCR job timed out",
+                extra={"scan_id": scan_id, "timeout_s": settings.OCR_JOB_TIMEOUT_SECONDS},
+            )
+            _set_scan_status(scan_id, ScanStatus.FAILED, error_message="timeout")
+
+
+async def process_transaction_in_background(transaction_id: int, scan_id: int, image_path: str) -> None:
+    """Async entry point for BackgroundTasks — wraps the worker with semaphore and timeout."""
+    await _run_with_semaphore(scan_id, transaction_id, image_path)
 
 
 
@@ -347,7 +403,7 @@ async def scan_transaction(
     scan = ReceiptScan(
         transaction_id=new_transaction.id,
         image_path=file_path,
-        status="processing",
+        status=ScanStatus.QUEUED,
         content_hash=file_hash,
         # keep_image defaults to False; final decision is made by user at verify time
     )
@@ -386,13 +442,14 @@ async def retry_transaction(
     if not scan:
         raise HTTPException(status_code=404, detail="No receipt scan found for this transaction")
 
-    if scan.status != "error":
+    if scan.status not in (ScanStatus.FAILED, "error"):
         raise HTTPException(status_code=400, detail="Only failed scans can be retried")
 
     if not scan.image_path or not os.path.exists(scan.image_path):
         raise HTTPException(status_code=404, detail="Original image file not found. Please re-upload.")
 
-    scan.status = "processing"
+    scan.status = ScanStatus.QUEUED
+    scan.error_message = None
     session.add(scan)
     session.commit()
     session.refresh(transaction)
@@ -436,16 +493,23 @@ async def get_inbox(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    """Fetch all transactions with status 'needs_review' or 'error' that require user attention."""
+    """Fetch all transactions that require user attention (NEEDS_REVIEW or FAILED)."""
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-    
+
+    inbox_statuses = [
+        ScanStatus.NEEDS_REVIEW,
+        ScanStatus.FAILED,
+        # legacy values stored before migration
+        "needs_review",
+        "error",
+    ]
     statement = (
         select(Transaction)
         .join(ReceiptScan)
         .where(
             Transaction.budget_id == current_budget.id,
-            col(ReceiptScan.status).in_(["needs_review", "error"])
+            col(ReceiptScan.status).in_(inbox_statuses),
         )
         .order_by(desc(Transaction.date))
     )
@@ -542,7 +606,7 @@ async def verify_transaction(
 
     # Persist user's keep_image decision and mark as done
     scan.keep_image = body.keep_image
-    scan.status = "done"
+    scan.status = ScanStatus.CATEGORIZATION_OK
     session.add(db_transaction)
     session.add(scan)
     session.commit()
