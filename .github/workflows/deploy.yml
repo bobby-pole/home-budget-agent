@@ -63,11 +63,12 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GHCR_TOKEN,OPENAI_API_KEY,SECRET_KEY
+          envs: GHCR_TOKEN,OPENAI_API_KEY,SECRET_KEY,GOOGLE_CREDENTIALS_JSON
           script: |
             set -e
 
@@ -80,8 +81,8 @@ jobs:
             mkdir -p data && chmod 777 data
 
             # Write .env from secrets (printf handles special chars safely)
-            printf 'OPENAI_API_KEY=%s\nSECRET_KEY=%s\nENVIRONMENT=production\n' \
-              "$OPENAI_API_KEY" "$SECRET_KEY" > .env
+            printf 'OPENAI_API_KEY=%s\nSECRET_KEY=%s\nENVIRONMENT=production\nGOOGLE_CREDENTIALS_JSON=%s\n' \
+              "$OPENAI_API_KEY" "$SECRET_KEY" "$GOOGLE_CREDENTIALS_JSON" > .env
 
             # Pull latest image and restart
             docker compose -f docker-compose.prod.yml pull
