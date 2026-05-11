@@ -1,8 +1,32 @@
 # backend/app/models.py
+from enum import Enum
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import UniqueConstraint, Index
+from sqlalchemy import UniqueConstraint, Index, String, Column
 from sqlmodel import Field, Relationship, SQLModel
+
+
+class ScanStatus(str, Enum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    OCR_OK = "OCR_OK"
+    PARSING_OK = "PARSING_OK"
+    CATEGORIZATION_OK = "CATEGORIZATION_OK"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    FAILED = "FAILED"
+
+    @classmethod
+    def _missing_(cls, value: object) -> "ScanStatus":
+        _legacy_map = {
+            "processing": cls.RUNNING,
+            "done": cls.CATEGORIZATION_OK,
+            "error": cls.FAILED,
+        }
+        if isinstance(value, str):
+            mapped = _legacy_map.get(value.lower())
+            if mapped is not None:
+                return mapped
+        return cls.FAILED
 
 
 # ─── User ─────────────────────────────────────────────────────────────────────
@@ -125,7 +149,10 @@ class ReceiptScan(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     transaction_id: int = Field(foreign_key="transaction.id", index=True)
     image_path: Optional[str] = None
-    status: str = Field(default="processing")  # processing | done | error | needs_review
+    status: str = Field(
+        sa_column=Column(String, index=True, nullable=False, default=ScanStatus.QUEUED.value),
+    )
+    error_message: Optional[str] = Field(default=None)
     content_hash: Optional[str] = Field(default=None, index=True)
     keep_image: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -200,6 +227,7 @@ class ReceiptScanRead(SQLModel):
     content_hash: Optional[str] = None
     created_at: datetime
     validation_message: Optional[str] = None
+    error_message: Optional[str] = None
 
 
 class TransactionRead(TransactionBase):

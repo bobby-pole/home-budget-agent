@@ -3,7 +3,7 @@ from unittest.mock import patch, mock_open
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from datetime import datetime, timezone
-from app.models import Transaction, TransactionLine, ReceiptScan, User, Budget, BudgetMember, Category, Tag
+from app.models import Transaction, TransactionLine, ReceiptScan, ScanStatus, User, Budget, BudgetMember, Category, Tag
 
 
 def test_health_check(client: TestClient):
@@ -72,7 +72,7 @@ def test_scan_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, c
     data = response.json()
     assert data["merchant_name"] == "Processing..."
     assert data["receipt_scan"] is not None
-    assert data["receipt_scan"]["status"] == "processing"
+    assert data["receipt_scan"]["status"] == ScanStatus.QUEUED
     assert data["receipt_scan"]["content_hash"] == expected_hash
 
     scan = session.exec(select(ReceiptScan).where(ReceiptScan.transaction_id == data["id"])).first()
@@ -94,7 +94,7 @@ def test_scan_duplicate_returns_409(client: TestClient, session: Session):
     session.refresh(transaction)
 
     assert transaction.id is not None
-    scan = ReceiptScan(transaction_id=transaction.id, status="done", content_hash=file_hash)
+    scan = ReceiptScan(transaction_id=transaction.id, status=ScanStatus.CATEGORIZATION_OK, content_hash=file_hash)
     session.add(scan)
     session.commit()
 
@@ -118,7 +118,7 @@ def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, sessio
     session.refresh(transaction)
 
     assert transaction.id is not None
-    scan = ReceiptScan(transaction_id=transaction.id, status="error", image_path="/fake/path/image.jpg")
+    scan = ReceiptScan(transaction_id=transaction.id, status=ScanStatus.FAILED, image_path="/fake/path/image.jpg")
     session.add(scan)
     session.commit()
     session.refresh(scan)
@@ -128,7 +128,7 @@ def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, sessio
     assert response.status_code == 200
 
     session.refresh(scan)
-    assert scan.status == "processing"
+    assert scan.status == ScanStatus.QUEUED
     mock_bg.assert_called_once_with(transaction.id, scan_id, "/fake/path/image.jpg")
 
 
@@ -143,7 +143,7 @@ def test_delete_removes_receipt_scan(client: TestClient, session: Session):
     session.refresh(transaction)
 
     assert transaction.id is not None
-    scan = ReceiptScan(transaction_id=transaction.id, status="done", image_path=None)
+    scan = ReceiptScan(transaction_id=transaction.id, status=ScanStatus.CATEGORIZATION_OK, image_path=None)
     session.add(scan)
     session.commit()
     scan_id = scan.id
@@ -415,7 +415,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     session.refresh(transaction)
     assert transaction.id is not None
 
-    scan = ReceiptScan(transaction_id=transaction.id, status="needs_review", content_hash="hash123")
+    scan = ReceiptScan(transaction_id=transaction.id, status=ScanStatus.NEEDS_REVIEW, content_hash="hash123")
     session.add(scan)
     
     line = TransactionLine(name="AI Item", price=50.0, quantity=1.0, transaction_id=transaction.id)
@@ -449,7 +449,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     data = response.json()
     assert data["merchant_name"] == "Verified Merchant"
     assert data["total_amount"] == 55.0
-    assert data["receipt_scan"]["status"] == "done"
+    assert data["receipt_scan"]["status"] == ScanStatus.CATEGORIZATION_OK
     assert len(data["lines"]) == 1
     assert data["lines"][0]["name"] == "Verified Item"
 
@@ -457,3 +457,70 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     response = client.get("/api/transactions/inbox")
     inbox = response.json()
     assert not any(t["id"] == transaction.id for t in inbox)
+
+
+# --- BACKWARD COMPAT ---
+
+def test_scan_status_legacy_values_map_correctly():
+    """ScanStatus._missing_ must silently remap pre-migration string values."""
+    assert ScanStatus("processing") == ScanStatus.RUNNING
+    assert ScanStatus("done") == ScanStatus.CATEGORIZATION_OK
+    assert ScanStatus("error") == ScanStatus.FAILED
+
+
+def test_inbox_includes_legacy_needs_review(client: TestClient, session: Session):
+    """Transactions with raw 'needs_review' string (pre-migration) must appear in inbox."""
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_user and test_budget
+
+    tx = Transaction(
+        merchant_name="Legacy Store",
+        uploaded_by=test_user.id,
+        budget_id=test_budget.id,
+        total_amount=10.0,
+        date=datetime.now(timezone.utc),
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    assert tx.id is not None
+
+    scan = ReceiptScan(transaction_id=tx.id, status="needs_review", content_hash="legacy_hash")
+    session.add(scan)
+    session.commit()
+
+    response = client.get("/api/transactions/inbox")
+    assert response.status_code == 200
+    ids = [t["id"] for t in response.json()]
+    assert tx.id in ids
+
+
+def test_retry_accepts_legacy_error_status(client: TestClient, session: Session):
+    """Retry must work even when scan.status is still the legacy 'error' string."""
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_user and test_budget
+
+    tx = Transaction(
+        merchant_name="Legacy Fail Shop",
+        uploaded_by=test_user.id,
+        budget_id=test_budget.id,
+        total_amount=5.0,
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    assert tx.id is not None
+
+    scan = ReceiptScan(transaction_id=tx.id, status="error", image_path="/fake/legacy.jpg")
+    session.add(scan)
+    session.commit()
+
+    with (
+        patch("app.api.process_transaction_in_background"),
+        patch("app.api.os.path.exists", return_value=True),
+    ):
+        response = client.post(f"/api/transactions/{tx.id}/retry")
+
+    assert response.status_code == 200
