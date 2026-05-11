@@ -47,8 +47,8 @@ ENVIRONMENT=development
 2. **Start the Frontend (Local):**
    ```bash
    cd frontend
-   npm install
-   npm run dev
+   pnpm install
+   pnpm dev
    ```
 The application will be accessible at `http://localhost:5173`.
 
@@ -56,7 +56,7 @@ The application will be accessible at `http://localhost:5173`.
 
 This project supports a "Lean Build" workflow to minimize memory usage on servers with limited RAM:
 
-1. Build assets locally: `cd frontend && npm run build`.
+1. Build assets locally: `cd frontend && pnpm build`.
 2. Transfer the project directory (including `frontend/dist`) to your server.
 3. On the server, execute:
    ```bash
@@ -68,3 +68,4 @@ This project supports a "Lean Build" workflow to minimize memory usage on server
 - `/frontend` - React application source code and assets.
 - `/data` - Persistent storage for the SQLite database.
 - `Dockerfile.vps` - Optimized production image for low-RAM environments.
+

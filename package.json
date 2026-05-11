@@ -1,9 +1,10 @@
 {
   "name": "home-budget-agent",
   "private": true,
+  "packageManager": "pnpm@11.0.9",
   "scripts": {
     "prepare": "husky",
-    "generate:types": "python3 backend/scripts/export_openapi.py && npm run --prefix frontend generate:types"
+    "generate:types": "python3 backend/scripts/export_openapi.py && cd frontend && pnpm generate:types"
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [
@@ -16,6 +17,12 @@
   "devDependencies": {
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "esbuild"
+    ]
   }
 }
 

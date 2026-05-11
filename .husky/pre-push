@@ -3,7 +3,7 @@ cd "$(git rev-parse --show-toplevel)/frontend"
 npx tsc --noEmit -p tsconfig.app.json || { echo "❌ Frontend Type-check failed. Push aborted."; exit 1; }
 
 echo "▶ [pre-push] Frontend Build..."
-npm run build || { echo "❌ Frontend Build failed. Push aborted."; exit 1; }
+pnpm build || { echo "❌ Frontend Build failed. Push aborted."; exit 1; }
 
 echo "▶ [pre-push] Backend Checks..."
 cd "$(git rev-parse --show-toplevel)/backend"

@@ -228,10 +228,10 @@ docker-compose down             # Stop
 ### Frontend
 ```bash
 cd frontend
-npm install       # Install dependencies
-npm run dev       # Dev server at http://localhost:5173
-npm run build     # Production build
-npm run lint      # ESLint
+pnpm install       # Install dependencies
+pnpm dev       # Dev server at http://localhost:5173
+pnpm build     # Production build
+pnpm lint      # ESLint
 ```
 
 ### Database migrations (Alembic)
@@ -248,7 +248,7 @@ docker-compose exec backend alembic downgrade -1
 
 ### Production (VPS)
 ```bash
-cd frontend && npm run build
+cd frontend && pnpm build
 docker-compose -f docker-compose.prod.yml up --build -d
 ```
 
@@ -342,3 +342,4 @@ GOOGLE_APPLICATION_CREDENTIALS=path/to/google-vision-credentials.json
 ENVIRONMENT=development
 SECRET_KEY=your_jwt_secret_here
 ```
+``
