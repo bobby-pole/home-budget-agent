@@ -96,6 +96,19 @@ def test_line_reconstruction(words) -> list[str] | None:
         print(f"  {i+1:3}  {line}")
     if len(lines) > 20:
         print(f"       ... ({len(lines) - 20} more lines)")
+
+    # Dump all lines to file for debugging
+    lines_path = "/tmp/receipt_lines.txt"
+    with open(lines_path, "w") as f:
+        for i, line in enumerate(lines):
+            f.write(f"{i+1:4}  {line}\n")
+    print(f"\n  All lines saved to: {lines_path}")
+
+    print("\n  Lines containing 'Suma':")
+    for i, line in enumerate(lines):
+        if "suma" in line.lower():
+            print(f"  {i+1:4}  {line}")
+
     return lines
 
 
@@ -108,7 +121,7 @@ def test_merchant_detection(lines: list[str] | None) -> str | None:
     merchant = detect_merchant(lines)
     if merchant:
         print(f"  ✅ Detected: {merchant}")
-        print("     → will use deterministic parser (when implemented in #175)")
+        print("     → will use deterministic parser")
     else:
         print("  ❓ Unknown merchant — will fall back to AI structurizer")
     return merchant

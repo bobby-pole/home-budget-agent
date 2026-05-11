@@ -42,10 +42,9 @@ class AIService:
             merchant = detect_merchant(lines)
             print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
 
-            # Deterministic parsers — implemented in #175 (Lidl), future issues for others.
-            # When a parser is ready, plug it in here:
-            # if merchant == "lidl":
-            #     return LidlReceiptParser().parse(lines).to_dict()
+            if merchant == "lidl":
+                from .lidl_parser import LidlReceiptParser
+                return LidlReceiptParser().parse(lines).to_dict()
 
             # AI structurizer fallback for all unknown / not-yet-parsed merchants.
             return AIService._ai_structurize("\n".join(lines), categories)

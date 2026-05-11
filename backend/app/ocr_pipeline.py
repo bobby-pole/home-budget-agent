@@ -1,6 +1,8 @@
 # backend/app/ocr_pipeline.py
 from __future__ import annotations
 
+import json
+import os
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -74,7 +76,16 @@ class GoogleVisionOCRService:
     def __init__(self) -> None:
         try:
             from google.cloud import vision  # type: ignore[import]
-            self._client = vision.ImageAnnotatorClient()
+            credentials = None
+            creds_json = os.getenv("GOOGLE_CREDENTIALS_JSON")
+            if creds_json:
+                from google.oauth2 import service_account  # type: ignore[import]
+                info = json.loads(creds_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    info,
+                    scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                )
+            self._client = vision.ImageAnnotatorClient(credentials=credentials)
             self._vision = vision
         except ImportError:
             self._client = None
