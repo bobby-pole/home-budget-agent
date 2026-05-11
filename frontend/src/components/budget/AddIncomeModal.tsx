@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { t } from "@/lib/i18n";
 import {
   Dialog,
   DialogContent,
@@ -25,17 +26,17 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 const incomeSchema = z.object({
-  amount: z.string().min(1, "Kwota jest wymagana").refine((val) => {
+  amount: z.string().min(1, t("budget.add_income_modal.validation.amount_required")).refine((val) => {
     const num = parseFloat(val);
     return !isNaN(num) && num > 0;
-  }, "Kwota musi być większa od 0"),
+  }, t("budget.add_income_modal.validation.amount_positive")),
   date: z.string().refine((val) => {
     const date = new Date(val);
     const now = new Date();
     now.setHours(23, 59, 59, 999);
     return date <= now;
-  }, "Data nie może być z przyszłości"),
-  merchant_name: z.string().min(1, "Nazwa / źródło jest wymagane"),
+  }, t("budget.add_income_modal.validation.date_future")),
+  merchant_name: z.string().min(1, t("budget.add_income_modal.validation.source_required")),
 });
 
 type IncomeFormValues = z.infer<typeof incomeSchema>;
@@ -85,17 +86,17 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
-      toast.success("Przychód został dodany!");
+      toast.success(t("budget.add_income_modal.toast_success"));
       onOpenChange(false);
     },
-    onError: () => toast.error("Błąd podczas dodawania przychodu"),
+    onError: () => toast.error(t("budget.add_income_modal.toast_error")),
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Dodaj przychód</DialogTitle>
+          <DialogTitle>{t("budget.add_income_modal.title")}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
@@ -104,7 +105,7 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Kwota (PLN)</FormLabel>
+                  <FormLabel>{t("budget.add_income_modal.amount_label")}</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input
@@ -128,9 +129,9 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
               name="merchant_name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Źródło</FormLabel>
+                  <FormLabel>{t("budget.add_income_modal.source_label")}</FormLabel>
                   <FormControl>
-                    <Input placeholder="np. Wypłata, Premia..." {...field} />
+                    <Input placeholder={t("budget.add_income_modal.placeholder_source")} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -141,7 +142,7 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
               name="date"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Data</FormLabel>
+                  <FormLabel>{t("budget.add_income_modal.date_label")}</FormLabel>
                   <FormControl>
                     <Input type="date" {...field} />
                   </FormControl>
@@ -152,7 +153,7 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
             <DialogFooter className="pt-4">
               <Button type="submit" disabled={mutation.isPending} className="w-full rounded-full font-bold">
                 {mutation.isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Plus className="mr-2 size-4" />}
-                Dodaj przychód
+                {t("budget.add_income_modal.submit_button")}
               </Button>
             </DialogFooter>
           </form>

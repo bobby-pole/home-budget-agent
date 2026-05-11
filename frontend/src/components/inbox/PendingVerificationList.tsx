@@ -1,11 +1,11 @@
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { pl } from "date-fns/locale";
+import { formatDate } from "@/lib/dates";
 import { AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { TransactionRead as Transaction } from "@/client";
 import { getStatusLabel, getStatusVariant, isInProgress } from "@/lib/receiptStatus";
+import { t } from "@/lib/i18n";
 
 interface PendingVerificationListProps {
   transactions: Transaction[];
@@ -22,9 +22,9 @@ export function PendingVerificationList({
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-2xl bg-muted/30">
         <CheckCircle2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
-        <h3 className="text-lg font-medium text-muted-foreground">Wszystko sprawdzone!</h3>
+        <h3 className="text-lg font-medium text-muted-foreground">{t("inbox.list.all_checked_title")}</h3>
         <p className="text-sm text-muted-foreground/60 max-w-[200px]">
-          Nie masz obecnie żadnych transakcji oczekujących na weryfikację.
+          {t("inbox.list.all_checked_description")}
         </p>
       </div>
     );
@@ -32,35 +32,35 @@ export function PendingVerificationList({
 
   return (
     <div className="space-y-3">
-      {transactions.map((t) => {
-        const isSelected = selectedId === t.id;
-        const status = t.receipt_scan?.status || "processing";
+      {transactions.map((tx) => {
+        const isSelected = selectedId === tx.id;
+        const status = tx.receipt_scan?.status || "processing";
         const variant = getStatusVariant(status);
         const label = getStatusLabel(status);
         const inProgress = isInProgress(status);
 
         return (
           <Card
-            key={t.id}
+            key={tx.id}
             className={cn(
               "cursor-pointer transition-all duration-200 hover:border-primary/50 hover:shadow-md border-border/50",
               isSelected ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "bg-card/50"
             )}
-            onClick={() => onSelect(t)}
+            onClick={() => onSelect(tx)}
           >
             <CardContent className="p-4">
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
                   <h4 className="font-semibold text-sm truncate">
-                    {t.merchant_name || "Przetwarzanie..."}
+                    {tx.merchant_name || t("inbox.list.processing_placeholder")}
                   </h4>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {t.date ? format(new Date(t.date), "PPP", { locale: pl }) : "Brak daty"}
+                    {tx.date ? formatDate(tx.date, "PPP") : t("inbox.list.no_date")}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-sm font-bold">
-                    {(t.total_amount ?? 0).toFixed(2)} {t.currency}
+                    {(tx.total_amount ?? 0).toFixed(2)} {tx.currency}
                   </div>
                   <div className="mt-2 flex justify-end">
                     {variant === "in-progress" && (

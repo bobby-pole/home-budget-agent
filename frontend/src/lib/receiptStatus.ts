@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 export type ReceiptStatus =
   | "QUEUED"
   | "RUNNING"
@@ -14,17 +16,17 @@ export type ReceiptStatus =
 export type StatusVariant = "in-progress" | "success" | "warning" | "error";
 
 export const STATUS_LABELS: Record<string, string> = {
-  QUEUED: "Oczekuje...",
-  RUNNING: "Przetwarzanie...",
-  OCR_OK: "Tekst odczytany",
-  PARSING_OK: "Paragony sparsowane",
-  CATEGORIZATION_OK: "Skategoryzowano",
-  NEEDS_REVIEW: "Wymaga weryfikacji",
-  FAILED: "Błąd przetwarzania",
-  processing: "Przetwarzanie...",
-  done: "Gotowe",
-  error: "Błąd",
-  needs_review: "Wymaga weryfikacji",
+  QUEUED: t("receipt_status.queued"),
+  RUNNING: t("receipt_status.running"),
+  OCR_OK: t("receipt_status.ocr_ok"),
+  PARSING_OK: t("receipt_status.parsing_ok"),
+  CATEGORIZATION_OK: t("receipt_status.categorization_ok"),
+  NEEDS_REVIEW: t("receipt_status.needs_review"),
+  FAILED: t("receipt_status.failed"),
+  processing: t("receipt_status.processing"),
+  done: t("receipt_status.done"),
+  error: t("receipt_status.error"),
+  needs_review: t("receipt_status.needs_review"),
 };
 
 export function getStatusLabel(status: string): string {

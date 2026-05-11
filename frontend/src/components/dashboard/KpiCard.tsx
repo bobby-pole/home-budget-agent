@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
+import { t } from "@/lib/i18n"
 
 interface KPICardProps {
   title: string
@@ -53,7 +54,7 @@ export function KPICard({
             {showProgress && progressValue !== undefined && (
                 <div className="w-full space-y-1">
                     <div className="flex justify-between text-[10px] font-bold uppercase text-muted-foreground">
-                        <span>Zużycie</span>
+                        <span>{t("dashboard.kpi_card.usage")}</span>
                         <span className={highlight ? "text-red-600" : ""}>{Math.round(progressValue)}%</span>
                     </div>
                     <Progress value={progressValue} className={cn("h-2 lg:h-3", highlight ? "bg-red-100" : "")} />

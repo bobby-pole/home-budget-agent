@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { t } from "@/lib/i18n";
 import {
   Form,
   FormControl,
@@ -31,12 +32,12 @@ import { Badge } from "@/components/ui/badge";
 import { TagPicker } from "../shared/TagPicker";
 
 const formSchema = z.object({
-  merchant_name: z.string().min(1, "Nazwa sklepu jest wymagana"),
+  merchant_name: z.string().min(1, t("transactions.header_form.validation.merchant_required")),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), {
-    message: "Nieprawidłowa data",
+    message: t("transactions.header_form.validation.date_invalid"),
   }),
-  total_amount: z.coerce.number().min(0.01, "Kwota musi być większa od 0"),
-  currency: z.string().min(3, "Waluta musi mieć 3 znaki").max(3),
+  total_amount: z.coerce.number().min(0.01, t("transactions.header_form.validation.amount_positive")),
+  currency: z.string().min(3, t("transactions.header_form.validation.currency_length")).max(3),
   type: z.enum(["expense", "income", "transfer"]).default("expense"),
   category_id: z.number().nullable().optional(),
   tag_ids: z.array(z.number()).default([]),
@@ -96,12 +97,12 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Zapisano dane nagłówka!");
+      toast.success(t("transactions.header_form.toast_saved"));
       setIsEditing(false);
     },
     onError: (err) => {
       console.error(err);
-      toast.error("Błąd zapisu.");
+      toast.error(t("transactions.header_form.toast_error"));
     },
   });
 
@@ -131,7 +132,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Sklep
+                  {t("transactions.header_form.field_merchant")}
                 </FormLabel>
                 {isEditing ? (
                   <>
@@ -155,7 +156,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Data
+                  {t("transactions.header_form.field_date")}
                 </FormLabel>
                 {isEditing ? (
                   <>
@@ -177,7 +178,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Kwota
+                  {t("transactions.header_form.field_amount")}
                 </FormLabel>
                 {isEditing ? (
                   <>
@@ -201,7 +202,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Waluta
+                  {t("transactions.header_form.field_currency")}
                 </FormLabel>
                 {isEditing ? (
                   <>
@@ -223,25 +224,25 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Typ
+                  {t("transactions.header_form.field_type")}
                 </FormLabel>
                 {isEditing ? (
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Wybierz typ" />
+                        <SelectValue placeholder={t("transactions.header_form.field_type")} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="expense">Wydatek</SelectItem>
-                        <SelectItem value="income">Przychód</SelectItem>
-                        <SelectItem value="transfer">Transfer</SelectItem>
+                        <SelectItem value="expense">{t("transactions.header_form.type_expense")}</SelectItem>
+                        <SelectItem value="income">{t("transactions.header_form.type_income")}</SelectItem>
+                        <SelectItem value="transfer">{t("transactions.header_form.type_transfer")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </FormControl>
                 ) : (
                   <div className="pt-1">
                     <span className="px-2 py-1 rounded text-xs uppercase tracking-wide font-bold flex items-center w-fit shadow-sm bg-muted text-muted-foreground">
-                      {field.value === "expense" ? "Wydatek" : field.value === "income" ? "Przychód" : "Transfer"}
+                      {field.value === "expense" ? t("transactions.header_form.type_expense") : field.value === "income" ? t("transactions.header_form.type_income") : t("transactions.header_form.type_transfer")}
                     </span>
                   </div>
                 )}
@@ -256,7 +257,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem>
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Kategoria
+                  {t("transactions.header_form.field_category")}
                 </FormLabel>
                 {isEditing ? (
                   <FormControl>
@@ -265,7 +266,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                       onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Wybierz kategorię" />
+                        <SelectValue placeholder={t("transactions.meta_section.category_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         {categories?.map((cat) => (
@@ -289,7 +290,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                         <span>{currentDisplayCat.icon}</span> {currentDisplayCat.name}
                       </span>
                     ) : (
-                      <span className="text-sm text-muted-foreground italic">Brak kategorii</span>
+                      <span className="text-sm text-muted-foreground italic">{t("transactions.header_form.no_category")}</span>
                     )}
                   </div>
                 )}
@@ -304,7 +305,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem className="col-span-1">
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Tagi
+                  {t("transactions.header_form.field_tags")}
                 </FormLabel>
                 {isEditing ? (
                   <TagPicker value={field.value || []} onChange={field.onChange} />
@@ -322,7 +323,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                         </Badge>
                       ))
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">Brak tagów</span>
+                      <span className="text-xs text-muted-foreground italic">{t("transactions.header_form.no_tags")}</span>
                     )}
                   </div>
                 )}
@@ -336,13 +337,13 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             render={({ field }) => (
               <FormItem className="col-span-full">
                 <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  Notatka
+                  {t("transactions.header_form.field_note")}
                 </FormLabel>
                 {isEditing ? (
                   <>
                     <FormControl>
                       <Textarea
-                        placeholder="np. prezent dla mamy, rata 3/12..."
+                        placeholder={t("transactions.meta_section.placeholder_note")}
                         className="resize-none"
                         rows={2}
                         {...field}
@@ -352,7 +353,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                   </>
                 ) : (
                   <div className="text-sm text-muted-foreground italic">
-                    {field.value ? field.value : "Brak notatki"}
+                    {field.value ? field.value : t("transactions.header_form.no_note")}
                   </div>
                 )}
               </FormItem>
@@ -372,7 +373,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
               }}
             >
               <Pencil className="mr-2 h-4 w-4" />
-              Edytuj dane
+              {t("transactions.header_form.edit_button")}
             </Button>
           ) : (
             <>
@@ -385,14 +386,14 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                   setIsEditing(false);
                 }}
               >
-                Anuluj
+                {t("transactions.header_form.cancel_button")}
               </Button>
               <Button type="submit" size="sm" disabled={updateMutation.isPending}>
                 {updateMutation.isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 <Save className="mr-2 h-4 w-4" />
-                Zapisz
+                {t("transactions.header_form.save_button")}
               </Button>
             </>
           )}

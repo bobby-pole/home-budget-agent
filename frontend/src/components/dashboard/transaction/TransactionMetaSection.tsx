@@ -1,6 +1,7 @@
 import type { Control } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import {
   FormControl,
   FormField,
@@ -41,12 +42,12 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                Kategoria
+                {t("transactions.meta_section.category_label")}
               </FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Wybierz kategorię" />
+                    <SelectValue placeholder={t("transactions.meta_section.category_placeholder")} />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -72,11 +73,11 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
         render={({ field }) => (
           <FormItem className="col-span-full">
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Notatka
+              {t("transactions.meta_section.note_label")}
             </FormLabel>
             <FormControl>
               <Textarea
-                placeholder="np. prezent dla mamy, rata 3/12..."
+                placeholder={t("transactions.meta_section.placeholder_note")}
                 className="resize-none"
                 rows={2}
                 {...field}
@@ -93,7 +94,7 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
         render={({ field }) => (
           <FormItem className="col-span-full">
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Tagi
+              {t("transactions.meta_section.tags_label")}
             </FormLabel>
             <TagPicker value={field.value || []} onChange={field.onChange} />
             <FormMessage />

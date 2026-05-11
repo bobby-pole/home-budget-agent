@@ -1,8 +1,9 @@
 import * as z from "zod";
+import { t } from "@/lib/i18n";
 
 export const transactionSchema = z.object({
-  merchant_name: z.string().min(1, "Wymagane"),
-  total_amount: z.coerce.number().positive("Musi być większe od 0").optional(),
+  merchant_name: z.string().min(1, t("transactions.add_modal.validation.required")),
+  total_amount: z.coerce.number().positive(t("transactions.add_modal.validation.positive")).optional(),
   currency: z.string().min(1),
   date: z.string().optional(),
   category_id: z.string().optional(),

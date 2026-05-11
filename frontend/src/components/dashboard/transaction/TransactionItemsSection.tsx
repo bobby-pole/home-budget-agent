@@ -1,5 +1,6 @@
 import type { TransactionLineRead as TransactionLine } from "@/client";
 import { TransactionItemRow } from "../TransactionItemRow";
+import { t } from "@/lib/i18n";
 
 interface TransactionItemsSectionProps {
   lines: TransactionLine[];
@@ -11,7 +12,7 @@ export function TransactionItemsSection({ lines, currency, transactionId }: Tran
   return (
     <div>
       <h4 className="mb-3 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-        Pozycje na paragonie
+        {t("transactions.detail_modal.items_section.header")}
         <span className="bg-muted text-muted-foreground px-2 py-0.5 rounded-full text-xs">
           {lines?.length || 0}
         </span>
@@ -30,7 +31,7 @@ export function TransactionItemsSection({ lines, currency, transactionId }: Tran
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-[100px] text-muted-foreground text-sm p-4">
-            <p>Brak wykrytych pozycji.</p>
+            <p>{t("transactions.detail_modal.items_section.no_items")}</p>
           </div>
         )}
       </div>

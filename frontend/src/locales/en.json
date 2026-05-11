@@ -1,0 +1,480 @@
+{
+  "receipt_status": {
+    "queued": "Queued...",
+    "running": "Processing...",
+    "ocr_ok": "Text extracted",
+    "parsing_ok": "Parsed",
+    "categorization_ok": "Categorized",
+    "needs_review": "Needs review",
+    "failed": "Processing error",
+    "processing": "Processing...",
+    "done": "Done",
+    "error": "Error"
+  },
+  "auth": {
+    "login": {
+      "title": "Smart Budget AI",
+      "description": "Sign in to your account",
+      "password_label": "Password",
+      "submit_idle": "Sign in",
+      "submit_pending": "Signing in...",
+      "no_account": "Don't have an account?",
+      "register_link": "Register",
+      "error_default": "Invalid email or password",
+      "validation": {
+        "email_invalid": "Invalid email address",
+        "password_required": "Password is required"
+      }
+    },
+    "register": {
+      "title": "Create an account",
+      "description": "Join Smart Budget AI",
+      "password_label": "Password",
+      "placeholder_password": "minimum 8 characters",
+      "confirm_password_label": "Confirm password",
+      "submit_idle": "Register",
+      "submit_pending": "Creating account...",
+      "has_account": "Already have an account?",
+      "login_link": "Sign in",
+      "error_default": "Registration failed",
+      "validation": {
+        "email_invalid": "Invalid email address",
+        "password_min": "Password must be at least 8 characters",
+        "passwords_mismatch": "Passwords do not match"
+      }
+    }
+  },
+  "nav": {
+    "route_titles": {
+      "dashboard": "Dashboard",
+      "budget": "Budget",
+      "transactions": "Transactions",
+      "inbox": "Inbox",
+      "settings": "Settings"
+    },
+    "user_menu": {
+      "profile": "Profile",
+      "settings": "Settings",
+      "logout": "Log out"
+    }
+  },
+  "dashboard": {
+    "header": {
+      "month_subtitle": "Here is your financial summary.",
+      "add_transaction": "Add transaction"
+    },
+    "loading": "Preparing your dashboard...",
+    "budget_summary": {
+      "empty_title": "No transactions this month",
+      "empty_description": "Add your first income or expense to start tracking your finances.",
+      "empty_action": "Add transaction",
+      "badge_available": "Available",
+      "available_subtitle": "Available this month",
+      "income_usage": "Income usage",
+      "income_label": "Income",
+      "spent_label": "Spent"
+    },
+    "spending_pie": {
+      "title": "Monthly spending",
+      "subtitle": "Current period",
+      "details_button": "Details",
+      "center_label": "Total",
+      "no_data": "No data",
+      "other_category": "Other"
+    },
+    "top_envelopes": {
+      "title": "Top envelopes",
+      "see_all": "See all",
+      "remaining_prefix": "Remaining",
+      "limit_prefix": "of",
+      "no_limits": "No limits set."
+    },
+    "recent_transactions": {
+      "title": "Recent activity",
+      "all_link": "All",
+      "no_category": "No category",
+      "no_date": "No date",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "added_by_me": "You",
+      "added_by_shared": "Shared",
+      "added_by_prefix": "Added by:",
+      "no_transactions": "No recent transactions.",
+      "type_income": "Income",
+      "type_expense": "Expense",
+      "type_transfer": "Transfer"
+    },
+    "kpi_card": {
+      "usage": "Usage"
+    }
+  },
+  "inbox": {
+    "title": "AI Inbox",
+    "verify_subtitle": "Verify the data",
+    "pending_count_label": "scans",
+    "pending_section_header": "Pending scans",
+    "load_error": "Error loading data",
+    "empty_title": "Your inbox is empty",
+    "empty_description": "Upload receipt photos and they will appear here after AI processing.",
+    "list": {
+      "all_checked_title": "All checked!",
+      "all_checked_description": "You have no transactions pending verification.",
+      "processing_placeholder": "Processing...",
+      "no_date": "No date"
+    },
+    "verification_card": {
+      "title": "Data verification",
+      "receipt_preview_title": "Receipt preview",
+      "image_loading": "Loading image...",
+      "image_load_error": "Failed to load image",
+      "tab_form": "Data",
+      "tab_receipt": "Receipt",
+      "field_merchant": "Merchant",
+      "field_date": "Date",
+      "field_total": "Total",
+      "items_section_header": "Receipt items",
+      "add_item_button": "Add",
+      "keep_image_label": "Keep receipt photo (e.g. for warranty purposes)",
+      "sum_prefix": "Total:",
+      "save_idle": "Confirm",
+      "save_pending": "Saving...",
+      "delete_dialog_title": "Reject this receipt?",
+      "delete_dialog_description": "This will permanently delete the transaction and receipt photo from the system. This action cannot be undone.",
+      "delete_dialog_cancel": "Cancel",
+      "delete_dialog_confirm": "Reject and delete",
+      "toast_deleted": "Receipt rejected and deleted",
+      "toast_delete_error": "Error deleting receipt",
+      "toast_verified": "Transaction verified successfully",
+      "toast_verify_error": "An error occurred during verification",
+      "placeholder_item_name": "Item name...",
+      "placeholder_price": "Price",
+      "placeholder_quantity": "Quantity",
+      "placeholder_category": "Cat.",
+      "validation": {
+        "name_required": "Name is required",
+        "merchant_required": "Merchant name is required"
+      }
+    }
+  },
+  "transactions": {
+    "page_title": "Transaction History",
+    "import_button": "Import from bank (CSV/PDF)",
+    "tip": "Tip: You can edit any transaction by clicking the eye icon. AI categorizes new imports automatically.",
+    "import_success": "Import complete!",
+    "import_error_title": "Import error",
+    "import_error_default": "An error occurred while processing the CSV file.",
+    "table": {
+      "title": "Transactions",
+      "page_info": "Page {current} of {total}",
+      "col_merchant": "Payee/Store",
+      "col_type": "Type",
+      "col_date": "Date",
+      "col_status": "AI Status",
+      "col_amount": "Amount",
+      "loading": "Loading data...",
+      "empty": "No transactions. Add the first one! 🧾",
+      "type_expense": "Expense",
+      "type_income": "Income",
+      "type_transfer": "Transfer",
+      "retry_title": "Processing error - Retry",
+      "details_title": "Details / Edit",
+      "delete_title": "Delete transaction",
+      "retry_toast": "Retrying processing...",
+      "retry_toast_description": "AI will try to re-analyze this transaction.",
+      "retry_error_title": "Retry failed.",
+      "retry_error_description": "The file may have expired or been deleted. Please upload it again.",
+      "deleted_toast": "Transaction deleted",
+      "delete_error_toast": "Failed to delete transaction",
+      "delete_dialog_title": "Are you sure you want to delete this transaction?",
+      "delete_dialog_description": "This action cannot be undone. The transaction will be permanently removed from the database along with all its items.",
+      "delete_dialog_cancel": "Cancel",
+      "delete_dialog_confirm": "Delete"
+    },
+    "detail_modal": {
+      "title": "Transaction details #",
+      "close": "Close",
+      "items_section": {
+        "header": "Receipt items",
+        "no_items": "No items detected."
+      }
+    },
+    "add_modal": {
+      "title": "Add transaction manually",
+      "save_button": "Save transaction",
+      "close_button": "Close",
+      "toast_success": "Transaction added",
+      "toast_error": "Error saving transaction",
+      "validation": {
+        "required": "Required",
+        "positive": "Must be greater than 0",
+        "no_items_amount": "Required when no items present"
+      }
+    },
+    "header_form": {
+      "field_merchant": "Store",
+      "field_date": "Date",
+      "field_amount": "Amount",
+      "field_currency": "Currency",
+      "field_type": "Type",
+      "field_category": "Category",
+      "field_tags": "Tags",
+      "field_note": "Note",
+      "type_expense": "Expense",
+      "type_income": "Income",
+      "type_transfer": "Transfer",
+      "no_category": "No category",
+      "no_tags": "No tags",
+      "no_note": "No note",
+      "edit_button": "Edit",
+      "cancel_button": "Cancel",
+      "save_button": "Save",
+      "toast_saved": "Header data saved!",
+      "toast_error": "Save error.",
+      "validation": {
+        "merchant_required": "Store name is required",
+        "date_invalid": "Invalid date",
+        "amount_positive": "Amount must be greater than 0",
+        "currency_length": "Currency must be 3 characters"
+      }
+    },
+    "header_section": {
+      "source_label": "Source / Sender",
+      "merchant_label": "Store / Payee",
+      "type_label": "Transaction type",
+      "date_label": "Date",
+      "amount_label": "Amount",
+      "computed_total_label": "Total (computed)",
+      "currency_label": "Currency",
+      "type_expense": "Expense",
+      "type_income": "Income",
+      "type_transfer": "Transfer",
+      "placeholder_income": "e.g. Employer XYZ",
+      "placeholder_expense": "e.g. Biedronka"
+    },
+    "meta_section": {
+      "category_label": "Category",
+      "category_placeholder": "Select category",
+      "note_label": "Note",
+      "tags_label": "Tags",
+      "placeholder_note": "e.g. gift for mom, instalment 3/12..."
+    },
+    "items_panel": {
+      "header": "Items",
+      "add_button": "Add item",
+      "empty_hint": "No items — the receipt will be saved as a whole with the given amount.",
+      "quantity_unit": "pcs."
+    },
+    "item_row": {
+      "placeholder_name": "Name",
+      "placeholder_category": "Cat.",
+      "placeholder_qty": "Qty",
+      "placeholder_price": "Price",
+      "toast_updated": "Item updated",
+      "toast_error": "Error updating item",
+      "validation": {
+        "name_required": "Name is required"
+      }
+    },
+    "draft_item": {
+      "placeholder_name": "Item name",
+      "placeholder_price": "Price",
+      "placeholder_quantity": "Quantity"
+    }
+  },
+  "budget": {
+    "page": {
+      "title_prefix": "Budget for",
+      "subtitle": "Plan every penny using the envelope method."
+    },
+    "ready_to_assign": {
+      "badge": "Ready to assign",
+      "over_budget_message": "You have exceeded your available income! Reduce limits in your envelopes.",
+      "assign_message": "Distribute these funds to envelopes to plan every penny.",
+      "all_assigned_message": "All income has been assigned.",
+      "add_income_button": "Add income"
+    },
+    "envelope_list": {
+      "title": "Spending Envelopes",
+      "no_categories": "No categories to display. Add categories in settings.",
+      "col_planned": "Planned",
+      "col_spent": "Spent",
+      "col_remaining": "Remaining",
+      "pacing_safe_prefix": "On track:",
+      "pacing_safe_suffix": "/ day",
+      "pacing_over_limit": "Over limit!",
+      "pacing_funds_exhausted": "Funds exhausted",
+      "pacing_no_plan": "No plan"
+    },
+    "allocation_drawer": {
+      "set_limit_subtitle": "Set spending limit",
+      "amount_label": "Planned Amount",
+      "save_button": "Save limit",
+      "cancel_button": "Cancel",
+      "toast_updated": "Limit updated for",
+      "toast_error": "Error saving limit",
+      "amount_error": "Enter a valid amount"
+    },
+    "add_income_modal": {
+      "title": "Add income",
+      "amount_label": "Amount",
+      "source_label": "Source",
+      "placeholder_source": "e.g. Salary, Bonus...",
+      "date_label": "Date",
+      "submit_button": "Add income",
+      "toast_success": "Income added!",
+      "toast_error": "Error adding income",
+      "validation": {
+        "amount_required": "Amount is required",
+        "amount_positive": "Amount must be greater than 0",
+        "date_future": "Date cannot be in the future",
+        "source_required": "Name / source is required"
+      }
+    }
+  },
+  "settings": {
+    "page": {
+      "title": "Settings",
+      "description": "Manage spending categories, tags, and budget access.",
+      "tab_categories": "Categories",
+      "tab_tags": "Tags",
+      "tab_budget": "Budget",
+      "tab_language": "Language"
+    },
+    "categories": {
+      "section_title": "Category structure",
+      "add_button": "Add category",
+      "add_subcategory_button": "Subcategory",
+      "no_categories": "No categories. Create your first category!",
+      "loading": "Loading categories...",
+      "delete_dialog_title": "Delete category?",
+      "delete_dialog_description": "Choose what to do with transactions assigned to it.",
+      "delete_dialog_cancel": "Cancel",
+      "delete_dialog_confirm": "Confirm delete",
+      "reassign_parent": "Move to parent category (if exists)",
+      "reassign_none": "Mark as Uncategorized",
+      "reassign_to_prefix": "Move to:",
+      "toast_created": "Category added",
+      "toast_create_error": "Error adding category",
+      "toast_saved": "Saved",
+      "toast_save_error": "Error saving",
+      "toast_deleted": "Category deleted",
+      "toast_delete_error": "Failed to delete category"
+    },
+    "tags": {
+      "section_title": "Your tags",
+      "add_button": "Add",
+      "no_tags": "You don't have any tags yet.",
+      "delete_dialog_title": "Delete tag?",
+      "delete_dialog_description_prefix": "Are you sure you want to delete the tag",
+      "delete_dialog_description_suffix": "? This will detach it from all transactions and cannot be undone.",
+      "delete_dialog_cancel": "Cancel",
+      "delete_dialog_confirm": "Delete tag",
+      "toast_created": "Tag added",
+      "toast_create_error": "Failed to add tag",
+      "toast_saved": "Saved",
+      "toast_save_error": "Error saving",
+      "toast_deleted": "Tag deleted",
+      "toast_delete_error": "Failed to delete tag"
+    },
+    "language_tab": {
+      "card_title": "App language",
+      "card_description": "Choose the display language for the interface.",
+      "option_pl": "Polski",
+      "option_en": "English"
+    },
+    "categories_tab": {
+      "placeholder_subcategory": "Enter subcategory name...",
+      "placeholder_category": "Enter category name...",
+      "placeholder_action": "Select action"
+    },
+    "tags_tab": {
+      "placeholder_new_tag": "Add new tag (e.g. #summer2026)"
+    },
+    "budget_tab": {
+      "card_title": "Manage budget",
+      "card_description": "Invite family members to jointly manage the household budget.",
+      "invite_button": "Invite person",
+      "invite_dialog_title": "Invite to budget",
+      "invite_email_label": "User email",
+      "invite_role_label": "Role",
+      "invite_role_owner": "Owner",
+      "invite_role_editor": "Editor",
+      "invite_role_viewer": "Viewer",
+      "invite_cancel": "Cancel",
+      "invite_submit": "Invite",
+      "toast_invited": "User has been invited to the budget",
+      "toast_invite_error": "Error inviting user",
+      "placeholder_email": "e.g. spouse@example.com",
+      "placeholder_role": "Select role",
+      "validation": {
+        "email_invalid": "Invalid email format"
+      }
+    }
+  },
+  "upload": {
+    "photo_label": "Photo",
+    "manual_label": "Manual",
+    "pending_label": "Pending",
+    "transactions_label": "Transactions",
+    "toast_uploaded": "Receipt uploaded!",
+    "toast_uploaded_description": "Starting AI analysis in the background.",
+    "toast_upload_error": "An error occurred while uploading the file.",
+    "toast_upload_error_description": "Please try again later.",
+    "toast_invalid_format": "Invalid file format.",
+    "toast_invalid_format_description": "Please upload a photo or PDF.",
+    "toast_duplicate_title": "Duplicate detected!",
+    "toast_duplicate_description": "This transaction has already been uploaded. Do you want to add it again?",
+    "toast_duplicate_action": "Yes, add"
+  },
+  "quick_entry": {
+    "dialog_title": "How would you like to add a transaction?",
+    "dialog_description": "Choose a way to add a new transaction",
+    "scan_title": "Take a photo / Upload receipt",
+    "scan_description": "Photograph a receipt or choose a photo from your gallery. AI will automatically extract the transaction data.",
+    "scan_pending": "Processing receipt...",
+    "manual_title": "Enter manually",
+    "manual_description": "Enter transaction details manually — amount, date, category and other details.",
+    "cancel_button": "Cancel"
+  },
+  "monthly_summary": {
+    "title": "Monthly Summary",
+    "no_data": "No data to display."
+  },
+  "spending_chart": {
+    "title": "Spending by Category",
+    "total_prefix": "Total:",
+    "no_data": "No spending data.",
+    "other_category": "Other"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "confirm": "Confirm"
+  },
+  "tags": {
+    "placeholder_new": "New tag..."
+  },
+  "tag_picker": {
+    "toast_created_prefix": "Tag created #",
+    "toast_create_error": "Failed to create tag",
+    "no_tags_hint": "No tags. Type a name above to add the first one!"
+  },
+  "scan_receipt": {
+    "toast_uploaded": "Receipt uploaded!",
+    "toast_uploaded_description": "AI analysis in progress.",
+    "toast_duplicate_title": "Duplicate!",
+    "toast_duplicate_description": "This receipt already exists. Add it anyway?",
+    "toast_duplicate_action": "Yes",
+    "toast_error": "Upload error.",
+    "toast_invalid_file": "Please select a photo."
+  },
+  "errors": {
+    "receipt": {
+      "empty": "Receipt contains no items.",
+      "sum_mismatch": "Sum of items differs from receipt total by {delta} PLN.",
+      "zero_price_item": "At least one item has a price of 0.00 PLN.",
+      "future_date": "Receipt date is in the future."
+    },
+    "csv_import_complete": "Imported {imported} transactions from {filename}. Skipped {skipped} duplicates."
+  }
+}

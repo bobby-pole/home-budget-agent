@@ -7,6 +7,8 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TransactionRead } from "@/client";
 import { CalendarDays } from "lucide-react";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 interface MonthlySummaryModalProps {
   transactions: TransactionRead[];
@@ -38,7 +40,7 @@ export function MonthlySummaryModal({
   const formatMonthKey = (key: string) => {
     const [year, month] = key.split("-");
     const date = new Date(Number(year), Number(month) - 1);
-    const monthName = date.toLocaleString("pl-PL", { month: "long" });
+    const monthName = date.toLocaleString(getIntlLocale(), { month: "long" });
     return `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}`;
   };
 
@@ -48,7 +50,7 @@ export function MonthlySummaryModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-primary" />
-            Podsumowanie Miesięczne
+            {t("monthly_summary.title")}
           </DialogTitle>
         </DialogHeader>
 
@@ -64,7 +66,7 @@ export function MonthlySummaryModal({
                     {formatMonthKey(key)}
                   </span>
                   <span className="font-bold text-primary">
-                    {amount.toLocaleString("pl-PL", {
+                    {amount.toLocaleString(getIntlLocale(), {
                       style: "currency",
                       currency: "PLN",
                     })}
@@ -73,7 +75,7 @@ export function MonthlySummaryModal({
               ))
             ) : (
               <p className="text-center text-muted-foreground text-sm py-10">
-                Brak danych do wyświetlenia.
+                {t("monthly_summary.no_data")}
               </p>
             )}
           </div>

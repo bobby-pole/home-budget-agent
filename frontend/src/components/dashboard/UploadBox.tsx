@@ -6,6 +6,7 @@ import { Upload, Loader2, CheckCircle2, Clock, Receipt, Pencil } from "lucide-re
 import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { t } from "@/lib/i18n"
 
 interface UploadBoxProps {
   totalCount?: number;
@@ -23,8 +24,8 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
       api.scanTransaction(file, force),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      toast.success("Paragon został przesłany!", {
-        description: "Rozpoczynam analizę AI w tle.",
+      toast.success(t("upload.toast_uploaded"), {
+        description: t("upload.toast_uploaded_description"),
       })
       
       setTimeout(() => {
@@ -33,9 +34,9 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
     },
     onError: (error: AxiosError) => {
       if (error.response?.status !== 409) {
-        console.error("Błąd uploadu:", error)
-        toast.error("Wystąpił błąd podczas wysyłania pliku.", {
-          description: "Spróbuj ponownie później.",
+        console.error("Upload error:", error)
+        toast.error(t("upload.toast_upload_error"), {
+          description: t("upload.toast_upload_error_description"),
         })
       }
     },
@@ -70,8 +71,8 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
 
   const handleScan = (file: File, force = false) => {
     if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
-      toast.error("Nieprawidłowy format pliku.", {
-        description: "Proszę wgrać zdjęcie lub PDF.",
+      toast.error(t("upload.toast_invalid_format"), {
+        description: t("upload.toast_invalid_format_description"),
       })
       return
     }
@@ -81,11 +82,11 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
       {
         onError: (error: AxiosError) => {
           if (error.response?.status === 409) {
-            toast.warning("Wykryto duplikat!", {
-              description: "Ta transakcja została już przesłana. Czy chcesz ją dodać ponownie?",
+            toast.warning(t("upload.toast_duplicate_title"), {
+              description: t("upload.toast_duplicate_description"),
               duration: 5000,
               action: {
-                label: "Tak, dodaj",
+                label: t("upload.toast_duplicate_action"),
                 onClick: () => handleScan(file, true),
               },
             })
@@ -132,7 +133,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
               )}
             </div>
             <span className="text-[9px] lg:text-[10px] font-semibold text-foreground text-center leading-tight">
-              {scanMutation.isPending ? "..." : "Zdjęcie"}
+              {scanMutation.isPending ? "..." : t("upload.photo_label")}
             </span>
           </div>
 
@@ -157,7 +158,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
               <Pencil className="h-3.5 w-3.5 lg:h-4 lg:w-4 text-primary" />
             </div>
             <span className="text-[9px] lg:text-[10px] font-semibold text-foreground text-center leading-tight">
-              Ręcznie
+              {t("upload.manual_label")}
             </span>
           </div>
 
@@ -170,7 +171,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
             <div className="flex flex-col">
                 <span className="text-[9px] lg:text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                     <Clock className="h-2.5 w-2.5" />
-                    Oczekujące
+                    {t("upload.pending_label")}
                 </span>
                 <div className="flex items-center gap-1.5 mt-0.5">
                     <span className={cn("text-lg lg:text-2xl font-bold", processingCount > 0 ? "text-amber-500" : "text-foreground")}>
@@ -188,7 +189,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
             <div className="flex flex-col">
                 <span className="text-[9px] lg:text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                     <Receipt className="h-2.5 w-2.5" />
-                    Transakcji
+                    {t("upload.transactions_label")}
                 </span>
                 <span className="text-base lg:text-lg font-semibold text-foreground mt-0.5">
                     {totalCount}

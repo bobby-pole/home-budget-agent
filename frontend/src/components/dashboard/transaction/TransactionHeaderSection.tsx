@@ -1,5 +1,6 @@
 import type { Control } from "react-hook-form";
 import { useWatch } from "react-hook-form";
+import { t } from "@/lib/i18n";
 import {
   FormControl,
   FormField,
@@ -42,10 +43,10 @@ export function TransactionHeaderSection({
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              {isIncome ? "Źródło / Nadawca" : "Sklep / Odbiorca"}
+              {isIncome ? t("transactions.header_section.source_label") : t("transactions.header_section.merchant_label")}
             </FormLabel>
             <FormControl>
-              <Input placeholder={isIncome ? "np. Pracodawca XYZ" : "np. Biedronka"} {...field} />
+              <Input placeholder={isIncome ? t("transactions.header_section.placeholder_income") : t("transactions.header_section.placeholder_expense")} {...field} />
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -58,7 +59,7 @@ export function TransactionHeaderSection({
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Typ transakcji
+              {t("transactions.header_section.type_label")}
             </FormLabel>
             <Select onValueChange={field.onChange} value={field.value}>
               <FormControl>
@@ -67,9 +68,9 @@ export function TransactionHeaderSection({
                 </SelectTrigger>
               </FormControl>
               <SelectContent>
-                <SelectItem value="expense">Wydatek</SelectItem>
-                <SelectItem value="income">Przychód</SelectItem>
-                <SelectItem value="transfer">Transfer</SelectItem>
+                <SelectItem value="expense">{t("transactions.header_section.type_expense")}</SelectItem>
+                <SelectItem value="income">{t("transactions.header_section.type_income")}</SelectItem>
+                <SelectItem value="transfer">{t("transactions.header_section.type_transfer")}</SelectItem>
               </SelectContent>
             </Select>
             <FormMessage />
@@ -83,7 +84,7 @@ export function TransactionHeaderSection({
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Data
+              {t("transactions.header_section.date_label")}
             </FormLabel>
             <FormControl>
               <Input type="date" {...field} />
@@ -100,7 +101,7 @@ export function TransactionHeaderSection({
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                Kwota
+                {t("transactions.header_section.amount_label")}
               </FormLabel>
               <FormControl>
                 <Input
@@ -119,7 +120,7 @@ export function TransactionHeaderSection({
       ) : (
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold uppercase text-muted-foreground">
-            Suma (wyliczona)
+            {t("transactions.header_section.computed_total_label")}
           </span>
           <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-bold text-primary">
             {computedTotal.toFixed(2)} {currency}
@@ -133,7 +134,7 @@ export function TransactionHeaderSection({
         render={({ field }) => (
           <FormItem>
             <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-              Waluta
+              {t("transactions.header_section.currency_label")}
             </FormLabel>
             <Select onValueChange={field.onChange} value={field.value}>
               <FormControl>

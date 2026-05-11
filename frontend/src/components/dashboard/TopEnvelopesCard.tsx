@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 interface EnvelopeData {
   id: number;
@@ -29,10 +31,10 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
   return (
     <Card className="rounded-[32px] border border-border/50 shadow-sm bg-card overflow-hidden h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-lg font-bold">Najważniejsze koperty</CardTitle>
+        <CardTitle className="text-lg font-bold">{t("dashboard.top_envelopes.title")}</CardTitle>
         <Button variant="ghost" size="sm" asChild className="text-primary font-bold rounded-full">
           <Link to="/budget">
-            Zobacz wszystkie <ArrowRight className="ml-1 size-4" />
+            {t("dashboard.top_envelopes.see_all")} <ArrowRight className="ml-1 size-4" />
           </Link>
         </Button>
       </CardHeader>
@@ -60,7 +62,7 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                           {env.name}
                         </span>
                         <span className="text-xs text-muted-foreground font-bold tracking-tight">
-                          Pozostało {(remaining > 0 ? remaining : 0).toLocaleString("pl-PL")} PLN
+                          {t("dashboard.top_envelopes.remaining_prefix")} {(remaining > 0 ? remaining : 0).toLocaleString(getIntlLocale())} PLN
                         </span>
                       </div>
                     </div>
@@ -68,10 +70,10 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                     {/* Spent & Limit */}
                     <div className="flex flex-col items-end text-right">
                       <span className="text-base font-black tracking-tight">
-                        {env.spent.toLocaleString("pl-PL")} PLN
+                        {env.spent.toLocaleString(getIntlLocale())} PLN
                       </span>
                       <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-70">
-                        z {env.limit.toLocaleString("pl-PL")}
+                        {t("dashboard.top_envelopes.limit_prefix")} {env.limit.toLocaleString(getIntlLocale())}
                       </span>
                     </div>
 
@@ -93,7 +95,7 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
             })
           ) : (
             <div className="flex flex-col items-center justify-center text-center py-12 space-y-2">
-              <p className="text-sm text-muted-foreground">Brak ustawionych limitów.</p>
+              <p className="text-sm text-muted-foreground">{t("dashboard.top_envelopes.no_limits")}</p>
             </div>
           )}
         </div>

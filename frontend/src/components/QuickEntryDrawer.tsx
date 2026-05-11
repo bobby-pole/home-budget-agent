@@ -1,5 +1,6 @@
 import { useRef } from "react"
 import { Camera, Pencil } from "lucide-react"
+import { t } from "@/lib/i18n"
 import {
   Drawer,
   DrawerContent,
@@ -58,9 +59,9 @@ export function QuickEntryDrawer({
   const content = (
     <>
       <DialogHeader className="pb-4">
-        <DialogTitle className="text-center text-xl">Jak chcesz dodać transakcję?</DialogTitle>
+        <DialogTitle className="text-center text-xl">{t("quick_entry.dialog_title")}</DialogTitle>
         <DialogDescription className="text-center">
-          Wybierz sposób dodania nowej transakcji
+          {t("quick_entry.dialog_description")}
         </DialogDescription>
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 max-w-md mx-auto px-4 sm:px-0">
@@ -78,14 +79,14 @@ export function QuickEntryDrawer({
               <Camera className="size-5 sm:size-6 text-primary" />
             </div>
             <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">
-              Zrób zdjęcie / Wgraj paragon
+              {t("quick_entry.scan_title")}
             </h3>
             <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2">
-              Sfotografuj paragon lub wybierz zdjęcie z galerii. AI automatycznie wyodrębni dane transakcji.
+              {t("quick_entry.scan_description")}
             </p>
             {scanPending && (
               <div className="mt-2 sm:mt-3 text-xs sm:text-sm text-amber-600">
-                Przetwarzanie paragonu...
+                {t("quick_entry.scan_pending")}
               </div>
             )}
           </CardContent>
@@ -100,9 +101,9 @@ export function QuickEntryDrawer({
             <div className="size-12 sm:size-14 rounded-full bg-primary/10 flex items-center justify-center mb-3 sm:mb-4">
               <Pencil className="size-5 sm:size-6 text-primary" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">Wpisz ręcznie</h3>
+            <h3 className="text-base sm:text-lg font-semibold mb-1 sm:mb-2">{t("quick_entry.manual_title")}</h3>
             <p className="text-muted-foreground text-xs sm:text-sm line-clamp-2">
-              Wprowadź dane transakcji ręcznie - kwota, data, kategoria i inne szczegóły.
+              {t("quick_entry.manual_description")}
             </p>
           </CardContent>
         </Card>
@@ -113,7 +114,7 @@ export function QuickEntryDrawer({
           className="mt-4"
           onClick={() => onOpenChange(false)}
         >
-          Anuluj
+          {t("quick_entry.cancel_button")}
         </Button>
       </div>
     </>

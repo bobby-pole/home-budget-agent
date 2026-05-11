@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { CategoryRead as Category } from "@/client";
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lock, Trash2, Edit2, Plus, ChevronRight, ChevronDown, Save, X, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
@@ -67,9 +68,9 @@ export function CategoriesTab() {
       setIsAdding(false);
       setNewCatParentId(null);
       setNewCatName("");
-      toast.success("Kategoria dodana");
+      toast.success(t("settings.categories.toast_created"));
     },
-    onError: () => toast.error("Błąd dodawania kategorii"),
+    onError: () => toast.error(t("settings.categories.toast_create_error")),
   });
 
   const updateMutation = useMutation({
@@ -77,9 +78,9 @@ export function CategoriesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       setEditingId(null);
-      toast.success("Zapisano");
+      toast.success(t("settings.categories.toast_saved"));
     },
-    onError: () => toast.error("Błąd podczas zapisu"),
+    onError: () => toast.error(t("settings.categories.toast_save_error")),
   });
 
   const reorderMutation = useMutation({
@@ -97,12 +98,12 @@ export function CategoriesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       setDeleteCatId(null);
-      toast.success("Kategoria usunięta");
+      toast.success(t("settings.categories.toast_deleted"));
     },
-    onError: () => toast.error("Nie udało się usunąć kategorii"),
+    onError: () => toast.error(t("settings.categories.toast_delete_error")),
   });
 
-  if (isLoading) return <div className="p-4">Ładowanie kategorii...</div>;
+  if (isLoading) return <div className="p-4">{t("settings.categories.loading")}</div>;
 
   const parents = categories.filter(c => !c.parent_id);
   const getChildren = (parentId: number) => categories.filter(c => c.parent_id === parentId);
@@ -287,7 +288,7 @@ export function CategoriesTab() {
                         setIsAdding(true);
                       }}
                     >
-                      <Plus className="h-3 w-3 mr-1" /> Podkategoria
+                      <Plus className="h-3 w-3 mr-1" /> {t("settings.categories.add_subcategory_button")}
                     </Button>
                   )}
                   <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleStartEdit(cat)}>
@@ -324,12 +325,12 @@ export function CategoriesTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-medium">Struktura kategorii</h3>
+        <h3 className="text-lg font-medium">{t("settings.categories.section_title")}</h3>
         <Button onClick={() => {
           setNewCatParentId(null);
           setIsAdding(true);
         }}>
-          <Plus className="h-4 w-4 mr-2" /> Dodaj kategorię
+          <Plus className="h-4 w-4 mr-2" /> {t("settings.categories.add_button")}
         </Button>
       </div>
 
@@ -344,7 +345,7 @@ export function CategoriesTab() {
               >
                 {parents.length === 0 && !isLoading ? (
                   <div className="p-8 text-center text-muted-foreground">
-                    Brak kategorii. Stwórz swoją pierwszą kategorię!
+                    {t("settings.categories.no_categories")}
                   </div>
                 ) : (
                   parents.map((cat, idx) => renderCategoryRow(cat, 0, idx, idx === parents.length - 1))
@@ -359,7 +360,7 @@ export function CategoriesTab() {
       {isAdding && (
         <div className="bg-card p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row items-center gap-3">
           <Input 
-            placeholder={newCatParentId ? "Wpisz nazwę podkategorii..." : "Wpisz nazwę kategorii..."} 
+            placeholder={newCatParentId ? t("settings.categories_tab.placeholder_subcategory") : t("settings.categories_tab.placeholder_category")}
             value={newCatName}
             onChange={e => setNewCatName(e.target.value)}
             className="flex-1"
@@ -367,9 +368,9 @@ export function CategoriesTab() {
           />
           <div className="flex gap-2 w-full sm:w-auto">
             <Button className="flex-1 sm:flex-none" disabled={!newCatName.trim()} onClick={() => createMutation.mutate({ name: newCatName.trim(), parent_id: newCatParentId || undefined })}>
-              Zapisz
+              {t("common.save")}
             </Button>
-            <Button variant="ghost" onClick={() => setIsAdding(false)}>Anuluj</Button>
+            <Button variant="ghost" onClick={() => setIsAdding(false)}>{t("common.cancel")}</Button>
           </div>
         </div>
       )}
@@ -378,31 +379,31 @@ export function CategoriesTab() {
       <AlertDialog open={!!deleteCatId} onOpenChange={(open) => !open && setDeleteCatId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Usunąć kategorię?</AlertDialogTitle>
+            <AlertDialogTitle>{t("settings.categories.delete_dialog_title")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Wybierz co zrobić z przypisanymi do niej transakcjami.
+              {t("settings.categories.delete_dialog_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
             <Select value={reassignTo} onValueChange={setReassignTo}>
               <SelectTrigger>
-                <SelectValue placeholder="Wybierz akcję" />
+                <SelectValue placeholder={t("settings.categories_tab.placeholder_action")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="parent">Przenieś do kategorii nadrzędnej (jeśli istnieje)</SelectItem>
-                <SelectItem value="none">Oznacz jako Bez Kategorii</SelectItem>
+                <SelectItem value="parent">{t("settings.categories.reassign_parent")}</SelectItem>
+                <SelectItem value="none">{t("settings.categories.reassign_none")}</SelectItem>
                 {parents.filter(p => p.id !== deleteCatId).map(p => (
                   <SelectItem key={p.id} value={p.id.toString()}>
-                    Przenieś do: {p.is_system ? (CATEGORY_LABELS[p.name] || p.name) : p.name}
+                    {t("settings.categories.reassign_to_prefix")} {p.is_system ? (CATEGORY_LABELS[p.name] || p.name) : p.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogCancel>{t("settings.categories.delete_dialog_cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
-              Potwierdź usunięcie
+              {t("settings.categories.delete_dialog_confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

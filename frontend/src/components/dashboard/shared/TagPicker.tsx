@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Plus, Loader2 } from "lucide-react";
@@ -37,9 +38,9 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
       setNewTagColor("#9ca3af");
       // Automatically select the newly created tag
       onChange([...(value || []), newTag.id]);
-      toast.success(`Utworzono tag #${newTag.name}`);
+      toast.success(`${t("tag_picker.toast_created_prefix")}${newTag.name}`);
     },
-    onError: () => toast.error("Nie udało się utworzyć tagu"),
+    onError: () => toast.error(t("tag_picker.toast_create_error")),
   });
 
   const handleCreateTag = (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -64,7 +65,7 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
       <div className="flex gap-2">
         <div className="relative flex-1 max-w-[200px] flex gap-2">
           <Input
-            placeholder="Nowy tag..."
+            placeholder={t("tags.placeholder_new")}
             value={newTagName}
             onChange={(e) => setNewTagName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreateTag(e)}
@@ -141,7 +142,7 @@ export function TagPicker({ value, onChange, disabled }: TagPickerProps) {
         })}
         {(!tags || tags.length === 0) && !createTagMutation.isPending && (
           <p className="text-xs text-muted-foreground italic">
-            Brak tagów. Wpisz nazwę powyżej, aby dodać pierwszy!
+            {t("tag_picker.no_tags_hint")}
           </p>
         )}
       </div>

@@ -117,11 +117,11 @@ export const api = {
   importTransactions: async (file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    const response = await apiClient.post<{ 
-      created: number; 
-      skipped: number; 
-      failed: number; 
-      summary: string 
+    const response = await apiClient.post<{
+      created: number;
+      skipped: number;
+      failed: number;
+      summary: string | { code: string; imported: number; skipped: number; filename: string };
     }>("/transactions/import", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });

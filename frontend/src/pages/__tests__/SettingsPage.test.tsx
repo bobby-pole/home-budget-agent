@@ -26,5 +26,6 @@ describe("SettingsPage", () => {
     // Tabs list triggers
     expect(screen.getByRole("tab", { name: /Kategorie/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /Tagi/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Język/i })).toBeInTheDocument();
   });
 });

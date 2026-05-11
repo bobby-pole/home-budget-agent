@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import type { TransactionRead } from "@/client";
 import { TransactionHeaderForm } from "./transaction/TransactionHeaderForm";
 import { TransactionItemsSection } from "./transaction/TransactionItemsSection";
+import { t } from "@/lib/i18n";
 
 interface TransactionDetailModalProps {
   transaction: TransactionRead | null;
@@ -23,7 +24,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-[650px] max-h-[90vh] flex flex-col">
         <DialogHeader className="pb-2 border-b mb-4">
-          <DialogTitle>Szczegóły transakcji #{transaction.id}</DialogTitle>
+          <DialogTitle>{t("transactions.detail_modal.title")}{transaction.id}</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-1 space-y-6">
@@ -33,7 +34,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
 
         <DialogFooter className="mt-4 pt-2 border-t">
           <Button type="button" variant="secondary" onClick={onClose}>
-            Zamknij
+            {t("transactions.detail_modal.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

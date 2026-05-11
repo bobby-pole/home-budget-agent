@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { t } from "@/lib/i18n";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -85,15 +86,15 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transakcja dodana");
+      toast.success(t("transactions.add_modal.toast_success"));
       onOpenChange(false);
     },
-    onError: () => toast.error("Błąd zapisu transakcji"),
+    onError: () => toast.error(t("transactions.add_modal.toast_error")),
   });
 
   const onSubmit = (values: TransactionFormValues) => {
     if (!hasItems && !values.total_amount) {
-      form.setError("total_amount", { message: "Wymagane gdy brak pozycji" });
+      form.setError("total_amount", { message: t("transactions.add_modal.validation.no_items_amount") });
       return;
     }
     mutation.mutate(values);
@@ -103,7 +104,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] flex flex-col">
         <DialogHeader className="pb-2 border-b mb-4">
-          <DialogTitle>Dodaj transakcję ręcznie</DialogTitle>
+          <DialogTitle>{t("transactions.add_modal.title")}</DialogTitle>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-1 space-y-4">
@@ -126,7 +127,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   <Save className="mr-2 h-4 w-4" />
-                  Zapisz transakcję
+                  {t("transactions.add_modal.save_button")}
                 </Button>
               </div>
             </form>
@@ -135,7 +136,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
 
         <DialogFooter className="mt-4 pt-2 border-t">
           <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-            Zamknij
+            {t("transactions.add_modal.close_button")}
           </Button>
         </DialogFooter>
       </DialogContent>

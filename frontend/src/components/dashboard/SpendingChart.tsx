@@ -11,6 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 export function SpendingChart() {
   const { data: transactions, isLoading: isTransactionsLoading } = useQuery({
@@ -39,9 +41,9 @@ export function SpendingChart() {
   const curYear = now.getFullYear();
 
   const getCategoryById = (categoryId: number | null) => {
-    if (categoryId == null || !categories) return { name: "Inne", color: "#9ca3af", icon: "📦" };
+    if (categoryId == null || !categories) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "📦" };
     const cat = categories.find(c => c.id === categoryId);
-    if (!cat) return { name: "Inne", color: "#9ca3af", icon: "📦" };
+    if (!cat) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "📦" };
     const displayName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
     return { name: displayName, color: cat.color || "#9ca3af", icon: cat.icon || "📦" };
   };
@@ -83,11 +85,11 @@ export function SpendingChart() {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold">
-            Wydatki wg Kategorii
+            {t("spending_chart.title")}
           </CardTitle>
           <span className="text-sm font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-            Suma:{" "}
-            {total.toLocaleString("pl-PL", {
+            {t("spending_chart.total_prefix")}{" "}
+            {total.toLocaleString(getIntlLocale(), {
               style: "currency",
               currency: "PLN",
             })}
@@ -130,7 +132,7 @@ export function SpendingChart() {
             </ResponsiveContainer>
           ) : (
             <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-sm">
-              <p>Brak danych o wydatkach.</p>
+              <p>{t("spending_chart.no_data")}</p>
             </div>
           )}
         </div>

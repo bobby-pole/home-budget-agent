@@ -1,5 +1,8 @@
 import "@testing-library/jest-dom";
 import { vi, afterEach } from "vitest";
+import { setLocale } from "@/lib/i18n";
+
+setLocale("pl");
 
 // Polyfill dla Radix UI (wymaga ResizeObserver)
 window.ResizeObserver = vi.fn().mockImplementation(() => ({

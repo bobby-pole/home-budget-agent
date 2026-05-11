@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 
 export interface ManualItem {
   id: string;
@@ -40,7 +41,7 @@ export function ItemRow({ item, currency, onRemove }: ItemRowProps) {
         </span>
       )}
       <span className="text-muted-foreground text-xs shrink-0 w-14 text-right">
-        {item.quantity} szt.
+        {item.quantity} {t("transactions.items_panel.quantity_unit")}
       </span>
       <span className="font-semibold shrink-0 w-24 text-right tabular-nums">
         {(item.price * item.quantity).toFixed(2)} {currency}
