@@ -51,7 +51,8 @@ exports[`Dashboard > snapshot — loaded state 1`] = `
               d="M12 5v14"
             />
           </svg>
-           Dodaj transakcję
+           
+          Dodaj transakcję
         </button>
       </div>
     </div>

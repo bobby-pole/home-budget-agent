@@ -336,7 +336,7 @@ def create_manual_transaction(
             ))
     else:
         session.add(TransactionLine(
-            name=data.note or "Wpis ręczny",
+            name=data.note or "Manual entry",
             price=data.total_amount,
             quantity=1.0,
             category_id=data.category_id,
@@ -1122,7 +1122,12 @@ async def import_transactions(
         "created": created_count, 
         "skipped": skipped_count, 
         "failed": 0, 
-        "summary": f"Zaimportowano {created_count} transakcji z pliku {filename}. Pominięto {skipped_count} duplikatów."
+        "summary": {
+            "code": "CSV_IMPORT_COMPLETE",
+            "imported": created_count,
+            "skipped": skipped_count,
+            "filename": filename
+        }
     }
 
 

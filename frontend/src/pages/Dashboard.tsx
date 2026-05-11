@@ -16,6 +16,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useScanReceipt } from "@/hooks/use-scan-receipt";
 import { useAddTransaction } from "@/hooks/use-add-transaction";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 export function Dashboard() {
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
@@ -26,7 +28,7 @@ export function Dashboard() {
   const now = new Date();
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
-  const monthName = now.toLocaleString("pl-PL", { month: "long" });
+  const monthName = now.toLocaleString(getIntlLocale(), { month: "long" });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
   useEffect(() => {
@@ -105,7 +107,7 @@ export function Dashboard() {
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm font-medium text-muted-foreground animate-pulse">
-            Przygotowujemy Twój pulpit...
+            {t("dashboard.loading")}
           </p>
         </div>
       </div>
@@ -118,14 +120,14 @@ export function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight">{capitalizedMonth} {curYear}</h1>
-          <p className="text-muted-foreground font-medium">Oto podsumowanie Twoich finansów.</p>
+          <p className="text-muted-foreground font-medium">{t("dashboard.header.month_subtitle")}</p>
         </div>
         {isMobile ? null : < div className="flex items-center gap-2">
           <Button
             onClick={() => setQuickEntryOpen(true)}
             className="rounded-full font-bold shadow-lg shadow-primary/20 h-11 px-6 transition-all active:scale-95"
           >
-            <Plus className="mr-2 size-4" /> Dodaj transakcję
+            <Plus className="mr-2 size-4" /> {t("dashboard.header.add_transaction")}
           </Button>
         </div>}
       </div>

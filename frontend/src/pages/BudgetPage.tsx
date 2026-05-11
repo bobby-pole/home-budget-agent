@@ -6,6 +6,8 @@ import { EnvelopeGroupList, type EnvelopeItem } from "@/components/budget/Envelo
 import { AddIncomeModal } from "@/components/budget/AddIncomeModal";
 import { AllocationDrawer } from "@/components/budget/AllocationDrawer";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 export function BudgetPage() {
   const [isAddIncomeOpen, setIsAddIncomeOpen] = useState(false);
@@ -14,7 +16,7 @@ export function BudgetPage() {
   const now = new Date();
   const curMonth = now.getMonth();
   const curYear = now.getFullYear();
-  const monthName = now.toLocaleString("pl-PL", { month: "long" });
+  const monthName = now.toLocaleString(getIntlLocale(), { month: "long" });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
 
   const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
@@ -56,8 +58,8 @@ export function BudgetPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight">Budżet na {capitalizedMonth} {curYear}</h1>
-          <p className="text-muted-foreground font-medium">Zaplanuj każdą złotówkę według metody kopertowej.</p>
+          <h1 className="text-3xl font-black tracking-tight">{t("budget.page.title_prefix")} {capitalizedMonth} {curYear}</h1>
+          <p className="text-muted-foreground font-medium">{t("budget.page.subtitle")}</p>
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { t } from "@/lib/i18n";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Pencil, Check, X, Loader2 } from "lucide-react";
@@ -20,7 +21,7 @@ import { CATEGORY_LABELS } from "@/lib/constants";
 import type { TransactionLineRead } from "@/client";
 
 const itemSchema = z.object({
-  name: z.string().min(1, "Nazwa wymagana"),
+  name: z.string().min(1, t("transactions.item_row.validation.name_required")),
   price: z.number().min(0.01),
   quantity: z.number().min(0.1),
   category_id: z.number().nullable(),
@@ -58,11 +59,11 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
       api.updateTransactionLine(transactionId, item.id, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Zaktualizowano pozycję");
+      toast.success(t("transactions.item_row.toast_updated"));
       setIsEditing(false);
     },
     onError: () => {
-      toast.error("Błąd aktualizacji pozycji");
+      toast.error(t("transactions.item_row.toast_error"));
     },
   });
 
@@ -101,7 +102,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
               </span>
             )}
             <span className="w-12 text-right">
-              {item.quantity ?? 1} szt.
+              {item.quantity ?? 1} {t("transactions.items_panel.quantity_unit")}
             </span>
           </div>
         </div>
@@ -136,7 +137,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
               render={({ field }) => (
                 <FormItem className="space-y-0">
                   <FormControl>
-                    <Input {...field} className="h-8 text-xs bg-background" placeholder="Nazwa" />
+                    <Input {...field} className="h-8 text-xs bg-background" placeholder={t("transactions.item_row.placeholder_name")} />
                   </FormControl>
                 </FormItem>
               )}
@@ -155,7 +156,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
                     onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
                   >
                     <SelectTrigger className="h-8 text-xs px-2 bg-background">
-                      <SelectValue placeholder="Kat." />
+                      <SelectValue placeholder={t("transactions.item_row.placeholder_category")} />
                     </SelectTrigger>
                     <SelectContent>
                       {categories?.map((cat) => (
@@ -180,7 +181,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             render={({ field }) => (
               <FormItem className="w-14 space-y-0">
                 <FormControl>
-                  <Input {...field} type="number" step="0.1" className="h-8 text-xs px-1 text-center bg-background" placeholder="Il." title="Ilość" />
+                  <Input {...field} type="number" step="0.1" className="h-8 text-xs px-1 text-center bg-background" placeholder={t("transactions.item_row.placeholder_qty")} title="Ilość" />
                 </FormControl>
               </FormItem>
             )}
@@ -193,7 +194,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             render={({ field }) => (
               <FormItem className="w-20 space-y-0">
                 <FormControl>
-                  <Input {...field} type="number" step="0.01" className="h-8 text-xs px-1 text-right bg-background" placeholder="Cena" />
+                  <Input {...field} type="number" step="0.01" className="h-8 text-xs px-1 text-right bg-background" placeholder={t("transactions.item_row.placeholder_price")} />
                 </FormControl>
               </FormItem>
             )}

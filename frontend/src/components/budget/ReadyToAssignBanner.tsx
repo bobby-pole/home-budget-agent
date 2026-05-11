@@ -2,6 +2,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 interface ReadyToAssignBannerProps {
   totalIncome: number;
@@ -28,7 +30,7 @@ export function ReadyToAssignBanner({ totalIncome, totalPlanned, onAddIncome }: 
               isNegative ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
             )}>
               <Sparkles className="size-3.5 fill-current" />
-              Gotowe do przydzielenia
+              {t("budget.ready_to_assign.badge")}
             </div>
           </div>
           
@@ -36,18 +38,18 @@ export function ReadyToAssignBanner({ totalIncome, totalPlanned, onAddIncome }: 
             "text-4xl md:text-5xl font-black tracking-tighter",
             isNegative ? "text-destructive" : "text-emerald-600 dark:text-emerald-400"
           )}>
-            {readyToAssign.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })}
+            {readyToAssign.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
           </h2>
           
           {isNegative ? (
             <p className="text-sm font-medium text-destructive mt-2">
-              Przekroczyłeś dostępne przychody! Zmniejsz limity w kopertach.
+              {t("budget.ready_to_assign.over_budget_message")}
             </p>
           ) : (
             <p className="text-sm font-medium text-muted-foreground mt-2">
-              {readyToAssign > 0 
-                ? "Rozdziel te środki do kopert, aby zaplanować każdy grosz."
-                : "Wszystkie przychody zostały przydzielone."}
+              {readyToAssign > 0
+                ? t("budget.ready_to_assign.assign_message")
+                : t("budget.ready_to_assign.all_assigned_message")}
             </p>
           )}
         </div>
@@ -60,7 +62,7 @@ export function ReadyToAssignBanner({ totalIncome, totalPlanned, onAddIncome }: 
           )}
         >
           <Plus className="mr-2 size-4" />
-          Dodaj przychód
+          {t("budget.ready_to_assign.add_income_button")}
         </Button>
       </CardContent>
     </Card>

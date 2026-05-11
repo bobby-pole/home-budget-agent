@@ -9,13 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { t } from "@/lib/i18n";
 
 const schema = z.object({
-  email: z.email("Nieprawidłowy adres email"),
-  password: z.string().min(8, "Hasło musi mieć minimum 8 znaków"),
+  email: z.email(t("auth.register.validation.email_invalid")),
+  password: z.string().min(8, t("auth.register.validation.password_min")),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
-  message: "Hasła nie są zgodne",
+  message: t("auth.register.validation.passwords_mismatch"),
   path: ["confirmPassword"],
 });
 
@@ -37,7 +38,7 @@ export function RegisterPage() {
       navigate("/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(msg || "Rejestracja nie powiodła się");
+      toast.error(msg || t("auth.register.error_default"));
     }
   };
 
@@ -45,8 +46,8 @@ export function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Utwórz konto</CardTitle>
-          <CardDescription>Dołącz do Smart Budget AI</CardDescription>
+          <CardTitle className="text-2xl">{t("auth.register.title")}</CardTitle>
+          <CardDescription>{t("auth.register.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -62,18 +63,18 @@ export function RegisterPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="password">Hasło</Label>
+              <Label htmlFor="password">{t("auth.register.password_label")}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="minimum 8 znaków"
+                placeholder={t("auth.register.placeholder_password")}
                 {...register("password")}
               />
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
+              <Label htmlFor="confirmPassword">{t("auth.register.confirm_password_label")}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
@@ -84,14 +85,14 @@ export function RegisterPage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Tworzenie konta..." : "Zarejestruj się"}
+              {isSubmitting ? t("auth.register.submit_pending") : t("auth.register.submit_idle")}
             </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Masz już konto?{" "}
+            {t("auth.register.has_account")}{" "}
             <Link to="/login" className="underline underline-offset-4 hover:text-primary">
-              Zaloguj się
+              {t("auth.register.login_link")}
             </Link>
           </p>
         </CardContent>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { t } from "@/lib/i18n";
 import {
   Drawer,
   DrawerContent,
@@ -47,11 +48,11 @@ export function AllocationDrawer({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
-      toast.success(`Zaktualizowano limit dla ${categoryName}`);
+      toast.success(`${t("budget.allocation_drawer.toast_updated")} ${categoryName}`);
       onOpenChange(false);
     },
     onError: () => {
-      toast.error("Błąd podczas zapisywania limitu");
+      toast.error(t("budget.allocation_drawer.toast_error"));
     },
   });
 
@@ -111,7 +112,7 @@ function AllocationForm({
   const handleSave = () => {
     const parsedAmount = parseFloat(amount.replace(",", "."));
     if (isNaN(parsedAmount) || parsedAmount < 0) {
-      toast.error("Wprowadź poprawną kwotę");
+      toast.error(t("budget.allocation_drawer.amount_error"));
       return;
     }
     onSave(parsedAmount);
@@ -125,14 +126,14 @@ function AllocationForm({
         </div>
         <div>
           <h2 className="text-2xl font-black tracking-tight leading-tight">{categoryName}</h2>
-          <p className="text-xs font-medium text-muted-foreground">Ustaw limit wydatków</p>
+          <p className="text-xs font-medium text-muted-foreground">{t("budget.allocation_drawer.set_limit_subtitle")}</p>
         </div>
       </div>
       
       <div className="space-y-4 py-4">
         <div className="flex flex-col gap-2">
           <Label htmlFor="planned-amount" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
-            Zaplanowana Kwota
+            {t("budget.allocation_drawer.amount_label")}
           </Label>
           <div className="relative">
             <Input
@@ -162,14 +163,14 @@ function AllocationForm({
           className="h-14 rounded-2xl font-black text-base shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
           {isPending ? <Loader2 className="mr-2 size-5 animate-spin" /> : <Save className="mr-2 size-5" />}
-          Zapisz limit
+          {t("budget.allocation_drawer.save_button")}
         </Button>
         <Button 
           variant="ghost" 
           onClick={onCancel}
           className="h-12 rounded-xl font-bold text-muted-foreground hover:text-foreground"
         >
-          Anuluj
+          {t("budget.allocation_drawer.cancel_button")}
         </Button>
       </div>
     </>

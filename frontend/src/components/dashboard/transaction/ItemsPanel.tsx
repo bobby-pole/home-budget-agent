@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { t } from "@/lib/i18n";
 import { ItemRow } from "./ItemRow";
 import { DraftItemRow } from "./DraftItemRow";
 import type { ManualItem } from "./ItemRow";
@@ -57,7 +58,7 @@ export function ItemsPanel({ items, currency, onItemsChange }: ItemsPanelProps) 
     <div className="border rounded-lg bg-muted/20 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/10">
         <span className="text-xs font-semibold uppercase text-muted-foreground flex items-center gap-2">
-          Pozycje
+          {t("transactions.items_panel.header")}
           {items.length > 0 && (
             <span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-[10px] font-bold">
               {items.length}
@@ -76,7 +77,7 @@ export function ItemsPanel({ items, currency, onItemsChange }: ItemsPanelProps) 
             }}
           >
             <Plus className="h-3 w-3" />
-            Dodaj pozycję
+            {t("transactions.items_panel.add_button")}
           </Button>
         )}
       </div>
@@ -108,7 +109,7 @@ export function ItemsPanel({ items, currency, onItemsChange }: ItemsPanelProps) 
 
       {items.length === 0 && !draft && (
         <p className="px-4 py-3 text-xs text-muted-foreground">
-          Brak pozycji — paragon zostanie zapisany jako całość z podaną kwotą.
+          {t("transactions.items_panel.empty_hint")}
         </p>
       )}
     </div>

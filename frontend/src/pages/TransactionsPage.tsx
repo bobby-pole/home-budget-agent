@@ -7,6 +7,7 @@ import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { toast } from "sonner";
 import { useRef } from "react";
 import type { AxiosError } from "axios";
+import { t } from "@/lib/i18n";
 
 export function TransactionsPage() {
   const queryClient = useQueryClient();
@@ -21,14 +22,24 @@ export function TransactionsPage() {
     mutationFn: api.importTransactions,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Import zakończony!", {
-        description: data.summary,
+      let description: string;
+      if (data.summary && typeof data.summary === "object" && data.summary.code === "CSV_IMPORT_COMPLETE") {
+        description = t("errors.csv_import_complete", {
+          imported: String(data.summary.imported),
+          skipped: String(data.summary.skipped),
+          filename: data.summary.filename,
+        });
+      } else {
+        description = typeof data.summary === "string" ? data.summary : t("transactions.import_success");
+      }
+      toast.success(t("transactions.import_success"), {
+        description,
       });
       if (fileInputRef.current) fileInputRef.current.value = "";
     },
     onError: (err: AxiosError<{ detail?: string }>) => {
-      toast.error("Błąd importu", {
-        description: err.response?.data?.detail || "Wystąpił błąd podczas przetwarzania pliku CSV.",
+      toast.error(t("transactions.import_error_title"), {
+        description: err.response?.data?.detail || t("transactions.import_error_default"),
       });
     },
   });
@@ -47,7 +58,7 @@ export function TransactionsPage() {
           <div className="p-2 bg-primary/10 rounded-lg">
             <Receipt className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">Historia Transakcji</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("transactions.page_title")}</h1>
         </div>
 
         <div className="flex items-center gap-2">
@@ -69,7 +80,7 @@ export function TransactionsPage() {
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            Importuj z banku (CSV/PDF)
+            {t("transactions.import_button")}
           </Button>
           
           <Button variant="ghost" size="icon" className="text-muted-foreground" title="Eksportuj dane">
@@ -90,7 +101,7 @@ export function TransactionsPage() {
          <Card className="rounded-2xl border-border/50 bg-muted/20">
             <CardContent className="pt-6">
                <p className="text-xs text-muted-foreground text-center">
-                  Tip: Możesz edytować każdą transakcję, klikając ikonę oka. AI kategoryzuje nowe importy automatycznie.
+                  {t("transactions.tip")}
                </p>
             </CardContent>
          </Card>

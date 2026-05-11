@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
+import { t } from "@/lib/i18n";
 
 const schema = z.object({
-  email: z.email("Nieprawidłowy adres email"),
-  password: z.string().min(1, "Hasło jest wymagane"),
+  email: z.email(t("auth.login.validation.email_invalid")),
+  password: z.string().min(1, t("auth.login.validation.password_required")),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -34,7 +35,7 @@ export function LoginPage() {
       navigate("/");
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      toast.error(msg || "Nieprawidłowy email lub hasło");
+      toast.error(msg || t("auth.login.error_default"));
     }
   };
 
@@ -42,8 +43,8 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">Smart Budget AI</CardTitle>
-          <CardDescription>Zaloguj się do swojego konta</CardDescription>
+          <CardTitle className="text-2xl">{t("auth.login.title")}</CardTitle>
+          <CardDescription>{t("auth.login.description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -59,7 +60,7 @@ export function LoginPage() {
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="password">Hasło</Label>
+              <Label htmlFor="password">{t("auth.login.password_label")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -70,14 +71,14 @@ export function LoginPage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? "Logowanie..." : "Zaloguj się"}
+              {isSubmitting ? t("auth.login.submit_pending") : t("auth.login.submit_idle")}
             </Button>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Nie masz konta?{" "}
+            {t("auth.login.no_account")}{" "}
             <Link to="/register" className="underline underline-offset-4 hover:text-primary">
-              Zarejestruj się
+              {t("auth.login.register_link")}
             </Link>
           </p>
         </CardContent>

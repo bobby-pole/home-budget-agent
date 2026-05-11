@@ -1,6 +1,8 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 export interface EnvelopeItem {
   categoryId: number;
@@ -38,11 +40,11 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-bold px-2 pt-4">Koperty Wydatków</h3>
-      
+      <h3 className="text-lg font-bold px-2 pt-4">{t("budget.envelope_list.title")}</h3>
+
       {items.length === 0 ? (
         <Card className="rounded-[32px] border-border/50 bg-muted/30 p-8 text-center border-dashed">
-          <p className="text-muted-foreground text-sm font-medium">Brak kategorii do wyświetlenia. Dodaj kategorie w ustawieniach.</p>
+          <p className="text-muted-foreground text-sm font-medium">{t("budget.envelope_list.no_categories")}</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -53,15 +55,17 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
             
             // Pacing
             let pacingText = "";
+            let isPacingSafe = false;
             if (isCurrentMonth && daysLeft > 0 && remainingSafe > 0) {
               const daily = remainingSafe / daysLeft;
-              pacingText = `Bezpiecznie: ${daily.toLocaleString("pl-PL", { maximumFractionDigits: 0 })} PLN / dzień`;
+              pacingText = `${t("budget.envelope_list.pacing_safe_prefix")} ${daily.toLocaleString(getIntlLocale(), { maximumFractionDigits: 0 })} ${t("budget.envelope_list.pacing_safe_suffix")}`;
+              isPacingSafe = true;
             } else if (isOverLimit) {
-              pacingText = "Przekroczono limit!";
+              pacingText = t("budget.envelope_list.pacing_over_limit");
             } else if (remainingSafe === 0 && env.planned > 0) {
-              pacingText = "Środki wyczerpane";
+              pacingText = t("budget.envelope_list.pacing_funds_exhausted");
             } else if (env.planned === 0) {
-              pacingText = "Brak planu";
+              pacingText = t("budget.envelope_list.pacing_no_plan");
             }
 
             return (
@@ -83,7 +87,7 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                           <span className="text-base font-bold leading-tight">{env.categoryName}</span>
                           <span className={cn(
                             "text-[11px] font-bold uppercase tracking-tight mt-0.5",
-                            isOverLimit ? "text-destructive" : (pacingText.includes("Bezpiecznie") ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
+                            isOverLimit ? "text-destructive" : (isPacingSafe ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
                           )}>
                             {pacingText}
                           </span>
@@ -106,24 +110,24 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                     {/* Columns: Planned, Spent, Remaining */}
                     <div className="grid grid-cols-3 gap-2 text-center divide-x divide-border/50 pt-2">
                       <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">Zaplanowano</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">{t("budget.envelope_list.col_planned")}</span>
                         <span className="text-xs font-black tabular-nums text-foreground">
-                          {env.planned.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {env.planned.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">Wydano</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">{t("budget.envelope_list.col_spent")}</span>
                         <span className="text-xs font-black tabular-nums text-foreground">
-                          {env.spent.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {env.spent.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex flex-col">
-                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">Pozostało</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">{t("budget.envelope_list.col_remaining")}</span>
                         <span className={cn(
                           "text-xs font-black tabular-nums",
                           isOverLimit ? "text-destructive" : "text-primary"
                         )}>
-                          {env.remaining.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {env.remaining.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>

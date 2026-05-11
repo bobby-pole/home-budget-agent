@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { PiggyBank, Zap, ArrowRight, TrendingUp } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 interface BudgetSummaryCardProps {
   remaining: number;
@@ -29,13 +31,13 @@ export function BudgetSummaryCard({
             <PiggyBank className="size-6 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">Brak transakcji w tym miesiącu</h3>
+            <h3 className="text-lg font-semibold">{t("dashboard.budget_summary.empty_title")}</h3>
             <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-              Dodaj swój pierwszy przychód lub wydatek, aby zacząć śledzić finanse.
+              {t("dashboard.budget_summary.empty_description")}
             </p>
           </div>
           <Button onClick={onAddTransaction} className="rounded-full">
-            Dodaj transakcję <ArrowRight className="ml-2 size-4" />
+            {t("dashboard.budget_summary.empty_action")} <ArrowRight className="ml-2 size-4" />
           </Button>
         </div>
       </Card>
@@ -54,7 +56,7 @@ export function BudgetSummaryCard({
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary font-bold text-xs tracking-wider uppercase">
             <Zap className="size-3.5 fill-current" />
-            Do wydania
+            {t("dashboard.budget_summary.badge_available")}
           </div>
           {/* Opcjonalny wskaźnik trendu (mock) */}
           <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
@@ -69,17 +71,17 @@ export function BudgetSummaryCard({
             "text-4xl md:text-5xl font-black tracking-tighter",
             isOverBudget ? "text-destructive" : "text-primary"
           )}>
-            {remaining.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })}
+            {remaining.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
           </h2>
           <p className="text-sm md:text-base font-medium text-muted-foreground mt-1">
-            Dostępne w tym miesiącu
+            {t("dashboard.budget_summary.available_subtitle")}
           </p>
         </div>
 
         {/* Progress Bar (BudgetStatusSummary) */}
         <div className="space-y-2 mt-2">
           <div className="flex justify-between text-xs font-bold text-muted-foreground">
-            <span>Wykorzystanie przychodów ({progressPercentage}%)</span>
+            <span>{t("dashboard.budget_summary.income_usage")} ({progressPercentage}%)</span>
           </div>
           <Progress 
             value={progressPercentage} 
@@ -94,19 +96,19 @@ export function BudgetSummaryCard({
         <div className="grid grid-cols-2 gap-4 mt-2">
           <div className="bg-background/80 backdrop-blur-sm rounded-2xl p-4 md:p-5 border border-border/50 shadow-sm">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Przychody
+              {t("dashboard.budget_summary.income_label")}
             </span>
             <div className="mt-1 font-black text-xl md:text-2xl text-emerald-600 dark:text-emerald-400 tracking-tighter">
-              {income.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })}
+              {income.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
             </div>
           </div>
           
           <div className="bg-background/80 backdrop-blur-sm rounded-2xl p-4 md:p-5 border border-border/50 shadow-sm">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-              Wydano
+              {t("dashboard.budget_summary.spent_label")}
             </span>
             <div className="mt-1 font-black text-xl md:text-2xl text-destructive tracking-tighter">
-              {spent.toLocaleString("pl-PL", { style: "currency", currency: "PLN" })}
+              {spent.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
             </div>
           </div>
         </div>

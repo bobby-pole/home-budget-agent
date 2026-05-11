@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { CATEGORY_LABELS } from "@/lib/constants";
 
 export interface NewItemDraft {
@@ -51,7 +52,7 @@ export function DraftItemRow({
     >
       <Input
         ref={draftNameRef}
-        placeholder="Nazwa pozycji"
+        placeholder={t("transactions.draft_item.placeholder_name")}
         value={draft.name}
         onChange={(e) => onChange({ ...draft, name: e.target.value })}
         className="flex-1 h-8 text-xs min-w-0"
@@ -60,7 +61,7 @@ export function DraftItemRow({
         type="number"
         step="0.01"
         min="0.01"
-        placeholder="Cena"
+        placeholder={t("transactions.draft_item.placeholder_price")}
         value={draft.price}
         onChange={(e) => onChange({ ...draft, price: e.target.value })}
         className="w-20 h-8 text-xs shrink-0"
@@ -69,7 +70,7 @@ export function DraftItemRow({
         type="number"
         step="0.1"
         min="0.1"
-        placeholder="Ilość"
+        placeholder={t("transactions.draft_item.placeholder_quantity")}
         value={draft.quantity}
         onChange={(e) => onChange({ ...draft, quantity: e.target.value })}
         className="w-16 h-8 text-xs shrink-0"

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { t } from "@/lib/i18n";
 import {
   Table,
   TableBody,
@@ -23,6 +24,7 @@ import {
 import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import type { TransactionRead as Transaction } from "@/client";
 import { cn } from "@/lib/utils";
+import { getIntlLocale } from "@/lib/dates";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -58,15 +60,14 @@ export function TransactionsTable({
     mutationFn: api.retryTransaction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Ponawiam przetwarzanie...", {
-        description: "AI spróbuje ponownie przeanalizować tę transakcję.",
+      toast.success(t("transactions.table.retry_toast"), {
+        description: t("transactions.table.retry_toast_description"),
       });
     },
     onError: (err) => {
       console.error(err);
-      toast.error("Błąd ponawiania.", {
-        description:
-          "Możliwe, że plik wygasł lub został usunięty. Wgraj go ponownie.",
+      toast.error(t("transactions.table.retry_error_title"), {
+        description: t("transactions.table.retry_error_description"),
       });
     },
   });
@@ -75,13 +76,13 @@ export function TransactionsTable({
     mutationFn: api.deleteTransaction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Transakcja usunięta");
+      toast.success(t("transactions.table.deleted_toast"));
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {
         setCurrentPage(prev => prev - 1);
       }
     },
-    onError: () => toast.error("Nie udało się usunąć transakcji"),
+    onError: () => toast.error(t("transactions.table.delete_error_toast")),
   });
 
   const handleOpenModal = (transaction: Transaction) => {
@@ -98,7 +99,7 @@ export function TransactionsTable({
       <Card className="rounded-2xl border border-border/50 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-lg font-semibold">Transakcje</CardTitle>
+            <CardTitle className="text-lg font-semibold">{t("transactions.table.title")}</CardTitle>
             <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px] font-bold">
               {transactions.length}
             </Badge>
@@ -106,7 +107,7 @@ export function TransactionsTable({
 
           <div className="flex items-center gap-3">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-              Strona {currentPage} z {totalPages}
+              {t("transactions.table.page_info").replace("{current}", String(currentPage)).replace("{total}", String(totalPages))}
             </span>
             <div className="flex gap-1">
               <Button
@@ -134,12 +135,12 @@ export function TransactionsTable({
           <Table>
             <TableHeader>
               <TableRow className="border-b border-muted">
-                <TableHead className="text-muted-foreground">Odbiorca/Sklep</TableHead>
-                <TableHead className="text-muted-foreground">Typ</TableHead>
-                <TableHead className="text-muted-foreground">Data</TableHead>
-                <TableHead className="text-muted-foreground w-[140px]">Status AI</TableHead>
+                <TableHead className="text-muted-foreground">{t("transactions.table.col_merchant")}</TableHead>
+                <TableHead className="text-muted-foreground">{t("transactions.table.col_type")}</TableHead>
+                <TableHead className="text-muted-foreground">{t("transactions.table.col_date")}</TableHead>
+                <TableHead className="text-muted-foreground w-[140px]">{t("transactions.table.col_status")}</TableHead>
                 <TableHead className="text-right text-muted-foreground">
-                  Kwota
+                  {t("transactions.table.col_amount")}
                 </TableHead>
                 <TableHead className="w-[120px]"></TableHead>
               </TableRow>
@@ -151,7 +152,7 @@ export function TransactionsTable({
                     colSpan={6}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    Ładowanie danych...
+                    {t("transactions.table.loading")}
                   </TableCell>
                 </TableRow>
               ) : transactions.length === 0 ? (
@@ -160,7 +161,7 @@ export function TransactionsTable({
                     colSpan={6}
                     className="h-24 text-center text-muted-foreground"
                   >
-                    Brak transakcji. Dodaj pierwszą! 🧾
+                    {t("transactions.table.empty")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -200,18 +201,18 @@ export function TransactionsTable({
                       </TableCell>
                       <TableCell>
                         {transaction.type === 'expense' && (
-                          <Badge variant="outline" className="text-red-500 bg-red-500/5 border-red-500/20 text-[10px] uppercase font-bold">Wydatek</Badge>
+                          <Badge variant="outline" className="text-red-500 bg-red-500/5 border-red-500/20 text-[10px] uppercase font-bold">{t("transactions.table.type_expense")}</Badge>
                         )}
                         {transaction.type === 'income' && (
-                          <Badge variant="outline" className="text-green-500 bg-green-500/5 border-green-500/20 text-[10px] uppercase font-bold">Przychód</Badge>
+                          <Badge variant="outline" className="text-green-500 bg-green-500/5 border-green-500/20 text-[10px] uppercase font-bold">{t("transactions.table.type_income")}</Badge>
                         )}
                         {transaction.type === 'transfer' && (
-                          <Badge variant="outline" className="text-blue-500 bg-blue-500/5 border-blue-500/20 text-[10px] uppercase font-bold">Transfer</Badge>
+                          <Badge variant="outline" className="text-blue-500 bg-blue-500/5 border-blue-500/20 text-[10px] uppercase font-bold">{t("transactions.table.type_transfer")}</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-gray-500 text-sm">
                         {transaction.date
-                          ? new Date(transaction.date).toLocaleDateString("pl-PL")
+                          ? new Date(transaction.date).toLocaleDateString(getIntlLocale())
                           : "-"}
                       </TableCell>
                       <TableCell>
@@ -256,7 +257,7 @@ export function TransactionsTable({
                                 retryMutation.mutate(transaction.id);
                               }}
                               disabled={retryMutation.isPending}
-                              title="Błąd przetwarzania - Spróbuj ponownie"
+                              title={t("transactions.table.retry_title")}
                             >
                               <RefreshCcw
                                 className={cn(
@@ -275,7 +276,7 @@ export function TransactionsTable({
                               e.stopPropagation();
                               handleOpenModal(transaction);
                             }}
-                            title="Szczegóły / Edycja"
+                            title={t("transactions.table.details_title")}
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -288,7 +289,7 @@ export function TransactionsTable({
                               e.stopPropagation();
                               setTransactionToDelete(transaction.id);
                             }}
-                            title="Usuń transakcję"
+                            title={t("transactions.table.delete_title")}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -316,22 +317,21 @@ export function TransactionsTable({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Czy na pewno chcesz usunąć ten transakcję?
+              {t("transactions.table.delete_dialog_title")}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tej operacji nie można cofnąć. Transakcja zostanie trwale usunięty z
-              bazy danych wraz ze wszystkimi pozycjami.
+              {t("transactions.table.delete_dialog_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Anuluj</AlertDialogCancel>
+            <AlertDialogCancel>{t("transactions.table.delete_dialog_cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
                 transactionToDelete && deleteMutation.mutate(transactionToDelete)
               }
               className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
             >
-              Usuń
+              {t("transactions.table.delete_dialog_confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

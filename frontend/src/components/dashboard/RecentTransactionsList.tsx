@@ -5,8 +5,10 @@ import { Store, ArrowRight, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { TransactionRead, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
+import { getIntlLocale } from "@/lib/dates";
 import { useAuth } from "@/context/AuthContext";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { t } from "@/lib/i18n";
 
 interface RecentTransactionsListProps {
   transactions: TransactionRead[];
@@ -15,7 +17,7 @@ interface RecentTransactionsListProps {
 }
 
 function formatRelativeDate(dateString: string | null | undefined): string {
-  if (!dateString) return "Brak daty";
+  if (!dateString) return t("dashboard.recent_transactions.no_date");
   
   const date = new Date(dateString);
   const now = new Date();
@@ -26,10 +28,10 @@ function formatRelativeDate(dateString: string | null | undefined): string {
   yesterday.setDate(now.getDate() - 1);
   const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
 
-  if (isToday) return "Dzisiaj";
-  if (isYesterday) return "Wczoraj";
+  if (isToday) return t("dashboard.recent_transactions.today");
+  if (isYesterday) return t("dashboard.recent_transactions.yesterday");
   
-  return date.toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
+  return date.toLocaleDateString(getIntlLocale(), { day: "numeric", month: "short" });
 }
 
 export function RecentTransactionsList({ transactions, categories = [], isLoading }: RecentTransactionsListProps) {
@@ -44,10 +46,10 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
   return (
     <Card className="rounded-[32px] border border-border/50 shadow-sm bg-card overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-lg font-bold">Ostatnia aktywność</CardTitle>
+        <CardTitle className="text-lg font-bold">{t("dashboard.recent_transactions.title")}</CardTitle>
         <Button variant="ghost" size="sm" asChild className="text-primary font-bold rounded-full">
           <Link to="/transactions">
-            Wszystkie <ArrowRight className="ml-1 size-4" />
+            {t("dashboard.recent_transactions.all_link")} <ArrowRight className="ml-1 size-4" />
           </Link>
         </Button>
       </CardHeader>
@@ -59,24 +61,24 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
               const isExpense = tx.type === 'expense';
               
               const category = categories.find(c => c.id === tx.category_id);
-              const categoryName = category 
+              const categoryName = category
                 ? (CATEGORY_LABELS[category.name] || category.name)
-                : "Brak kategorii";
+                : t("dashboard.recent_transactions.no_category");
               const categoryIcon = category?.icon;
 
               const typeLabels: Record<string, string> = {
-                income: "Przychód",
-                expense: "Wydatek",
-                transfer: "Transfer"
+                income: t("dashboard.recent_transactions.type_income"),
+                expense: t("dashboard.recent_transactions.type_expense"),
+                transfer: t("dashboard.recent_transactions.type_transfer"),
               };
-              const typeLabel = typeLabels[tx.type ?? "expense"] || "Wydatek";
+              const typeLabel = typeLabels[tx.type ?? "expense"] || t("dashboard.recent_transactions.type_expense");
 
               const relativeDate = formatRelativeDate(tx.date);
               
               // Sprawdzamy kto dodał transakcję
               // Jeśli uploaded_by jest null/undefined, traktujemy jako własną (np. stara transakcja bez usera)
               const isMine = !tx.uploaded_by || tx.uploaded_by === user?.id;
-              const uploaderText = isMine ? "Ty" : "Współdzielone";
+              const uploaderText = isMine ? t("dashboard.recent_transactions.added_by_me") : t("dashboard.recent_transactions.added_by_shared");
 
               return (
                 <div key={tx.id} className="flex items-center justify-between py-4 first:pt-2 last:pb-2 transition-colors">
@@ -106,7 +108,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                         <span>•</span>
                         <span>{relativeDate}</span>
                         <span>•</span>
-                        <span className="truncate opacity-70">Dodał: {uploaderText}</span>
+                        <span className="truncate opacity-70">{t("dashboard.recent_transactions.added_by_prefix")} {uploaderText}</span>
                       </div>
                       
                       {tx.receipt_scan?.status === "processing" && (
@@ -124,7 +126,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                       isIncome ? "text-emerald-600 dark:text-emerald-400" : 
                       tx.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : "text-destructive"
                     )}>
-                      {isIncome ? "+" : tx.type === 'transfer' ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {isIncome ? "+" : tx.type === 'transfer' ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString(getIntlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
                       {tx.currency ?? "PLN"}
@@ -135,7 +137,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
             })
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
-              <p>Brak niedawnych transakcji.</p>
+              <p>{t("dashboard.recent_transactions.no_transactions")}</p>
             </div>
           )}
         </div>

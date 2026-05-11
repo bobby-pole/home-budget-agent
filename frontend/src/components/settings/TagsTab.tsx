@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,9 +45,9 @@ export function TagsTab() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       setNewTag("");
       setNewTagColor("#9ca3af");
-      toast.success("Tag został dodany");
+      toast.success(t("settings.tags.toast_created"));
     },
-    onError: () => toast.error("Nie udało się dodać tagu"),
+    onError: () => toast.error(t("settings.tags.toast_create_error")),
   });
 
   const updateMutation = useMutation({
@@ -54,18 +55,18 @@ export function TagsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       setEditingId(null);
-      toast.success("Zapisano");
+      toast.success(t("settings.tags.toast_saved"));
     },
-    onError: () => toast.error("Błąd podczas zapisu"),
+    onError: () => toast.error(t("settings.tags.toast_save_error")),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.deleteTag(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
-      toast.success("Tag został usunięty");
+      toast.success(t("settings.tags.toast_deleted"));
     },
-    onError: () => toast.error("Nie udało się usunąć tagu"),
+    onError: () => toast.error(t("settings.tags.toast_delete_error")),
   });
 
   const handleAddTag = (e: React.FormEvent) => {
@@ -93,12 +94,12 @@ export function TagsTab() {
       <div className="bg-card p-6 rounded-xl border shadow-sm">
         <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
           <TagIcon className="h-5 w-5 text-primary" />
-          Twoje tagi
+          {t("settings.tags.section_title")}
         </h3>
         
         <form onSubmit={handleAddTag} className="flex flex-wrap gap-2 mb-6">
           <Input 
-            placeholder="Dodaj nowy tag (np. #wakacje2026)" 
+            placeholder={t("settings.tags_tab.placeholder_new_tag")}
             value={newTag}
             onChange={(e) => setNewTag(e.target.value)}
             className="max-w-sm h-9"
@@ -130,7 +131,7 @@ export function TagsTab() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button type="submit" className="h-9" disabled={!newTag.trim() || createMutation.isPending}>
-            <Plus className="h-4 w-4 mr-2" /> Dodaj
+            <Plus className="h-4 w-4 mr-2" /> {t("settings.tags.add_button")}
           </Button>
         </form>
 
@@ -141,7 +142,7 @@ export function TagsTab() {
             <div className="h-8 w-16 bg-muted rounded-full"></div>
           </div>
         ) : tags?.length === 0 ? (
-          <p className="text-muted-foreground text-sm">Nie masz jeszcze żadnych tagów.</p>
+          <p className="text-muted-foreground text-sm">{t("settings.tags.no_tags")}</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {tags?.map((tag) => (
@@ -209,18 +210,18 @@ export function TagsTab() {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Usunąć tag?</AlertDialogTitle>
+                        <AlertDialogTitle>{t("settings.tags.delete_dialog_title")}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Czy na pewno chcesz usunąć tag <strong>#{tag.name}</strong>? Ta akcja odepnie go od wszystkich transakcji i nie może być cofnięta.
+                          {t("settings.tags.delete_dialog_description_prefix")} <strong>#{tag.name}</strong>{t("settings.tags.delete_dialog_description_suffix")}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Anuluj</AlertDialogCancel>
-                        <AlertDialogAction 
+                        <AlertDialogCancel>{t("settings.tags.delete_dialog_cancel")}</AlertDialogCancel>
+                        <AlertDialogAction
                           className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           onClick={() => deleteMutation.mutate(tag.id)}
                         >
-                          Usuń tag
+                          {t("settings.tags.delete_dialog_confirm")}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

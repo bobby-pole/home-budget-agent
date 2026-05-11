@@ -5,6 +5,7 @@ import { ThemeToggle } from "@/components/dashboard/ThemeToggle"
 import { useLocation, useNavigate } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { t } from "@/lib/i18n"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,11 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 
 const routeTitles: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/budget": "Budżet",
-  "/transactions": "Transakcje",
-  "/inbox": "Skrzynka odbiorcza",
-  "/settings": "Ustawienia",
+  "/dashboard": t("nav.route_titles.dashboard"),
+  "/budget": t("nav.route_titles.budget"),
+  "/transactions": t("nav.route_titles.transactions"),
+  "/inbox": t("nav.route_titles.inbox"),
+  "/settings": t("nav.route_titles.settings"),
 }
 
 function getPageTitle(pathname: string): string {
@@ -78,21 +79,21 @@ export function DashboardHeader() {
               className="cursor-pointer"
             >
               <User className="mr-2 h-4 w-4" />
-              Profil
+              {t("nav.user_menu.profile")}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => navigate("/settings")}
               className="cursor-pointer"
             >
               <Settings className="mr-2 h-4 w-4" />
-              Ustawienia
+              {t("nav.user_menu.settings")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive cursor-pointer"
               onClick={handleLogout}
             >
-              Wyloguj
+              {t("nav.user_menu.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>}

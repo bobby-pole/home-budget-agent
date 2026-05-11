@@ -54,7 +54,7 @@ class ReceiptValidator:
                 is_valid=False,
                 issues=[ValidationIssue.EMPTY_RECEIPT],
                 confidence=0.0,
-                message="Paragon nie zawiera żadnych pozycji.",
+                message="RECEIPT_EMPTY",
             )
 
         # ── INVALID_PRICE ──────────────────────────────────────────────────────
@@ -105,11 +105,11 @@ class ReceiptValidator:
     @staticmethod
     def _describe(issue: ValidationIssue, delta: Optional[Decimal]) -> str:
         if issue == ValidationIssue.TOTAL_MISMATCH:
-            return f"Suma pozycji różni się od paragonu o {delta:.2f} zł."
+            return f"RECEIPT_SUM_MISMATCH:{delta:.2f}"
         if issue == ValidationIssue.INVALID_PRICE:
-            return "Co najmniej jedna pozycja ma cenę 0,00 zł."
+            return "RECEIPT_ZERO_PRICE_ITEM"
         if issue == ValidationIssue.FUTURE_DATE:
-            return "Data na paragonie jest w przyszłości."
+            return "RECEIPT_FUTURE_DATE"
         if issue == ValidationIssue.EMPTY_RECEIPT:
-            return "Paragon nie zawiera żadnych pozycji."
-        return "Nieznany problem z paragonem."
+            return "RECEIPT_EMPTY"
+        return "RECEIPT_UNKNOWN_ISSUE"

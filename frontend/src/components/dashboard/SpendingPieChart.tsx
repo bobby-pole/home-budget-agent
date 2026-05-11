@@ -9,6 +9,8 @@ import {
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { t } from "@/lib/i18n";
+import { getIntlLocale } from "@/lib/dates";
 
 interface SpendingPieChartProps {
   data: Array<{
@@ -40,7 +42,7 @@ export function SpendingPieChart({ data, isLoading, total }: SpendingPieChartPro
   if (otherData.length > 0) {
     const otherValue = otherData.reduce((sum, item) => sum + item.value, 0);
     displayedData.push({
-      name: "Inne",
+      name: t("dashboard.spending_pie.other_category"),
       value: otherValue,
       color: "#9ca3af",
       percentage: Math.round((otherValue / total) * 100)
@@ -51,12 +53,12 @@ export function SpendingPieChart({ data, isLoading, total }: SpendingPieChartPro
     <Card className="rounded-[32px] border border-border/50 shadow-sm bg-card overflow-hidden flex flex-col h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div>
-          <CardTitle className="text-lg font-bold">Wydatki miesięczne</CardTitle>
-          <p className="text-xs text-muted-foreground font-medium">Bieżący okres</p>
+          <CardTitle className="text-lg font-bold">{t("dashboard.spending_pie.title")}</CardTitle>
+          <p className="text-xs text-muted-foreground font-medium">{t("dashboard.spending_pie.subtitle")}</p>
         </div>
         <Link to="/budget">
           <Button variant="ghost" size="sm" className="bg-primary/5 text-primary font-bold rounded-full px-4">
-            Szczegóły
+            {t("dashboard.spending_pie.details_button")}
           </Button>
         </Link>
       </CardHeader>
@@ -84,22 +86,22 @@ export function SpendingPieChart({ data, isLoading, total }: SpendingPieChartPro
                     </Pie>
                     <Tooltip
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      formatter={(value) => value ? Number(value).toLocaleString("pl-PL", { style: "currency", currency: "PLN" }) : ""}
+                      formatter={(value) => value ? Number(value).toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" }) : ""}
                     />
                   </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-xl font-black tracking-tighter">
-                    {total.toLocaleString("pl-PL", {
+                    {total.toLocaleString(getIntlLocale(), {
                       maximumFractionDigits: 0,
                     })}
                   </span>
-                  <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest">Suma</span>
+                  <span className="text-[10px] text-muted-foreground/60 font-bold uppercase tracking-widest">{t("dashboard.spending_pie.center_label")}</span>
                 </div>
               </>
             ) : (
               <div className="flex flex-col h-full items-center justify-center text-muted-foreground text-[10px] py-12 text-center uppercase font-black">
-                <p>Brak danych</p>
+                <p>{t("dashboard.spending_pie.no_data")}</p>
               </div>
             )}
           </div>

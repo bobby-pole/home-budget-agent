@@ -7,6 +7,7 @@ import { VerificationCard } from "@/components/inbox/VerificationCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export function InboxPage() {
   const queryClient = useQueryClient();
@@ -44,12 +45,12 @@ export function InboxPage() {
             </div>
             <div>
               <h1 className="text-xl md:text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
-                AI Inbox
+                {t("inbox.title")}
               </h1>
               {!isMobile && (
                 <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
                   <Sparkles className="h-3 w-3 text-amber-500" />
-                  Zweryfikuj poprawność danych
+                  {t("inbox.verify_subtitle")}
                 </p>
               )}
             </div>
@@ -62,7 +63,7 @@ export function InboxPage() {
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
               </span>
               <span className="text-[10px] md:text-xs font-bold text-primary">
-                {transactions.length} skany
+                {transactions.length} {t("inbox.pending_count_label")}
               </span>
             </div>
           )}
@@ -81,7 +82,7 @@ export function InboxPage() {
           )}>
             {!isMobile && (
               <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-1">
-                Oczekujące skany
+                {t("inbox.pending_section_header")}
               </h3>
             )}
             <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
@@ -93,7 +94,7 @@ export function InboxPage() {
                 <Card className="border-destructive/20 bg-destructive/5">
                   <CardContent className="p-4 flex items-center gap-2 text-destructive">
                     <AlertCircle className="h-4 w-4" />
-                    <span className="text-xs font-medium">Błąd ładowania danych</span>
+                    <span className="text-xs font-medium">{t("inbox.load_error")}</span>
                   </CardContent>
                 </Card>
               ) : (
@@ -127,9 +128,9 @@ export function InboxPage() {
             <div className="p-6 bg-primary/5 rounded-full mb-6">
               <Inbox className="h-12 w-12 text-primary/20" />
             </div>
-            <h2 className="text-2xl font-bold text-foreground/40">Twoja skrzynka jest pusta</h2>
+            <h2 className="text-2xl font-bold text-foreground/40">{t("inbox.empty_title")}</h2>
             <p className="text-muted-foreground/50 max-w-sm mt-2">
-              Prześlij zdjęcia paragonów, a pojawią się tutaj po przetworzeniu przez AI.
+              {t("inbox.empty_description")}
             </p>
           </div>
         )}

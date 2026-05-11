@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import type { AxiosError } from "axios";
+import { t } from "@/lib/i18n";
 
 export function useScanReceipt() {
   const queryClient = useQueryClient();
@@ -11,14 +12,14 @@ export function useScanReceipt() {
       api.scanTransaction(file, force),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      toast.success("Paragon przesłany!", { description: "Analiza AI w toku." });
+      toast.success(t("scan_receipt.toast_uploaded"), { description: t("scan_receipt.toast_uploaded_description") });
     },
     onError: (error: AxiosError) => {
       if (error.response?.status === 409) {
-        toast.warning("Duplikat!", {
-          description: "Ten paragon już istnieje. Dodać mimo to?",
+        toast.warning(t("scan_receipt.toast_duplicate_title"), {
+          description: t("scan_receipt.toast_duplicate_description"),
           action: {
-            label: "Tak",
+            label: t("scan_receipt.toast_duplicate_action"),
             onClick: () => {
               const formData = error.config?.data as FormData | undefined;
               const file = formData?.get("file") as File | null;
@@ -27,14 +28,14 @@ export function useScanReceipt() {
           },
         });
       } else {
-        toast.error("Błąd wysyłania.");
+        toast.error(t("scan_receipt.toast_error"));
       }
     },
   });
 
   const scanReceipt = (file: File) => {
     if (!file.type.startsWith("image/")) {
-      toast.error("Wybierz zdjęcie.");
+      toast.error(t("scan_receipt.toast_invalid_file"));
       return;
     }
     scanMutation.mutate({ file });

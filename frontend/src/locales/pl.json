@@ -1,0 +1,480 @@
+{
+  "receipt_status": {
+    "queued": "Oczekuje...",
+    "running": "Przetwarzanie...",
+    "ocr_ok": "Tekst odczytany",
+    "parsing_ok": "Paragony sparsowane",
+    "categorization_ok": "Skategoryzowano",
+    "needs_review": "Wymaga weryfikacji",
+    "failed": "Błąd przetwarzania",
+    "processing": "Przetwarzanie...",
+    "done": "Gotowe",
+    "error": "Błąd"
+  },
+  "auth": {
+    "login": {
+      "title": "Smart Budget AI",
+      "description": "Zaloguj się do swojego konta",
+      "password_label": "Hasło",
+      "submit_idle": "Zaloguj się",
+      "submit_pending": "Logowanie...",
+      "no_account": "Nie masz konta?",
+      "register_link": "Zarejestruj się",
+      "error_default": "Nieprawidłowy email lub hasło",
+      "validation": {
+        "email_invalid": "Nieprawidłowy adres email",
+        "password_required": "Hasło jest wymagane"
+      }
+    },
+    "register": {
+      "title": "Utwórz konto",
+      "description": "Dołącz do Smart Budget AI",
+      "password_label": "Hasło",
+      "placeholder_password": "minimum 8 znaków",
+      "confirm_password_label": "Potwierdź hasło",
+      "submit_idle": "Zarejestruj się",
+      "submit_pending": "Tworzenie konta...",
+      "has_account": "Masz już konto?",
+      "login_link": "Zaloguj się",
+      "error_default": "Rejestracja nie powiodła się",
+      "validation": {
+        "email_invalid": "Nieprawidłowy adres email",
+        "password_min": "Hasło musi mieć minimum 8 znaków",
+        "passwords_mismatch": "Hasła nie są zgodne"
+      }
+    }
+  },
+  "nav": {
+    "route_titles": {
+      "dashboard": "Dashboard",
+      "budget": "Budżet",
+      "transactions": "Transakcje",
+      "inbox": "Skrzynka odbiorcza",
+      "settings": "Ustawienia"
+    },
+    "user_menu": {
+      "profile": "Profil",
+      "settings": "Ustawienia",
+      "logout": "Wyloguj"
+    }
+  },
+  "dashboard": {
+    "header": {
+      "month_subtitle": "Oto podsumowanie Twoich finansów.",
+      "add_transaction": "Dodaj transakcję"
+    },
+    "loading": "Przygotowujemy Twój pulpit...",
+    "budget_summary": {
+      "empty_title": "Brak transakcji w tym miesiącu",
+      "empty_description": "Dodaj swój pierwszy przychód lub wydatek, aby zacząć śledzić finanse.",
+      "empty_action": "Dodaj transakcję",
+      "badge_available": "Do wydania",
+      "available_subtitle": "Dostępne w tym miesiącu",
+      "income_usage": "Wykorzystanie przychodów",
+      "income_label": "Przychody",
+      "spent_label": "Wydano"
+    },
+    "spending_pie": {
+      "title": "Wydatki miesięczne",
+      "subtitle": "Bieżący okres",
+      "details_button": "Szczegóły",
+      "center_label": "Suma",
+      "no_data": "Brak danych",
+      "other_category": "Inne"
+    },
+    "top_envelopes": {
+      "title": "Najważniejsze koperty",
+      "see_all": "Zobacz wszystkie",
+      "remaining_prefix": "Pozostało",
+      "limit_prefix": "z",
+      "no_limits": "Brak ustawionych limitów."
+    },
+    "recent_transactions": {
+      "title": "Ostatnia aktywność",
+      "all_link": "Wszystkie",
+      "no_category": "Brak kategorii",
+      "no_date": "Brak daty",
+      "today": "Dzisiaj",
+      "yesterday": "Wczoraj",
+      "added_by_me": "Ty",
+      "added_by_shared": "Współdzielone",
+      "added_by_prefix": "Dodał:",
+      "no_transactions": "Brak niedawnych transakcji.",
+      "type_income": "Przychód",
+      "type_expense": "Wydatek",
+      "type_transfer": "Transfer"
+    },
+    "kpi_card": {
+      "usage": "Zużycie"
+    }
+  },
+  "inbox": {
+    "title": "AI Inbox",
+    "verify_subtitle": "Zweryfikuj poprawność danych",
+    "pending_count_label": "skany",
+    "pending_section_header": "Oczekujące skany",
+    "load_error": "Błąd ładowania danych",
+    "empty_title": "Twoja skrzynka jest pusta",
+    "empty_description": "Prześlij zdjęcia paragonów, a pojawią się tutaj po przetworzeniu przez AI.",
+    "list": {
+      "all_checked_title": "Wszystko sprawdzone!",
+      "all_checked_description": "Nie masz obecnie żadnych transakcji oczekujących na weryfikację.",
+      "processing_placeholder": "Przetwarzanie...",
+      "no_date": "Brak daty"
+    },
+    "verification_card": {
+      "title": "Weryfikacja danych",
+      "receipt_preview_title": "Podgląd paragonu",
+      "image_loading": "Ładowanie obrazu...",
+      "image_load_error": "Nie udało się załadować obrazu",
+      "tab_form": "Dane",
+      "tab_receipt": "Paragon",
+      "field_merchant": "Sprzedawca",
+      "field_date": "Data",
+      "field_total": "Razem",
+      "items_section_header": "Pozycje na paragonie",
+      "add_item_button": "Dodaj",
+      "keep_image_label": "Zachowaj zdjęcie paragonu (np. dla celów gwarancyjnych)",
+      "sum_prefix": "Suma:",
+      "save_idle": "Zatwierdź",
+      "save_pending": "Zapis...",
+      "delete_dialog_title": "Czy na pewno odrzucić paragon?",
+      "delete_dialog_description": "Ta operacja całkowicie usunie transakcję i zdjęcie paragonu z systemu. Nie można tego cofnąć.",
+      "delete_dialog_cancel": "Anuluj",
+      "delete_dialog_confirm": "Odrzuć i usuń",
+      "toast_deleted": "Paragon został odrzucony i usunięty",
+      "toast_delete_error": "Błąd podczas usuwania paragonu",
+      "toast_verified": "Transakcja zweryfikowana pomyślnie",
+      "toast_verify_error": "Wystąpił błąd podczas weryfikacji",
+      "placeholder_item_name": "Nazwa pozycji...",
+      "placeholder_price": "Cena",
+      "placeholder_quantity": "Ilość",
+      "placeholder_category": "Kat.",
+      "validation": {
+        "name_required": "Nazwa jest wymagana",
+        "merchant_required": "Nazwa sprzedawcy jest wymagana"
+      }
+    }
+  },
+  "transactions": {
+    "page_title": "Historia Transakcji",
+    "import_button": "Importuj z banku (CSV/PDF)",
+    "tip": "Tip: Możesz edytować każdą transakcję, klikając ikonę oka. AI kategoryzuje nowe importy automatycznie.",
+    "import_success": "Import zakończony!",
+    "import_error_title": "Błąd importu",
+    "import_error_default": "Wystąpił błąd podczas przetwarzania pliku CSV.",
+    "table": {
+      "title": "Transakcje",
+      "page_info": "Strona {current} z {total}",
+      "col_merchant": "Odbiorca/Sklep",
+      "col_type": "Typ",
+      "col_date": "Data",
+      "col_status": "Status AI",
+      "col_amount": "Kwota",
+      "loading": "Ładowanie danych...",
+      "empty": "Brak transakcji. Dodaj pierwszą! 🧾",
+      "type_expense": "Wydatek",
+      "type_income": "Przychód",
+      "type_transfer": "Transfer",
+      "retry_title": "Błąd przetwarzania - Spróbuj ponownie",
+      "details_title": "Szczegóły / Edycja",
+      "delete_title": "Usuń transakcję",
+      "retry_toast": "Ponawiam przetwarzanie...",
+      "retry_toast_description": "AI spróbuje ponownie przeanalizować tę transakcję.",
+      "retry_error_title": "Błąd ponawiania.",
+      "retry_error_description": "Możliwe, że plik wygasł lub został usunięty. Wgraj go ponownie.",
+      "deleted_toast": "Transakcja usunięta",
+      "delete_error_toast": "Nie udało się usunąć transakcji",
+      "delete_dialog_title": "Czy na pewno chcesz usunąć ten transakcję?",
+      "delete_dialog_description": "Tej operacji nie można cofnąć. Transakcja zostanie trwale usunięty z bazy danych wraz ze wszystkimi pozycjami.",
+      "delete_dialog_cancel": "Anuluj",
+      "delete_dialog_confirm": "Usuń"
+    },
+    "detail_modal": {
+      "title": "Szczegóły transakcji #",
+      "close": "Zamknij",
+      "items_section": {
+        "header": "Pozycje na paragonie",
+        "no_items": "Brak wykrytych pozycji."
+      }
+    },
+    "add_modal": {
+      "title": "Dodaj transakcję ręcznie",
+      "save_button": "Zapisz transakcję",
+      "close_button": "Zamknij",
+      "toast_success": "Transakcja dodana",
+      "toast_error": "Błąd zapisu transakcji",
+      "validation": {
+        "required": "Wymagane",
+        "positive": "Musi być większe od 0",
+        "no_items_amount": "Wymagane gdy brak pozycji"
+      }
+    },
+    "header_form": {
+      "field_merchant": "Sklep",
+      "field_date": "Data",
+      "field_amount": "Kwota",
+      "field_currency": "Waluta",
+      "field_type": "Typ",
+      "field_category": "Kategoria",
+      "field_tags": "Tagi",
+      "field_note": "Notatka",
+      "type_expense": "Wydatek",
+      "type_income": "Przychód",
+      "type_transfer": "Transfer",
+      "no_category": "Brak kategorii",
+      "no_tags": "Brak tagów",
+      "no_note": "Brak notatki",
+      "edit_button": "Edytuj dane",
+      "cancel_button": "Anuluj",
+      "save_button": "Zapisz",
+      "toast_saved": "Zapisano dane nagłówka!",
+      "toast_error": "Błąd zapisu.",
+      "validation": {
+        "merchant_required": "Nazwa sklepu jest wymagana",
+        "date_invalid": "Nieprawidłowa data",
+        "amount_positive": "Kwota musi być większa od 0",
+        "currency_length": "Waluta musi mieć 3 znaki"
+      }
+    },
+    "header_section": {
+      "source_label": "Źródło / Nadawca",
+      "merchant_label": "Sklep / Odbiorca",
+      "type_label": "Typ transakcji",
+      "date_label": "Data",
+      "amount_label": "Kwota",
+      "computed_total_label": "Suma (wyliczona)",
+      "currency_label": "Waluta",
+      "type_expense": "Wydatek",
+      "type_income": "Przychód",
+      "type_transfer": "Transfer",
+      "placeholder_income": "np. Pracodawca XYZ",
+      "placeholder_expense": "np. Biedronka"
+    },
+    "meta_section": {
+      "category_label": "Kategoria",
+      "category_placeholder": "Wybierz kategorię",
+      "note_label": "Notatka",
+      "tags_label": "Tagi",
+      "placeholder_note": "np. prezent dla mamy, rata 3/12..."
+    },
+    "items_panel": {
+      "header": "Pozycje",
+      "add_button": "Dodaj pozycję",
+      "empty_hint": "Brak pozycji — paragon zostanie zapisany jako całość z podaną kwotą.",
+      "quantity_unit": "szt."
+    },
+    "item_row": {
+      "placeholder_name": "Nazwa",
+      "placeholder_category": "Kat.",
+      "placeholder_qty": "Il.",
+      "placeholder_price": "Cena",
+      "toast_updated": "Zaktualizowano pozycję",
+      "toast_error": "Błąd aktualizacji pozycji",
+      "validation": {
+        "name_required": "Nazwa wymagana"
+      }
+    },
+    "draft_item": {
+      "placeholder_name": "Nazwa pozycji",
+      "placeholder_price": "Cena",
+      "placeholder_quantity": "Ilość"
+    }
+  },
+  "budget": {
+    "page": {
+      "title_prefix": "Budżet na",
+      "subtitle": "Zaplanuj każdą złotówkę według metody kopertowej."
+    },
+    "ready_to_assign": {
+      "badge": "Gotowe do przydzielenia",
+      "over_budget_message": "Przekroczyłeś dostępne przychody! Zmniejsz limity w kopertach.",
+      "assign_message": "Rozdziel te środki do kopert, aby zaplanować każdy grosz.",
+      "all_assigned_message": "Wszystkie przychody zostały przydzielone.",
+      "add_income_button": "Dodaj przychód"
+    },
+    "envelope_list": {
+      "title": "Koperty Wydatków",
+      "no_categories": "Brak kategorii do wyświetlenia. Dodaj kategorie w ustawieniach.",
+      "col_planned": "Zaplanowano",
+      "col_spent": "Wydano",
+      "col_remaining": "Pozostało",
+      "pacing_safe_prefix": "Bezpiecznie:",
+      "pacing_safe_suffix": "PLN / dzień",
+      "pacing_over_limit": "Przekroczono limit!",
+      "pacing_funds_exhausted": "Środki wyczerpane",
+      "pacing_no_plan": "Brak planu"
+    },
+    "allocation_drawer": {
+      "set_limit_subtitle": "Ustaw limit wydatków",
+      "amount_label": "Zaplanowana Kwota",
+      "save_button": "Zapisz limit",
+      "cancel_button": "Anuluj",
+      "toast_updated": "Zaktualizowano limit dla",
+      "toast_error": "Błąd podczas zapisywania limitu",
+      "amount_error": "Wprowadź poprawną kwotę"
+    },
+    "add_income_modal": {
+      "title": "Dodaj przychód",
+      "amount_label": "Kwota (PLN)",
+      "source_label": "Źródło",
+      "placeholder_source": "np. Wypłata, Premia...",
+      "date_label": "Data",
+      "submit_button": "Dodaj przychód",
+      "toast_success": "Przychód został dodany!",
+      "toast_error": "Błąd podczas dodawania przychodu",
+      "validation": {
+        "amount_required": "Kwota jest wymagana",
+        "amount_positive": "Kwota musi być większa od 0",
+        "date_future": "Data nie może być z przyszłości",
+        "source_required": "Nazwa / źródło jest wymagane"
+      }
+    }
+  },
+  "settings": {
+    "page": {
+      "title": "Ustawienia",
+      "description": "Zarządzaj kategoriami wydatków, tagami i dostępem do budżetu.",
+      "tab_categories": "Kategorie",
+      "tab_tags": "Tagi",
+      "tab_budget": "Budżet",
+      "tab_language": "Język"
+    },
+    "categories": {
+      "section_title": "Struktura kategorii",
+      "add_button": "Dodaj kategorię",
+      "add_subcategory_button": "Podkategoria",
+      "no_categories": "Brak kategorii. Stwórz swoją pierwszą kategorię!",
+      "loading": "Ładowanie kategorii...",
+      "delete_dialog_title": "Usunąć kategorię?",
+      "delete_dialog_description": "Wybierz co zrobić z przypisanymi do niej transakcjami.",
+      "delete_dialog_cancel": "Anuluj",
+      "delete_dialog_confirm": "Potwierdź usunięcie",
+      "reassign_parent": "Przenieś do kategorii nadrzędnej (jeśli istnieje)",
+      "reassign_none": "Oznacz jako Bez Kategorii",
+      "reassign_to_prefix": "Przenieś do:",
+      "toast_created": "Kategoria dodana",
+      "toast_create_error": "Błąd dodawania kategorii",
+      "toast_saved": "Zapisano",
+      "toast_save_error": "Błąd podczas zapisu",
+      "toast_deleted": "Kategoria usunięta",
+      "toast_delete_error": "Nie udało się usunąć kategorii"
+    },
+    "tags": {
+      "section_title": "Twoje tagi",
+      "add_button": "Dodaj",
+      "no_tags": "Nie masz jeszcze żadnych tagów.",
+      "delete_dialog_title": "Usunąć tag?",
+      "delete_dialog_description_prefix": "Czy na pewno chcesz usunąć tag",
+      "delete_dialog_description_suffix": "? Ta akcja odepnie go od wszystkich transakcji i nie może być cofnięta.",
+      "delete_dialog_cancel": "Anuluj",
+      "delete_dialog_confirm": "Usuń tag",
+      "toast_created": "Tag został dodany",
+      "toast_create_error": "Nie udało się dodać tagu",
+      "toast_saved": "Zapisano",
+      "toast_save_error": "Błąd podczas zapisu",
+      "toast_deleted": "Tag został usunięty",
+      "toast_delete_error": "Nie udało się usunąć tagu"
+    },
+    "language_tab": {
+      "card_title": "Język aplikacji",
+      "card_description": "Wybierz język wyświetlania interfejsu.",
+      "option_pl": "Polski",
+      "option_en": "English"
+    },
+    "categories_tab": {
+      "placeholder_subcategory": "Wpisz nazwę podkategorii...",
+      "placeholder_category": "Wpisz nazwę kategorii...",
+      "placeholder_action": "Wybierz akcję"
+    },
+    "tags_tab": {
+      "placeholder_new_tag": "Dodaj nowy tag (np. #wakacje2026)"
+    },
+    "budget_tab": {
+      "card_title": "Zarządzaj budżetem",
+      "card_description": "Zaproś członków rodziny do wspólnego zarządzania domowym budżetem.",
+      "invite_button": "Zaproś osobę",
+      "invite_dialog_title": "Zaproś do budżetu",
+      "invite_email_label": "Email użytkownika",
+      "invite_role_label": "Rola",
+      "invite_role_owner": "Właściciel",
+      "invite_role_editor": "Edytor",
+      "invite_role_viewer": "Widz",
+      "invite_cancel": "Anuluj",
+      "invite_submit": "Zaproś",
+      "toast_invited": "Użytkownik został zaproszony do budżetu",
+      "toast_invite_error": "Błąd podczas zapraszania użytkownika",
+      "placeholder_email": "np. zona@przyklad.pl",
+      "placeholder_role": "Wybierz rolę",
+      "validation": {
+        "email_invalid": "Niepoprawny format email"
+      }
+    }
+  },
+  "upload": {
+    "photo_label": "Zdjęcie",
+    "manual_label": "Ręcznie",
+    "pending_label": "Oczekujące",
+    "transactions_label": "Transakcji",
+    "toast_uploaded": "Paragon został przesłany!",
+    "toast_uploaded_description": "Rozpoczynam analizę AI w tle.",
+    "toast_upload_error": "Wystąpił błąd podczas wysyłania pliku.",
+    "toast_upload_error_description": "Spróbuj ponownie później.",
+    "toast_invalid_format": "Nieprawidłowy format pliku.",
+    "toast_invalid_format_description": "Proszę wgrać zdjęcie lub PDF.",
+    "toast_duplicate_title": "Wykryto duplikat!",
+    "toast_duplicate_description": "Ta transakcja została już przesłana. Czy chcesz ją dodać ponownie?",
+    "toast_duplicate_action": "Tak, dodaj"
+  },
+  "quick_entry": {
+    "dialog_title": "Jak chcesz dodać transakcję?",
+    "dialog_description": "Wybierz sposób dodania nowej transakcji",
+    "scan_title": "Zrób zdjęcie / Wgraj paragon",
+    "scan_description": "Sfotografuj paragon lub wybierz zdjęcie z galerii. AI automatycznie wyodrębni dane transakcji.",
+    "scan_pending": "Przetwarzanie paragonu...",
+    "manual_title": "Wpisz ręcznie",
+    "manual_description": "Wprowadź dane transakcji ręcznie - kwota, data, kategoria i inne szczegóły.",
+    "cancel_button": "Anuluj"
+  },
+  "monthly_summary": {
+    "title": "Podsumowanie Miesięczne",
+    "no_data": "Brak danych do wyświetlenia."
+  },
+  "spending_chart": {
+    "title": "Wydatki wg Kategorii",
+    "total_prefix": "Suma:",
+    "no_data": "Brak danych o wydatkach.",
+    "other_category": "Inne"
+  },
+  "common": {
+    "cancel": "Anuluj",
+    "save": "Zapisz",
+    "confirm": "Potwierdź"
+  },
+  "tags": {
+    "placeholder_new": "Nowy tag..."
+  },
+  "tag_picker": {
+    "toast_created_prefix": "Utworzono tag #",
+    "toast_create_error": "Nie udało się utworzyć tagu",
+    "no_tags_hint": "Brak tagów. Wpisz nazwę powyżej, aby dodać pierwszy!"
+  },
+  "scan_receipt": {
+    "toast_uploaded": "Paragon przesłany!",
+    "toast_uploaded_description": "Analiza AI w toku.",
+    "toast_duplicate_title": "Duplikat!",
+    "toast_duplicate_description": "Ten paragon już istnieje. Dodać mimo to?",
+    "toast_duplicate_action": "Tak",
+    "toast_error": "Błąd wysyłania.",
+    "toast_invalid_file": "Wybierz zdjęcie."
+  },
+  "errors": {
+    "receipt": {
+      "empty": "Paragon nie zawiera żadnych pozycji.",
+      "sum_mismatch": "Suma pozycji różni się od paragonu o {delta} zł.",
+      "zero_price_item": "Co najmniej jedna pozycja ma cenę 0,00 zł.",
+      "future_date": "Data na paragonie jest w przyszłości."
+    },
+    "csv_import_complete": "Zaimportowano {imported} transakcji z pliku {filename}. Pominięto {skipped} duplikatów."
+  }
+}
