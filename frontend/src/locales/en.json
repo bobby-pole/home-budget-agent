@@ -150,6 +150,16 @@
       "placeholder_price": "Price",
       "placeholder_quantity": "Quantity",
       "placeholder_category": "Cat.",
+      "placeholder_adjustment_name": "e.g. bottle deposit, basket coupon",
+      "basket_adjustment": "Basket adjustment",
+      "basket_adjustments_section_header": "Basket adjustments",
+      "add_adjustment_button": "Add adjustment",
+      "no_basket_adjustments": "No basket adjustments (e.g. bottle deposits).",
+      "label_unit_price": "Unit price",
+      "label_quantity": "Quantity",
+      "label_discount": "Discount",
+      "label_total": "Total",
+      "remove_item": "Remove item",
       "validation": {
         "name_required": "Name is required",
         "merchant_required": "Merchant name is required"
@@ -271,6 +281,8 @@
       "placeholder_price": "Price",
       "toast_updated": "Item updated",
       "toast_error": "Error updating item",
+      "discount_badge": "Discount",
+      "edit_item": "Edit item",
       "validation": {
         "name_required": "Name is required"
       }

@@ -150,6 +150,16 @@
       "placeholder_price": "Cena",
       "placeholder_quantity": "Ilość",
       "placeholder_category": "Kat.",
+      "placeholder_adjustment_name": "np. Kaucja, rabat koszyka",
+      "basket_adjustment": "Rabat koszyka",
+      "basket_adjustments_section_header": "Rabaty koszyka",
+      "add_adjustment_button": "Dodaj rabat",
+      "no_basket_adjustments": "Brak rabatów koszyka (np. kaucji za butelki).",
+      "label_unit_price": "Cena za sztukę",
+      "label_quantity": "Ilość",
+      "label_discount": "Rabat",
+      "label_total": "Razem",
+      "remove_item": "Usuń pozycję",
       "validation": {
         "name_required": "Nazwa jest wymagana",
         "merchant_required": "Nazwa sprzedawcy jest wymagana"
@@ -271,6 +281,8 @@
       "placeholder_price": "Cena",
       "toast_updated": "Zaktualizowano pozycję",
       "toast_error": "Błąd aktualizacji pozycji",
+      "discount_badge": "Rabat",
+      "edit_item": "Edytuj pozycję",
       "validation": {
         "name_required": "Nazwa wymagana"
       }

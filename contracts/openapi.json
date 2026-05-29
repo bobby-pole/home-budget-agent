@@ -340,7 +340,7 @@
     "/api/transactions/inbox": {
       "get": {
         "summary": "Get Inbox",
-        "description": "Fetch all transactions with status 'needs_review' or 'error' that require user attention.",
+        "description": "Fetch all transactions that require user attention (NEEDS_REVIEW or FAILED).",
         "operationId": "get_inbox_api_transactions_inbox_get",
         "responses": {
           "200": {
@@ -1299,7 +1299,7 @@
         "properties": {
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -1324,7 +1324,7 @@
           },
           "file": {
             "type": "string",
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "File"
           }
         },
@@ -1841,6 +1841,17 @@
               }
             ],
             "title": "Validation Message"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
           }
         },
         "type": "object",
@@ -1991,6 +2002,38 @@
             ],
             "title": "Category Id"
           },
+          "original_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Price"
+          },
+          "discount_total": {
+            "type": "number",
+            "title": "Discount Total",
+            "default": 0.0
+          },
+          "final_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Price"
+          },
+          "is_adjustment": {
+            "type": "boolean",
+            "title": "Is Adjustment",
+            "default": false
+          },
           "id": {
             "anyOf": [
               {
@@ -2046,6 +2089,38 @@
               }
             ],
             "title": "Category Id"
+          },
+          "original_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Price"
+          },
+          "discount_total": {
+            "type": "number",
+            "title": "Discount Total",
+            "default": 0.0
+          },
+          "final_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Price"
+          },
+          "is_adjustment": {
+            "type": "boolean",
+            "title": "Is Adjustment",
+            "default": false
           }
         },
         "type": "object",
@@ -2080,6 +2155,38 @@
               }
             ],
             "title": "Category Id"
+          },
+          "original_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Price"
+          },
+          "discount_total": {
+            "type": "number",
+            "title": "Discount Total",
+            "default": 0.0
+          },
+          "final_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Price"
+          },
+          "is_adjustment": {
+            "type": "boolean",
+            "title": "Is Adjustment",
+            "default": false
           },
           "id": {
             "type": "integer",
@@ -2139,6 +2246,50 @@
               }
             ],
             "title": "Category Id"
+          },
+          "original_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Price"
+          },
+          "discount_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Total"
+          },
+          "final_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Price"
+          },
+          "is_adjustment": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Adjustment"
           }
         },
         "type": "object",

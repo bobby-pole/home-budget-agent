@@ -248,12 +248,18 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         for item_raw in data.get("items", []):
             category_name = item_raw.get("category", "")
             cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
+            orig = item_raw.get("original_price")
+            fin = item_raw.get("final_price")
             session.add(TransactionLine(
                 name=item_raw.get("name", "Unknown item"),
                 price=float(item_raw.get("price", 0.0)),
                 quantity=float(item_raw.get("quantity", 1.0)),
                 category_id=cat_id,
                 transaction_id=transaction.id,
+                original_price=float(orig) if orig is not None else None,
+                discount_total=float(item_raw.get("discount_total", 0.0)),
+                final_price=float(fin) if fin is not None else None,
+                is_adjustment=bool(item_raw.get("is_adjustment", False)),
             ))
 
         session.add(transaction)

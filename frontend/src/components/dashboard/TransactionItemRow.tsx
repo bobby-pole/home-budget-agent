@@ -19,6 +19,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import type { TransactionLineRead } from "@/client";
+import { getIntlLocale } from "@/lib/dates";
 
 const itemSchema = z.object({
   name: z.string().min(1, t("transactions.item_row.validation.name_required")),
@@ -84,9 +85,29 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
 
   if (!isEditing) {
     const displayCat = getDisplayCategory(item.category_id ?? null);
+    const qty = item.quantity ?? 1;
+    const hasDiscount =
+      item.original_price != null && (item.discount_total ?? 0) !== 0;
+    const isAdjustment = item.is_adjustment === true;
+    const intlLocale = getIntlLocale();
+    const formatMoney = (value: number) =>
+      value.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (isAdjustment) {
+      return (
+        <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 h-[52px] bg-amber-500/5 min-w-[450px]">
+          <span className="font-medium text-amber-700 dark:text-amber-400 truncate" title={item.name}>
+            {item.name}
+          </span>
+          <span className="font-semibold whitespace-nowrap text-amber-700 dark:text-amber-400 tabular-nums">
+            {formatMoney(item.price * qty)} {currency}
+          </span>
+        </div>
+      );
+    }
 
     return (
-      <div className="flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group h-[52px] hover:bg-muted/20 transition-colors min-w-[450px]">
+      <div className={`flex items-center justify-between py-2 px-2 text-sm border-b last:border-0 group hover:bg-muted/20 transition-colors min-w-[450px] ${hasDiscount ? "min-h-[64px]" : "h-[52px]"}`}>
         <div className="flex items-center flex-1 min-w-0 mr-2 gap-3">
           <span className="font-medium truncate shrink" title={item.name}>
             {item.name}
@@ -102,21 +123,36 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
               </span>
             )}
             <span className="w-12 text-right">
-              {item.quantity ?? 1} {t("transactions.items_panel.quantity_unit")}
+              {qty} {t("transactions.items_panel.quantity_unit")}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          <span className="font-semibold whitespace-nowrap min-w-[70px] text-right">
-            {item.price.toFixed(2)} {currency}
-          </span>
+          <div className="flex flex-col items-end gap-0.5">
+            {hasDiscount && (
+              <span className="text-[11px] line-through text-muted-foreground/60 leading-none">
+                {formatMoney((item.original_price as number) * qty)} {currency}
+              </span>
+            )}
+            <span className="font-semibold whitespace-nowrap min-w-[70px] text-right leading-none">
+              {formatMoney(item.price * qty)} {currency}
+            </span>
+            {hasDiscount && (
+              <span
+                className="text-[10px] font-medium px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 leading-none"
+                title={t("transactions.item_row.discount_badge")}
+              >
+                {formatMoney(item.discount_total as number)} {currency}
+              </span>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"
             className="h-8 w-8 opacity-70 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
             onClick={() => setIsEditing(true)}
-            title="Edytuj pozycję"
+            title={t("transactions.item_row.edit_item")}
           >
             <Pencil className="h-4 w-4 text-muted-foreground" />
           </Button>

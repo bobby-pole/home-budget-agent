@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   Check,
   Trash2,
-  Plus,
   ImageIcon,
   Loader2,
   Calendar as CalendarIcon,
@@ -20,13 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import {
   Form,
   FormControl,
@@ -53,13 +45,22 @@ import type { TransactionRead as Transaction } from "@/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { translateValidationMessage } from "@/lib/errorCodes";
+import { ItemsSection } from "./ItemsSection";
 
 const lineSchema = z.object({
   id: z.number().optional(),
   name: z.string().min(1, t("inbox.verification_card.validation.name_required")),
-  price: z.number().min(0),
+  // Unit price BEFORE any discount (per piece / per kg) for regular items.
+  // For basket adjustments (kaucja, basket coupons) this holds the (negative)
+  // refund amount, so no lower bound here.
+  unit_price: z.number(),
   quantity: z.number().min(0.01),
+  // total discount on this line (always ≤ 0)
+  discount_total: z.number().max(0),
   category_id: z.string().optional(),
+  // True for basket-level adjustments (kaucja, basket coupons). UI hides
+  // category/qty for these and renders them in a dedicated footer section.
+  is_adjustment: z.boolean(),
 });
 
 const verificationSchema = z.object({
@@ -71,7 +72,7 @@ const verificationSchema = z.object({
   keep_image: z.boolean(),
 });
 
-type VerificationFormValues = z.infer<typeof verificationSchema>;
+export type VerificationFormValues = z.infer<typeof verificationSchema>;
 
 interface VerificationCardProps {
   transaction: Transaction;
@@ -83,6 +84,16 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
+  const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Reset zoom when a new image loads (setState-during-render pattern — avoids effect)
+  const [prevImageUrl, setPrevImageUrl] = useState(imageUrl);
+  if (imageUrl !== prevImageUrl) {
+    setPrevImageUrl(imageUrl);
+    setZoom(1);
+  }
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -116,6 +127,99 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
     };
   }, [transaction.id]);
 
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el || !imageUrl) return;
+
+    zoomRef.current = 1;
+
+    // Ctrl+Wheel (or trackpad pinch) → zoom toward cursor
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const oldZoom = zoomRef.current;
+      const newZoom = Math.min(Math.max(0.5, oldZoom * (e.deltaY > 0 ? 0.9 : 1.1)), 5);
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const sx = el.scrollLeft + mx;
+      const sy = el.scrollTop + my;
+      zoomRef.current = newZoom;
+      setZoom(newZoom);
+      requestAnimationFrame(() => {
+        const r = newZoom / oldZoom;
+        el.scrollLeft = sx * r - mx;
+        el.scrollTop = sy * r - my;
+      });
+    };
+
+    // Mouse drag → pan
+    let dragging = false, lx = 0, ly = 0;
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      dragging = true; lx = e.clientX; ly = e.clientY;
+      el.style.cursor = 'grabbing';
+      e.preventDefault();
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      el.scrollLeft -= e.clientX - lx;
+      el.scrollTop -= e.clientY - ly;
+      lx = e.clientX; ly = e.clientY;
+    };
+    const onMouseUp = () => {
+      if (dragging) { dragging = false; el.style.cursor = 'grab'; }
+    };
+    const onDblClick = () => {
+      zoomRef.current = 1;
+      setZoom(1);
+    };
+
+    // Touch pinch → zoom (single finger scroll handled natively by overflow-auto)
+    let lastDist: number | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        lastDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY,
+        );
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || lastDist === null) return;
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+      const newZoom = Math.min(Math.max(0.5, zoomRef.current * (dist / lastDist)), 5);
+      zoomRef.current = newZoom;
+      setZoom(newZoom);
+      lastDist = dist;
+    };
+    const onTouchEnd = () => { lastDist = null; };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    el.addEventListener('dblclick', onDblClick);
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      el.removeEventListener('dblclick', onDblClick);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [imageUrl]);
+
   const form = useForm<VerificationFormValues>({
     resolver: zodResolver(verificationSchema),
     defaultValues: {
@@ -126,9 +230,13 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       lines: (transaction.lines || []).map(l => ({
         id: l.id,
         name: l.name,
-        price: l.price || 0,
+        // Prefer pre-discount unit price; fall back to current per-unit price
+        // (which equals unit price when there is no discount).
+        unit_price: l.original_price ?? l.price ?? 0,
         quantity: l.quantity || 1,
+        discount_total: l.discount_total ?? 0,
         category_id: l.category_id?.toString() || "",
+        is_adjustment: l.is_adjustment ?? false,
       })),
       keep_image: false,
     },
@@ -165,12 +273,24 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
           total_amount: values.total_amount,
           currency: values.currency,
         },
-        values.lines.map(l => ({
-          name: l.name,
-          price: l.price,
-          quantity: l.quantity,
-          category_id: l.category_id ? parseInt(l.category_id) : undefined,
-        })),
+        values.lines.map(l => {
+          // For adjustments we keep the user-entered unit_price as-is (single line, qty=1).
+          // For regular items: line gross = unit_price × qty; final per-unit = unit + discount/qty.
+          const qty = l.quantity || 1;
+          const gross = l.unit_price * qty;
+          const finalLineTotal = gross + l.discount_total;
+          const finalUnit = qty > 0 ? finalLineTotal / qty : finalLineTotal;
+          return {
+            name: l.name,
+            price: finalUnit,
+            quantity: qty,
+            category_id: l.category_id ? parseInt(l.category_id) : undefined,
+            original_price: l.discount_total < 0 || l.is_adjustment ? l.unit_price : null,
+            discount_total: l.discount_total,
+            final_price: l.discount_total < 0 ? finalUnit : null,
+            is_adjustment: l.is_adjustment,
+          };
+        }),
         values.keep_image
       );
       toast.success(t("inbox.verification_card.toast_verified"));
@@ -195,9 +315,13 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
 
   const lines = useWatch({ control: form.control, name: "lines" }) || [];
   const linesTotal = lines.reduce((acc, l) => {
-    const p = parseNumber(l.price);
-    const q = parseNumber(l.quantity);
-    return acc + (p * q);
+    if (l.is_adjustment) {
+      return acc + parseNumber(l.unit_price);
+    }
+    const unit = parseNumber(l.unit_price);
+    const qty = parseNumber(l.quantity);
+    const disc = parseNumber(l.discount_total);
+    return acc + (unit * qty + disc);
   }, 0);
 
   const receiptPreview = (
@@ -215,11 +339,55 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
             <p className="text-xs font-medium">{t("inbox.verification_card.image_loading")}</p>
           </div>
         ) : imageUrl ? (
-          <img
-            src={imageUrl}
-            alt="Receipt preview"
-            className="max-w-full max-h-full object-contain z-10"
-          />
+          <>
+            <div
+              ref={previewRef}
+              className="absolute inset-0 overflow-auto"
+              style={{ cursor: 'grab' }}
+            >
+              <div style={{
+                width: `${Math.max(zoom, 1) * 100}%`,
+                minHeight: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <img
+                  src={imageUrl}
+                  alt="Receipt preview"
+                  style={{
+                    width: zoom >= 1 ? '100%' : `${zoom * 100}%`,
+                    height: 'auto',
+                    display: 'block',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                  }}
+                  draggable={false}
+                />
+              </div>
+            </div>
+            <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 bg-background/90 backdrop-blur-sm rounded-lg px-1.5 py-1 border shadow-sm">
+              <button
+                type="button"
+                onClick={() => setZoom(z => { const n = Math.max(0.5, z * 0.8); zoomRef.current = n; return n; })}
+                className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
+              >−</button>
+              <span className="text-[10px] w-9 text-center tabular-nums text-muted-foreground">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoom(z => { const n = Math.min(5, z * 1.25); zoomRef.current = n; return n; })}
+                className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
+              >+</button>
+              <button
+                type="button"
+                onClick={() => { zoomRef.current = 1; setZoom(1); }}
+                className="w-6 h-6 flex items-center justify-center text-xs text-muted-foreground hover:text-primary transition-colors"
+                title="Reset zoom"
+              >↺</button>
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center text-muted-foreground/20">
             <ImageIcon className="h-24 w-24" />
@@ -400,128 +568,14 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground/70">{t("inbox.verification_card.items_section_header")}</h3>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => append({ name: "", price: 0, quantity: 1 })}
-                    className="h-8 text-xs gap-1 border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors shrink-0"
-                  >
-                    <Plus className="h-3 w-3" /> {t("inbox.verification_card.add_item_button")}
-                  </Button>
-                </div>
+              <ItemsSection
+                form={form}
+                fields={fields}
+                append={append}
+                remove={remove}
+                categories={categories}
+              />
 
-                <div className="space-y-3">
-                  {fields.map((field, index) => (
-                    <div key={field.id} className="group relative bg-card border border-border/40 p-3 rounded-xl hover:border-primary/30 transition-all hover:shadow-sm">
-                      <div className="flex flex-col gap-3">
-                        <div className="flex gap-2">
-                          <FormField
-                            control={form.control}
-                            name={`lines.${index}.name`}
-                            render={({ field }) => (
-                              <FormItem className="flex-1">
-                                <FormControl>
-                                  <Input {...field} placeholder={t("inbox.verification_card.placeholder_item_name")} className="h-9 text-sm bg-muted/20" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => remove(index)}
-                            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-12 gap-2">
-                          <div className="col-span-4">
-                            <FormField
-                              control={form.control}
-                              name={`lines.${index}.price`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <div className="relative">
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        {...field}
-                                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                        className="h-9 text-sm bg-muted/20 pr-6"
-                                        placeholder={t("inbox.verification_card.placeholder_price")}
-                                      />
-                                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">zł</span>
-                                    </div>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="col-span-3">
-                            <FormField
-                              control={form.control}
-                              name={`lines.${index}.quantity`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <div className="relative">
-                                      <Input
-                                        type="number"
-                                        step="0.01"
-                                        {...field}
-                                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                                        className="h-9 text-sm bg-muted/20 pr-5"
-                                        placeholder={t("inbox.verification_card.placeholder_quantity")}
-                                      />
-                                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">szt</span>
-                                    </div>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="col-span-5">
-                            <FormField
-                              control={form.control}
-                              name={`lines.${index}.category_id`}
-                              render={({ field }) => (
-                                <FormItem>
-                                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                      <SelectTrigger className="h-9 text-xs bg-muted/20 px-2">
-                                        <SelectValue placeholder={t("inbox.verification_card.placeholder_category")} />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {categories.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.id.toString()}>
-                                          <span className="flex items-center gap-2">
-                                            <span>{cat.icon}</span>
-                                            <span className="truncate max-w-[80px]">{cat.name}</span>
-                                          </span>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </CardContent>
 
             <CardFooter className="py-4 px-4 md:px-6 border-t bg-muted/30 shrink-0">
