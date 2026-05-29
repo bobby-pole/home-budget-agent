@@ -168,6 +168,10 @@ class TransactionLineBase(SQLModel):
     price: float
     quantity: float = Field(default=1.0)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    original_price: Optional[float] = Field(default=None)
+    discount_total: float = Field(default=0.0)
+    final_price: Optional[float] = Field(default=None)
+    is_adjustment: bool = Field(default=False)
 
 
 class TransactionLine(TransactionLineBase, table=True):
@@ -261,6 +265,10 @@ class TransactionLineCreate(SQLModel):
     price: float
     quantity: float = 1.0
     category_id: Optional[int] = None
+    original_price: Optional[float] = None
+    discount_total: float = 0.0
+    final_price: Optional[float] = None
+    is_adjustment: bool = False
 
 
 class ManualTransactionCreate(SQLModel):
@@ -280,6 +288,10 @@ class TransactionLineUpdate(SQLModel):
     price: Optional[float] = None
     quantity: Optional[float] = None
     category_id: Optional[int] = None
+    original_price: Optional[float] = None
+    discount_total: Optional[float] = None
+    final_price: Optional[float] = None
+    is_adjustment: Optional[bool] = None
 
 
 

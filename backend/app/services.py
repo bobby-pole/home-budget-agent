@@ -46,8 +46,13 @@ class AIService:
                 from .lidl_parser import LidlReceiptParser
                 parsed = LidlReceiptParser().parse(lines)
                 data = parsed.to_dict()
+                # Deterministic parsers don't assign categories. Run AI categorization
+                # here so Lidl items reach the staging area pre-categorized.
+                # (Cache-first lookup will plug in here once #178 lands.)
+                data = AIService._categorize_parsed_items(data, categories)
             else:
                 # AI structurizer fallback for all unknown / not-yet-parsed merchants.
+                # Categories are already assigned inside the structurizer prompt.
                 data = AIService._ai_structurize("\n".join(lines), categories)
 
             return AIService._validate_and_annotate(data)
@@ -60,6 +65,44 @@ class AIService:
         except Exception as e:
             print(f"❌ OCR Pipeline Error: {e}")
             return None
+
+    @staticmethod
+    def _categorize_parsed_items(
+        data: Optional[dict],
+        categories: Optional[list[dict]],
+    ) -> Optional[dict]:
+        """
+        Batch-categorize items produced by a deterministic parser.
+
+        Skips items already categorized and basket-level adjustments (kaucja etc.).
+        On AI failure leaves items without a category — staging area will let the
+        user assign one manually.
+        """
+        if data is None or not categories:
+            return data
+
+        items = data.get("items") or []
+        targets = [
+            (idx, item) for idx, item in enumerate(items)
+            if not item.get("is_adjustment") and not item.get("category")
+        ]
+        if not targets:
+            return data
+
+        names = [item["name"] for _, item in targets]
+        try:
+            mapping = AIService.categorize_descriptions(names, categories)
+        except Exception as e:
+            print(f"⚠️ [Categorization] AI call failed: {e}")
+            return data
+
+        valid_cat_names = {c["name"] for c in categories}
+        for idx, item in targets:
+            cat = mapping.get(item["name"])
+            if cat in valid_cat_names:
+                items[idx]["category"] = cat
+
+        return data
 
     @staticmethod
     def _validate_and_annotate(data: Optional[dict]) -> Optional[dict]:
@@ -202,7 +245,9 @@ Return ONLY a JSON object: {{"Description": "Category", ...}}"""
             return json.loads(response.choices[0].message.content or "{}")
         except Exception as e:
             print(f"❌ AI Categorization Error: {e}")
-            return {desc: "Other" for desc in descriptions}
+            # Empty mapping lets callers leave items uncategorized rather than
+            # poisoning the result with a non-existent "Other" category.
+            return {}
 
     # ── Bank statement parsing ─────────────────────────────────────────────────
 

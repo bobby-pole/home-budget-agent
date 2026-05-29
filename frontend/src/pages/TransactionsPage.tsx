@@ -18,6 +18,11 @@ export function TransactionsPage() {
     queryFn: api.getTransactions,
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: api.getCategories,
+  });
+
   const importMutation = useMutation({
     mutationFn: api.importTransactions,
     onSuccess: (data) => {
@@ -90,10 +95,11 @@ export function TransactionsPage() {
       </div>
 
       <div className="grid gap-6">
-        <TransactionsTable 
-          transactions={transactions} 
-          isLoading={isLoading} 
-          error={error} 
+        <TransactionsTable
+          transactions={transactions}
+          categories={categories}
+          isLoading={isLoading}
+          error={error}
         />
       </div>
 

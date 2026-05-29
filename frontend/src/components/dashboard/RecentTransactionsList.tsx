@@ -81,8 +81,8 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
               const uploaderText = isMine ? t("dashboard.recent_transactions.added_by_me") : t("dashboard.recent_transactions.added_by_shared");
 
               return (
-                <div key={tx.id} className="flex items-center justify-between py-4 first:pt-2 last:pb-2 transition-colors">
-                  <div className="flex items-center gap-4">
+                <div key={tx.id} className="flex items-start justify-between gap-3 py-4 first:pt-2 last:pb-2 transition-colors">
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
                     {/* Icon Circle */}
                     <div className={cn(
                       "size-12 rounded-full flex items-center justify-center shrink-0 shadow-inner text-xl",
@@ -91,26 +91,26 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                       isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
                       "bg-muted text-muted-foreground"
                     )}>
-                      {categoryIcon ? categoryIcon : (isIncome ? <ArrowUpRight className="size-6" /> : 
+                      {categoryIcon ? categoryIcon : (isIncome ? <ArrowUpRight className="size-6" /> :
                        isExpense ? <Store className="size-6" /> :
                        <ArrowDownRight className="size-6" />)}
                     </div>
-                    
+
                     {/* Details */}
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-sm md:text-base font-bold truncate leading-tight">
                         {tx.merchant_name}
                       </span>
-                      <div className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground font-medium">
-                        <span className="truncate">{typeLabel}</span>
-                        <span>•</span>
-                        <span className="truncate">{categoryName}</span>
-                        <span>•</span>
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-xs text-muted-foreground font-medium">
+                        <span>{typeLabel}</span>
+                        <span aria-hidden>•</span>
+                        <span>{categoryName}</span>
+                        <span aria-hidden>•</span>
                         <span>{relativeDate}</span>
-                        <span>•</span>
-                        <span className="truncate opacity-70">{t("dashboard.recent_transactions.added_by_prefix")} {uploaderText}</span>
+                        <span aria-hidden>•</span>
+                        <span className="opacity-70">{t("dashboard.recent_transactions.added_by_prefix")} {uploaderText}</span>
                       </div>
-                      
+
                       {tx.receipt_scan?.status === "processing" && (
                         <div className="mt-1">
                           <Badge variant="outline" className="h-4 px-1.5 text-[9px] animate-pulse uppercase border-amber-500 text-amber-500">AI Processing</Badge>
@@ -118,12 +118,12 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Amount */}
-                  <div className="text-right flex flex-col items-end">
+                  <div className="text-right flex flex-col items-end shrink-0">
                     <span className={cn(
-                      "text-sm md:text-base font-black tabular-nums",
-                      isIncome ? "text-emerald-600 dark:text-emerald-400" : 
+                      "text-sm md:text-base font-black tabular-nums whitespace-nowrap",
+                      isIncome ? "text-emerald-600 dark:text-emerald-400" :
                       tx.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : "text-destructive"
                     )}>
                       {isIncome ? "+" : tx.type === 'transfer' ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString(getIntlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
