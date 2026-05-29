@@ -1,7 +1,7 @@
 import os
 import json
 import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 import fitz
 
 from app.ocr_pipeline import (
@@ -172,47 +172,51 @@ def test_eparagon_json_adapter_parse():
 
 # ── AIService E2E Integration Tests ─────────────────────────────────────────────
 
-@patch("builtins.open", mock_open(read_data=b'{"protoVersion": "000", "document": {"podmiot1": {"nazwaPod": "e-Store"}, "paragon": {"total": {"zaplZwrot": 1000}, "pozycja": []}}}'))
 @patch("app.services.AIService._categorize_parsed_items", lambda data, cats: data)
-def test_pipeline_eparagon_json():
-    # Pass filename with .json so it detects e-paragon
-    result = AIService.parse_receipt("fake.json")
+def test_pipeline_eparagon_json(tmp_path):
+    mock_jpk = b'{"protoVersion": "000", "document": {"podmiot1": {"nazwaPod": "e-Store"}, "paragon": {"total": {"zaplZwrot": 1000}, "pozycja": []}}}'
+    fake_json_path = tmp_path / "fake.json"
+    fake_json_path.write_bytes(mock_jpk)
+    
+    result = AIService.parse_receipt(str(fake_json_path))
     
     assert result is not None
     assert result["merchant_name"] == "e-Store"
     assert result["total_amount"] == 10.0
 
 
-@patch("builtins.open")
 @patch("app.services.AIService._ai_structurize")
-def test_pipeline_pdf_text_layer_bypass_ocr(mock_structurize, mock_file):
+def test_pipeline_pdf_text_layer_bypass_ocr(mock_structurize, tmp_path):
     text = "LIDL sp. z o.o.\nChleb 3.50\nSuma PLN 3,50"
     long_text = text * 10
     pdf_bytes = _generate_test_pdf(long_text)
     
-    mock_file.return_value.__enter__.return_value.read.return_value = pdf_bytes
+    fake_pdf_path = tmp_path / "fake.pdf"
+    fake_pdf_path.write_bytes(pdf_bytes)
+    
     mock_structurize.return_value = {"merchant_name": "Lidl", "total_amount": 3.50, "items": []}
     
     # We run OCR pipeline and mock Google Vision OCR to ensure it's not used
     with patch("app.ocr_pipeline.GoogleVisionOCRService.extract") as mock_extract:
-        result = AIService.parse_receipt("fake.pdf")
+        result = AIService.parse_receipt(str(fake_pdf_path))
         assert result is not None
         mock_extract.assert_not_called()
 
 
-@patch("builtins.open")
 @patch("app.ocr_pipeline.GoogleVisionOCRService.extract")
 @patch("app.services.AIService._ai_structurize")
-def test_pipeline_scanned_pdf_fallback_to_ocr(mock_structurize, mock_extract, mock_file):
+def test_pipeline_scanned_pdf_fallback_to_ocr(mock_structurize, mock_extract, tmp_path):
     pdf_bytes = _generate_scanned_pdf()
     
-    mock_file.return_value.__enter__.return_value.read.return_value = pdf_bytes
+    fake_pdf_path = tmp_path / "fake.pdf"
+    fake_pdf_path.write_bytes(pdf_bytes)
+    
     mock_structurize.return_value = {"merchant_name": "Lidl", "total_amount": 3.50, "items": []}
     
     from app.ocr_pipeline import OCRResult
     mock_extract.return_value = OCRResult(words=[], raw_text="scanned text", source_engine="mock")
     
-    result = AIService.parse_receipt("fake.pdf")
+    result = AIService.parse_receipt(str(fake_pdf_path))
     assert result is not None
     mock_extract.assert_called_once()
 
