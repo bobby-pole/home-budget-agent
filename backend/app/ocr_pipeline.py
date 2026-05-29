@@ -14,6 +14,7 @@ class ReceiptSource(str, Enum):
     PHOTO_IMAGE = "photo_image"  # camera photo — higher Y tolerance for reconstruction
     PDF_TEXT = "pdf_text"     # PDF with text layer — skip OCR entirely
     PDF_IMAGE = "pdf_image"   # PDF without text layer — route through OCR
+    EPARAGON = "eparagon"     # structured e-paragon JSON
 
 
 # ── Data types ─────────────────────────────────────────────────────────────────
@@ -52,17 +53,179 @@ class OCRResult:
 
 class ReceiptSourceDetector:
     @staticmethod
-    def detect(filename: str, content_type: Optional[str] = None) -> ReceiptSource:
+    def detect(filename: str, content_type: Optional[str] = None, file_bytes: Optional[bytes] = None) -> ReceiptSource:
+        # 1. Check binary magic bytes first for bulletproof detection
+        if file_bytes:
+            if file_bytes.startswith(b"%PDF"):
+                return ReceiptSource.PDF_TEXT
+            if file_bytes.strip().startswith(b"{"):
+                try:
+                    data = json.loads(file_bytes.decode("utf-8"))
+                    if "document" in data or "protoVersion" in data:
+                        return ReceiptSource.EPARAGON
+                except Exception:
+                    pass
+
+        # 2. Fall back to filename and content type heuristics
         mime = (content_type or "").lower()
         name = (filename or "").lower()
 
+        if name.endswith(".json") or "json" in mime:
+            return ReceiptSource.EPARAGON
+
         if "pdf" in mime or name.endswith(".pdf"):
-            # PDFTextLayerAdapter will verify if text layer actually exists (#179)
             return ReceiptSource.PDF_TEXT
 
-        # All PNG/JPG treated as APP_PNG for now.
-        # PHOTO_IMAGE distinction (EXIF heuristic) is future work.
         return ReceiptSource.APP_PNG
+
+
+# ── PDF Text-Layer Adapter ─────────────────────────────────────────────────────
+
+class PDFTextLayerAdapter:
+    @staticmethod
+    def has_text_layer(file_bytes: bytes) -> bool:
+        try:
+            import fitz
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            text = ""
+            for page in doc:
+                text += str(page.get_text()) + "\n"
+            doc.close()
+            # Threshold: > 100 non-whitespace characters
+            cleaned_text = "".join(text.split())
+            return len(cleaned_text) > 100
+        except Exception as e:
+            print(f"⚠️ Error checking PDF text layer: {e}")
+            return False
+
+    @staticmethod
+    def extract_text(file_bytes: bytes) -> str:
+        import fitz
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        text = ""
+        for page in doc:
+            text += str(page.get_text()) + "\n"
+        doc.close()
+        return text
+
+    @staticmethod
+    def convert_to_image(file_bytes: bytes) -> bytes:
+        import fitz
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        page = doc[0]  # Render first page
+        pix = page.get_pixmap(dpi=150)
+        png_bytes = pix.tobytes("png")
+        doc.close()
+        return png_bytes
+
+
+# ── E-Paragon JSON Adapter ─────────────────────────────────────────────────────
+
+class EParagonJSONAdapter:
+    @staticmethod
+    def parse(file_bytes: bytes) -> dict:
+        import base64
+        
+        raw_data = json.loads(file_bytes.decode("utf-8"))
+        
+        # Decode JPK JWT payload if wrapped in official "data" key
+        if isinstance(raw_data, dict) and "data" in raw_data and isinstance(raw_data["data"], str):
+            try:
+                parts = raw_data["data"].split('.')
+                if len(parts) >= 2:
+                    payload_segment = parts[1]
+                    rem = len(payload_segment) % 4
+                    if rem > 0:
+                        payload_segment += '=' * (4 - rem)
+                    decoded_bytes = base64.urlsafe_b64decode(payload_segment)
+                    data = json.loads(decoded_bytes.decode("utf-8"))
+                else:
+                    data = raw_data
+            except Exception as e:
+                print(f"⚠️ Failed to decode JWT payload from data: {e}")
+                data = raw_data
+        else:
+            data = raw_data
+
+        doc = data.get("dokument") or data.get("document") or data
+        # If 'doc' itself is wrapped in another level
+        if isinstance(doc, dict) and ("dokument" in doc or "document" in doc):
+            doc = doc.get("dokument") or doc.get("document")
+            
+        if not isinstance(doc, dict):
+            doc = {}
+            
+        paragon = doc.get("paragon", {})
+        podmiot = doc.get("podmiot1", {})
+        
+        # 1. Merchant name
+        merchant = podmiot.get("nazwaPod", "Unknown Merchant")
+        
+        # 2. Purchase date
+        purchase_date_str = paragon.get("zakSprzed") or doc.get("naglowek", {}).get("dataJPK", "")
+        date_str = ""
+        if purchase_date_str:
+            date_str = purchase_date_str.split("T")[0]
+            
+        # 3. Currency and totals
+        podsum = paragon.get("podsum", {})
+        currency = podsum.get("waluta", "PLN")
+        total_gross = float(paragon.get("total", {}).get("zaplZwrot", 0)) / 100.0
+        
+        # 4. Items
+        items = []
+        positions = paragon.get("pozycja", [])
+        for pos in positions:
+            towar = pos.get("towar", {})
+            name = towar.get("nazwa", "Unknown Item").strip()
+            
+            orig_unit_price = float(towar.get("cena", 0)) / 100.0
+            qty = float(towar.get("ilosc", "1"))
+            
+            discount_total = 0.0
+            rabat = towar.get("rabat", {})
+            if rabat:
+                discount_total = float(rabat.get("wart", 0)) / 100.0
+            
+            original_price = orig_unit_price
+            final_price = original_price + (discount_total / qty) if qty > 0 else original_price
+            
+            items.append({
+                "name": name,
+                "price": final_price,
+                "quantity": qty,
+                "original_price": original_price,
+                "discount_total": discount_total,
+                "final_price": final_price,
+                "is_adjustment": False
+            })
+            
+        # 5. Packaging / Deposits
+        opak = paragon.get("opak", {})
+        if opak:
+            for op_item in opak.get("daneOpak", []):
+                name = op_item.get("nazwa", "Kaucja").strip()
+                cena = float(op_item.get("cena", 0)) / 100.0
+                ilosc_raw = op_item.get("ilosc", 1000)
+                qty = float(ilosc_raw) / 1000.0 if ilosc_raw > 10 else float(ilosc_raw)
+                
+                items.append({
+                    "name": name,
+                    "price": cena,
+                    "quantity": qty,
+                    "original_price": None,
+                    "discount_total": 0.0,
+                    "final_price": None,
+                    "is_adjustment": True
+                })
+                
+        return {
+            "merchant_name": merchant,
+            "date": date_str,
+            "total_amount": total_gross,
+            "currency": currency,
+            "items": items
+        }
 
 
 # ── Google Vision OCR ──────────────────────────────────────────────────────────
@@ -85,11 +248,11 @@ class GoogleVisionOCRService:
                     info,
                     scopes=["https://www.googleapis.com/auth/cloud-platform"],
                 )
-            self._client = vision.ImageAnnotatorClient(credentials=credentials)
+            self._client = vision.ImageAnnotatorClient(credentials=credentials)  # type: ignore
             self._vision = vision
         except ImportError:
-            self._client = None
-            self._vision = None
+            self._client = None  # type: ignore
+            self._vision = None  # type: ignore
 
     @property
     def available(self) -> bool:
@@ -99,7 +262,7 @@ class GoogleVisionOCRService:
         if not self._client or not self._vision:
             raise RuntimeError(
                 "google-cloud-vision is not installed. "
-                "Add it to requirements.txt and set GOOGLE_APPLICATION_CREDENTIALS."
+                "Add it to pyproject.toml and set GOOGLE_APPLICATION_CREDENTIALS."
             )
 
         image = self._vision.Image(content=image_bytes)
