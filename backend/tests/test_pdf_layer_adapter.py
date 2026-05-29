@@ -197,15 +197,17 @@ def test_pipeline_pdf_text_layer_bypass_ocr(mock_structurize, tmp_path):
     mock_structurize.return_value = {"merchant_name": "Lidl", "total_amount": 3.50, "items": []}
     
     # We run OCR pipeline and mock Google Vision OCR to ensure it's not used
-    with patch("app.ocr_pipeline.GoogleVisionOCRService.extract") as mock_extract:
+    with patch("app.ocr_pipeline.GoogleVisionOCRService.__init__", return_value=None), \
+         patch("app.ocr_pipeline.GoogleVisionOCRService.extract") as mock_extract:
         result = AIService.parse_receipt(str(fake_pdf_path))
         assert result is not None
         mock_extract.assert_not_called()
 
 
+@patch("app.ocr_pipeline.GoogleVisionOCRService.__init__", return_value=None)
 @patch("app.ocr_pipeline.GoogleVisionOCRService.extract")
 @patch("app.services.AIService._ai_structurize")
-def test_pipeline_scanned_pdf_fallback_to_ocr(mock_structurize, mock_extract, tmp_path):
+def test_pipeline_scanned_pdf_fallback_to_ocr(mock_structurize, mock_extract, mock_init, tmp_path):
     pdf_bytes = _generate_scanned_pdf()
     
     fake_pdf_path = tmp_path / "fake.pdf"
@@ -235,9 +237,10 @@ def _find_real_file(filename: str) -> str | None:
     return None
 
 
+@patch("app.ocr_pipeline.GoogleVisionOCRService.__init__", return_value=None)
 @patch("app.ocr_pipeline.GoogleVisionOCRService.extract")
 @patch("app.services.AIService._ai_structurize")
-def test_e2e_user_downloads_receipt_pdf(mock_structurize, mock_extract):
+def test_e2e_user_downloads_receipt_pdf(mock_structurize, mock_extract, mock_init):
     pdf_path = _find_real_file("receipt.pdf")
     if pdf_path is None:
         pytest.skip("User file receipt.pdf not present in data or Downloads folder")
