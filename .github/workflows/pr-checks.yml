@@ -54,14 +54,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
-          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/pyproject.toml
 
       - name: Install dependencies
         working-directory: backend
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          uv pip install --system -r pyproject.toml
 
       - name: Run tests
         working-directory: backend

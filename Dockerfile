@@ -33,9 +33,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 --gid 1001 appuser
 
-# Copy backend dependencies
-COPY backend/requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy backend dependencies and install using uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY backend/pyproject.toml ./
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # Copy backend source code
 COPY backend/ ./

@@ -17,7 +17,11 @@ class AIService:
     # ── Receipt parsing ────────────────────────────────────────────────────────
 
     @staticmethod
-    def parse_receipt(image_path: str, categories: Optional[list[dict]] = None) -> Optional[dict]:
+    def parse_receipt(
+        image_path: str,
+        categories: Optional[list[dict]] = None,
+        filename: Optional[str] = None,
+    ) -> Optional[dict]:
         """
         Entry point for receipt parsing.
         Pipeline: Google Vision OCR → line reconstruction → merchant detection → parser | AI fallback.
@@ -29,16 +33,52 @@ class AIService:
             print(f"❌ Error reading image: {e}")
             return None
 
-        return AIService._run_ocr_pipeline(image_bytes, categories)
+        actual_filename = filename or os.path.basename(image_path)
+        return AIService._run_ocr_pipeline(image_bytes, categories, filename=actual_filename)
 
     @staticmethod
-    def _run_ocr_pipeline(image_bytes: bytes, categories: Optional[list[dict]] = None) -> Optional[dict]:
-        from .ocr_pipeline import GoogleVisionOCRService, reconstruct_lines, detect_merchant
+    def _run_ocr_pipeline(
+        image_bytes: bytes,
+        categories: Optional[list[dict]] = None,
+        filename: str = "",
+    ) -> Optional[dict]:
+        from .ocr_pipeline import (
+            ReceiptSource,
+            ReceiptSourceDetector,
+            GoogleVisionOCRService,
+            reconstruct_lines,
+            detect_merchant,
+            PDFTextLayerAdapter,
+            EParagonJSONAdapter,
+        )
 
         try:
-            ocr = GoogleVisionOCRService()
-            result = ocr.extract(image_bytes)
-            lines = reconstruct_lines(result.words)
+            # Detect source using magic bytes / filename
+            source = ReceiptSourceDetector.detect(filename=filename, file_bytes=image_bytes)
+            print(f"📡 [Pipeline] Detected source: {source.value}")
+
+            if source == ReceiptSource.EPARAGON:
+                print("⚡ [Pipeline] Structured e-Paragon JSON detected. Running fast extraction.")
+                data = EParagonJSONAdapter.parse(image_bytes)
+                data = AIService._categorize_parsed_items(data, categories)
+                return AIService._validate_and_annotate(data)
+
+            if source == ReceiptSource.PDF_TEXT:
+                if PDFTextLayerAdapter.has_text_layer(image_bytes):
+                    print("📄 [Pipeline] PDF has text layer. skipping Google Vision OCR.")
+                    text = PDFTextLayerAdapter.extract_text(image_bytes)
+                    lines = [line.strip() for line in text.splitlines() if line.strip()]
+                else:
+                    print("⚠️ [Pipeline] PDF has no text layer. Rendering first page to PNG.")
+                    converted_png = PDFTextLayerAdapter.convert_to_image(image_bytes)
+                    ocr = GoogleVisionOCRService()
+                    result = ocr.extract(converted_png)
+                    lines = reconstruct_lines(result.words)
+            else:
+                ocr = GoogleVisionOCRService()
+                result = ocr.extract(image_bytes)
+                lines = reconstruct_lines(result.words)
+
             merchant = detect_merchant(lines)
             print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
 

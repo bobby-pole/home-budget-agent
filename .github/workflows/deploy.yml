@@ -60,7 +60,7 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.1
         env:
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
