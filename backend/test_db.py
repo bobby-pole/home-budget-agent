@@ -1,0 +1,13 @@
+from app.database import operations_engine
+from sqlmodel import Session, select, col
+from app.models import Transaction, TransactionLine
+
+with Session(operations_engine) as session:
+    tx = session.exec(select(Transaction).order_by(col(Transaction.id).desc()).limit(1)).first()
+    if tx:
+        print(f"Transaction: {tx.id} - {tx.merchant_name}")
+        lines = session.exec(select(TransactionLine).where(TransactionLine.transaction_id == tx.id)).all()
+        for line in lines:
+            print(f"  Line: {line.name} (Cat ID: {line.category_id})")
+    else:
+        print("No transactions")

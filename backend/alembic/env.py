@@ -22,6 +22,7 @@ import sys  # noqa: E402
 import os  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from sqlmodel import SQLModel  # noqa: E402
+import app.models  # noqa: F401, E402
 target_metadata = SQLModel.metadata
 
 # other values from the config, defined by the needs of env.py,

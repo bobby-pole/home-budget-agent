@@ -70,7 +70,11 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   const handleDragLeave = () => setIsDragging(false)
 
   const handleScan = (file: File, force = false) => {
-    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isJson = file.type === "application/json" || file.name.endsWith(".json");
+
+    if (!isImage && !isPdf && !isJson) {
       toast.error(t("upload.toast_invalid_format"), {
         description: t("upload.toast_invalid_format_description"),
       })
@@ -121,7 +125,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept="image/png, image/jpeg, image/jpg, image/webp"
+              accept="image/png, image/jpeg, image/jpg, image/webp, application/pdf, application/json, .json"
             />
             <div className="flex h-7 w-7 lg:h-9 lg:w-9 items-center justify-center rounded-full bg-background border shadow-sm mb-1">
               {scanMutation.isPending ? (

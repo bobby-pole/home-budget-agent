@@ -172,7 +172,7 @@ def test_eparagon_json_adapter_parse():
 
 # ── AIService E2E Integration Tests ─────────────────────────────────────────────
 
-@patch("app.services.AIService._categorize_parsed_items", lambda data, cats: data)
+@patch("app.services.AIService._categorize_parsed_items", lambda data, cats, user_id: data)
 def test_pipeline_eparagon_json(tmp_path):
     mock_jpk = b'{"protoVersion": "000", "document": {"podmiot1": {"nazwaPod": "e-Store"}, "paragon": {"total": {"zaplZwrot": 1000}, "pozycja": []}}}'
     fake_json_path = tmp_path / "fake.json"

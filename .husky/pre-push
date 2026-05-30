@@ -7,16 +7,19 @@ pnpm build || { echo "❌ Frontend Build failed. Push aborted."; exit 1; }
 
 echo "▶ [pre-push] Backend Checks..."
 cd "$(git rev-parse --show-toplevel)/backend"
-if [ -d "venv" ]; then
+if [ -d ".venv" ]; then
+    source .venv/bin/activate
+elif [ -d "venv" ]; then
     source venv/bin/activate
-    
-    echo "  - Type-check (pyright)..."
-    pyright || { echo "❌ Backend Type-check failed. Push aborted."; exit 1; }
-
-    echo "  - Tests (pytest)..."
-    pytest tests/ || { echo "❌ Backend Tests failed. Push aborted."; exit 1; }
 else
     echo "⚠️ Python virtual environment not found. Skipping backend checks..."
+    exit 0
 fi
+
+echo "  - Type-check (pyright)..."
+pyright || { echo "❌ Backend Type-check failed. Push aborted."; exit 1; }
+
+echo "  - Tests (pytest)..."
+pytest tests/ || { echo "❌ Backend Tests failed. Push aborted."; exit 1; }
 
 echo "✅ pre-push checks passed."

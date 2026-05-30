@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { CATEGORY_LABELS } from "@/lib/constants";
 import type { CategoryRead } from "@/client";
 import type { VerificationFormValues } from "./VerificationCard";
 
@@ -177,7 +178,9 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
                       <SelectItem key={cat.id} value={cat.id.toString()}>
                         <span className="flex items-center gap-2">
                           <span>{cat.icon}</span>
-                          <span className="truncate max-w-[80px]">{cat.name}</span>
+                          <span className="truncate max-w-[80px]">
+                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                          </span>
                         </span>
                       </SelectItem>
                     ))}

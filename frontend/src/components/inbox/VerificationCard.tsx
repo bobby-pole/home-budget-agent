@@ -15,6 +15,7 @@ import {
   DollarSign,
   ArrowLeft,
   FileText,
+  FileJson,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -83,6 +84,7 @@ interface VerificationCardProps {
 export function VerificationCard({ transaction, onSuccess, onBack }: VerificationCardProps) {
   const queryClient = useQueryClient();
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageType, setImageType] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
   const [zoom, setZoom] = useState(1);
   const zoomRef = useRef(1);
@@ -110,6 +112,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         const response = await apiClient.get(`/transactions/${transaction.id}/receipt`, {
           responseType: 'blob'
         });
+        setImageType(response.data.type);
         objectUrl = URL.createObjectURL(response.data);
         setImageUrl(objectUrl);
       } catch (error) {
@@ -338,55 +341,73 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
             <Loader2 className="h-8 w-8 animate-spin" />
             <p className="text-xs font-medium">{t("inbox.verification_card.image_loading")}</p>
           </div>
+        ) : imageType === "application/json" ? (
+          <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+            <FileJson className="h-12 w-12 mb-4 opacity-20" />
+            <p className="font-medium text-sm">Podgląd niedostępny</p>
+            <p className="text-xs mt-1 max-w-[200px]">Pliki strukturalne (e-Paragon) nie posiadają reprezentacji wizualnej.</p>
+          </div>
         ) : imageUrl ? (
           <>
             <div
               ref={previewRef}
               className="absolute inset-0 overflow-auto"
-              style={{ cursor: 'grab' }}
+              style={{ cursor: imageType === 'application/pdf' ? 'auto' : 'grab' }}
             >
               <div style={{
-                width: `${Math.max(zoom, 1) * 100}%`,
+                width: imageType === 'application/pdf' ? '100%' : `${Math.max(zoom, 1) * 100}%`,
                 minHeight: '100%',
+                height: imageType === 'application/pdf' ? '100%' : 'auto',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                <img
-                  src={imageUrl}
-                  alt="Receipt preview"
-                  style={{
-                    width: zoom >= 1 ? '100%' : `${zoom * 100}%`,
-                    height: 'auto',
-                    display: 'block',
-                    userSelect: 'none',
-                    pointerEvents: 'none',
-                  }}
-                  draggable={false}
-                />
+                {imageType === 'application/pdf' ? (
+                  <iframe
+                    src={`${imageUrl}#toolbar=0&navpanes=0`}
+                    title="Receipt PDF Preview"
+                    className="w-full h-full border-0"
+                    style={{ minHeight: '500px' }}
+                  />
+                ) : (
+                  <img
+                    src={imageUrl}
+                    alt="Receipt preview"
+                    style={{
+                      width: zoom >= 1 ? '100%' : `${zoom * 100}%`,
+                      height: 'auto',
+                      display: 'block',
+                      userSelect: 'none',
+                      pointerEvents: 'none',
+                    }}
+                    draggable={false}
+                  />
+                )}
               </div>
             </div>
-            <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 bg-background/90 backdrop-blur-sm rounded-lg px-1.5 py-1 border shadow-sm">
-              <button
-                type="button"
-                onClick={() => setZoom(z => { const n = Math.max(0.5, z * 0.8); zoomRef.current = n; return n; })}
-                className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
-              >−</button>
-              <span className="text-[10px] w-9 text-center tabular-nums text-muted-foreground">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                type="button"
-                onClick={() => setZoom(z => { const n = Math.min(5, z * 1.25); zoomRef.current = n; return n; })}
-                className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
-              >+</button>
-              <button
-                type="button"
-                onClick={() => { zoomRef.current = 1; setZoom(1); }}
-                className="w-6 h-6 flex items-center justify-center text-xs text-muted-foreground hover:text-primary transition-colors"
-                title="Reset zoom"
-              >↺</button>
-            </div>
+            {imageType !== 'application/pdf' && (
+              <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 bg-background/90 backdrop-blur-sm rounded-lg px-1.5 py-1 border shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setZoom(z => { const n = Math.max(0.5, z * 0.8); zoomRef.current = n; return n; })}
+                  className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
+                >−</button>
+                <span className="text-[10px] w-9 text-center tabular-nums text-muted-foreground">
+                  {Math.round(zoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setZoom(z => { const n = Math.min(5, z * 1.25); zoomRef.current = n; return n; })}
+                  className="w-6 h-6 flex items-center justify-center text-sm font-bold hover:text-primary transition-colors"
+                >+</button>
+                <button
+                  type="button"
+                  onClick={() => { zoomRef.current = 1; setZoom(1); }}
+                  className="w-6 h-6 flex items-center justify-center text-xs text-muted-foreground hover:text-primary transition-colors"
+                  title="Reset zoom"
+                >↺</button>
+              </div>
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center text-muted-foreground/20">

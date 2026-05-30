@@ -58,14 +58,13 @@ export function AppSidebar() {
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
 
-  const { data: transactions = [] } = useQuery({
-    queryKey: ["transactions"],
-    queryFn: api.getTransactions,
+  const { data: inboxItems = [] } = useQuery({
+    queryKey: ["inbox"],
+    queryFn: api.getInbox,
+    refetchInterval: 5000,
   })
 
-  const pendingScansCount = transactions.filter(
-    (t) => t.receipt_scan && t.receipt_scan.status !== "done"
-  ).length
+  const pendingScansCount = inboxItems.length
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">

@@ -21,6 +21,7 @@ class AIService:
         image_path: str,
         categories: Optional[list[dict]] = None,
         filename: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> Optional[dict]:
         """
         Entry point for receipt parsing.
@@ -34,13 +35,14 @@ class AIService:
             return None
 
         actual_filename = filename or os.path.basename(image_path)
-        return AIService._run_ocr_pipeline(image_bytes, categories, filename=actual_filename)
+        return AIService._run_ocr_pipeline(image_bytes, categories, filename=actual_filename, user_id=user_id)
 
     @staticmethod
     def _run_ocr_pipeline(
         image_bytes: bytes,
         categories: Optional[list[dict]] = None,
         filename: str = "",
+        user_id: Optional[int] = None,
     ) -> Optional[dict]:
         from .ocr_pipeline import (
             ReceiptSource,
@@ -57,26 +59,28 @@ class AIService:
             source = ReceiptSourceDetector.detect(filename=filename, file_bytes=image_bytes)
             print(f"📡 [Pipeline] Detected source: {source.value}")
 
+            image_to_process = image_bytes
+
             if source == ReceiptSource.EPARAGON:
                 print("⚡ [Pipeline] Structured e-Paragon JSON detected. Running fast extraction.")
-                data = EParagonJSONAdapter.parse(image_bytes)
-                data = AIService._categorize_parsed_items(data, categories)
+                data = EParagonJSONAdapter.parse(image_to_process)
+                data = AIService._categorize_parsed_items(data, categories, user_id)
                 return AIService._validate_and_annotate(data)
 
             if source == ReceiptSource.PDF_TEXT:
-                if PDFTextLayerAdapter.has_text_layer(image_bytes):
+                if PDFTextLayerAdapter.has_text_layer(image_to_process):
                     print("📄 [Pipeline] PDF has text layer. skipping Google Vision OCR.")
-                    text = PDFTextLayerAdapter.extract_text(image_bytes)
+                    text = PDFTextLayerAdapter.extract_text(image_to_process)
                     lines = [line.strip() for line in text.splitlines() if line.strip()]
                 else:
                     print("⚠️ [Pipeline] PDF has no text layer. Rendering first page to PNG.")
-                    converted_png = PDFTextLayerAdapter.convert_to_image(image_bytes)
+                    image_to_process = PDFTextLayerAdapter.convert_to_image(image_to_process)
                     ocr = GoogleVisionOCRService()
-                    result = ocr.extract(converted_png)
+                    result = ocr.extract(image_to_process)
                     lines = reconstruct_lines(result.words)
             else:
                 ocr = GoogleVisionOCRService()
-                result = ocr.extract(image_bytes)
+                result = ocr.extract(image_to_process)
                 lines = reconstruct_lines(result.words)
 
             merchant = detect_merchant(lines)
@@ -86,37 +90,33 @@ class AIService:
                 from .lidl_parser import LidlReceiptParser
                 parsed = LidlReceiptParser().parse(lines)
                 data = parsed.to_dict()
-                # Deterministic parsers don't assign categories. Run AI categorization
-                # here so Lidl items reach the staging area pre-categorized.
-                # (Cache-first lookup will plug in here once #178 lands.)
-                data = AIService._categorize_parsed_items(data, categories)
+                data = AIService._categorize_parsed_items(data, categories, user_id)
             else:
                 # AI structurizer fallback for all unknown / not-yet-parsed merchants.
-                # Categories are already assigned inside the structurizer prompt.
-                data = AIService._ai_structurize("\n".join(lines), categories)
+                data = AIService._ai_structurize("\n".join(lines))
+                data = AIService._categorize_parsed_items(data, categories, user_id)
 
             return AIService._validate_and_annotate(data)
 
-        except RuntimeError as e:
-            # Google Vision not configured — fall back to direct AI vision (legacy path)
-            print(f"⚠️ [Pipeline] OCR unavailable ({e}), falling back to AI vision")
-            data = AIService._ai_vision_fallback(image_bytes, categories)
-            return AIService._validate_and_annotate(data)
         except Exception as e:
-            print(f"❌ OCR Pipeline Error: {e}")
-            return None
+            # Catch all OCR-related errors (including Google API 403) and fallback to OpenAI Vision
+            print(f"⚠️ [Pipeline] OCR unavailable or failed ({e}), falling back to AI vision")
+            try:
+                data = AIService._ai_vision_fallback(image_bytes)
+                data = AIService._categorize_parsed_items(data, categories, user_id)
+                return AIService._validate_and_annotate(data)
+            except Exception as inner_e:
+                print(f"❌ Fallback AI Pipeline Error: {inner_e}")
+                return None
 
     @staticmethod
     def _categorize_parsed_items(
         data: Optional[dict],
         categories: Optional[list[dict]],
+        user_id: Optional[int],
     ) -> Optional[dict]:
         """
-        Batch-categorize items produced by a deterministic parser.
-
-        Skips items already categorized and basket-level adjustments (kaucja etc.).
-        On AI failure leaves items without a category — staging area will let the
-        user assign one manually.
+        Batch-categorize items produced by any parser using cache-first approach.
         """
         if data is None or not categories:
             return data
@@ -129,18 +129,60 @@ class AIService:
         if not targets:
             return data
 
-        names = [item["name"] for _, item in targets]
-        try:
-            mapping = AIService.categorize_descriptions(names, categories)
-        except Exception as e:
-            print(f"⚠️ [Categorization] AI call failed: {e}")
-            return data
+        from .database import get_ops_session
+        from .cache_service import fuzzy_match_cache, save_to_cache
+        
+        # Executor runs without injected session, create a short-lived one
+        db_session = next(get_ops_session())
 
-        valid_cat_names = {c["name"] for c in categories}
-        for idx, item in targets:
-            cat = mapping.get(item["name"])
-            if cat in valid_cat_names:
-                items[idx]["category"] = cat
+        names = [item["name"] for _, item in targets]
+        
+        try:
+            hits = {}
+            misses = names
+            if user_id:
+                hits, misses = fuzzy_match_cache(db_session, user_id, names)
+                if hits:
+                    print(f"🎯 [Categorization] Cache hits: {len(hits)} / {len(names)}")
+                
+            # For hits, assign category ID and map back to name
+            if hits:
+                cat_id_to_name = {c["id"]: c["name"] for c in categories}
+                for idx, item in targets:
+                    if item["name"] in hits:
+                        cat_id = hits[item["name"]]
+                        cat_name = cat_id_to_name.get(cat_id)
+                        if cat_name:
+                            items[idx]["category"] = cat_name
+
+            mapping = {}
+            if misses:
+                print(f"🧠 [Categorization] Asking AI for {len(misses)} unknown items...")
+                mapping = AIService.categorize_descriptions(misses, categories)
+                if mapping:
+                    print(f"✅ [Categorization] AI mapped {len(mapping)} items successfully")
+                else:
+                    print("⚠️ [Categorization] AI returned empty mapping")
+                
+            valid_cat_names = {c["name"]: c["id"] for c in categories}
+            new_cache_mappings = {}
+            
+            for idx, item in targets:
+                # If we have a newly mapped category from AI
+                if item["name"] in mapping:
+                    cat = mapping[item["name"]]
+                    if cat in valid_cat_names:
+                        items[idx]["category"] = cat
+                        new_cache_mappings[item["name"]] = valid_cat_names[cat]
+                        
+            if user_id and new_cache_mappings:
+                print(f"💾 [Categorization] Saving {len(new_cache_mappings)} new mappings to cache")
+                save_to_cache(db_session, user_id, new_cache_mappings)
+                
+        except Exception as e:
+            print(f"⚠️ [Categorization] Cache/AI failed: {e}")
+        finally:
+            db_session.close()
 
         return data
 
@@ -173,33 +215,28 @@ class AIService:
         return data
 
     @staticmethod
-    def _ai_structurize(receipt_text: str, categories: Optional[list[dict]] = None) -> Optional[dict]:
+    def _ai_structurize(receipt_text: str) -> Optional[dict]:
         """AI structurizer — called for unknown merchant formats after OCR + line reconstruction."""
-        cat_context = ""
-        if categories:
-            cat_list = ", ".join(f'"{c["name"]}"' for c in categories)
-            cat_context = f"\nCRITICAL: Assign a category to each item using ONLY names from this list: [{cat_list}]. Do NOT invent new categories."
 
-        system_prompt = f"""You are an expert receipt parser.
+        system_prompt = """You are an expert receipt parser.
 Extract structured data from the following receipt text.
 
 Return ONLY valid JSON with this structure:
-{{
+{
     "merchant_name": "Store Name",
     "date": "YYYY-MM-DD",
     "total_amount": 123.45,
     "currency": "PLN",
     "items": [
-        {{"name": "Product name", "price": 3.50, "quantity": 1, "category": "Food"}}
+        {"name": "Product name", "price": 3.50, "quantity": 1}
     ]
-}}
+}
 
 Rules:
 - date: YYYY-MM-DD format. Use today if missing.
 - total_amount: the final sum paid (after discounts).
 - Each item price is the unit price. quantity defaults to 1.
-- Include discounts as negative-price items if visible.
-{cat_context}"""
+- Include discounts as negative-price items if visible."""
 
         try:
             response = client.chat.completions.create(
@@ -217,19 +254,14 @@ Rules:
             return None
 
     @staticmethod
-    def _ai_vision_fallback(image_bytes: bytes, categories: Optional[list[dict]] = None) -> Optional[dict]:
+    def _ai_vision_fallback(image_bytes: bytes) -> Optional[dict]:
         """
         Direct AI vision — used only when Google Vision is not configured.
         Sends the whole image as-is (no chunking).
         """
-        cat_context = ""
-        if categories:
-            cat_list = ", ".join(f'"{c["name"]}"' for c in categories)
-            cat_context = f"\nCRITICAL: Assign categories ONLY from: [{cat_list}]."
 
-        system_prompt = f"""You are an expert receipt parser. Extract data from the receipt image into JSON.
-Return: merchant_name, date (YYYY-MM-DD), total_amount, currency, items (name/price/quantity/category).
-{cat_context}
+        system_prompt = """You are an expert receipt parser. Extract data from the receipt image into JSON.
+Return: merchant_name, date (YYYY-MM-DD), total_amount, currency, items (name/price/quantity).
 Return ONLY valid JSON."""
 
         try:
@@ -266,27 +298,38 @@ Return ONLY valid JSON."""
             return {}
 
         cat_list_str = ", ".join(f'"{c["name"]}"' for c in categories)
+        
+        # Create indexed descriptions so AI returns predictable keys
+        indexed_desc = {str(i): d for i, d in enumerate(descriptions)}
+        input_json = json.dumps(indexed_desc, ensure_ascii=False)
 
-        system_prompt = f"""You are a financial assistant. Categorize each bank transaction description.
+        system_prompt = f"""You are a financial assistant. Categorize each transaction description.
 For each description pick EXACTLY ONE category from: [{cat_list_str}].
 If no category fits, use the closest match.
-Return ONLY a JSON object: {{"Description": "Category", ...}}"""
+The user provides a JSON map: {{"ID": "description"}}. 
+You MUST return ONLY a JSON map: {{"ID": "Category"}}.
+Do NOT change the IDs."""
 
         try:
             response = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": "\n".join(descriptions)},
+                    {"role": "user", "content": input_json},
                 ],
                 response_format={"type": "json_object"},
                 max_tokens=1500,
             )
-            return json.loads(response.choices[0].message.content or "{}")
+            raw_mapping = json.loads(response.choices[0].message.content or "{}")
+            
+            # Reconstruct original mapping
+            result = {}
+            for k, cat in raw_mapping.items():
+                if k in indexed_desc:
+                    result[indexed_desc[k]] = cat
+            return result
         except Exception as e:
             print(f"❌ AI Categorization Error: {e}")
-            # Empty mapping lets callers leave items uncategorized rather than
-            # poisoning the result with a non-existent "Other" category.
             return {}
 
     # ── Bank statement parsing ─────────────────────────────────────────────────
