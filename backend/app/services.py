@@ -102,7 +102,7 @@ class AIService:
             # Catch all OCR-related errors (including Google API 403) and fallback to OpenAI Vision
             print(f"⚠️ [Pipeline] OCR unavailable or failed ({e}), falling back to AI vision")
             try:
-                data = AIService._ai_vision_fallback(image_to_process)
+                data = AIService._ai_vision_fallback(image_bytes)
                 data = AIService._categorize_parsed_items(data, categories, user_id)
                 return AIService._validate_and_annotate(data)
             except Exception as inner_e:
