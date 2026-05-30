@@ -23,7 +23,7 @@ export function LoginPage() {
   const { token, login } = useAuth();
   const navigate = useNavigate();
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
 
@@ -37,6 +37,11 @@ export function LoginPage() {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       toast.error(msg || t("auth.login.error_default"));
     }
+  };
+
+  const handleFillTestData = () => {
+    setValue("email", "test@example.com");
+    setValue("password", "password123");
   };
 
   return (
@@ -70,9 +75,22 @@ export function LoginPage() {
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? t("auth.login.submit_pending") : t("auth.login.submit_idle")}
-            </Button>
+            <div className="space-y-2 pt-2">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? t("auth.login.submit_pending") : t("auth.login.submit_idle")}
+              </Button>
+              
+              {import.meta.env.DEV && (
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  className="w-full text-xs"
+                  onClick={handleFillTestData}
+                >
+                  🧪 Uzupełnij dane testowe (Dev)
+                </Button>
+              )}
+            </div>
           </form>
 
           <p className="mt-4 text-center text-sm text-muted-foreground">

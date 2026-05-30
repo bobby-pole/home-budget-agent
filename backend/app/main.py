@@ -4,12 +4,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import os
-from sqlmodel import Session, select, SQLModel
+from dotenv import load_dotenv
 
-from .api import router
-from .database import operations_engine, identity_engine
-from .models import User
-from .auth import hash_password
+# Ensure environment variables are loaded for local execution BEFORE importing internal modules
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"), override=True)
+
+import logging  # noqa: E402
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+)
+
+from sqlmodel import Session, select, SQLModel  # noqa: E402
+
+from .api import router  # noqa: E402
+from .database import operations_engine, identity_engine  # noqa: E402
+from .models import User  # noqa: E402
+from .auth import hash_password  # noqa: E402
 
 TEST_USER_EMAIL = "test@example.com"
 TEST_USER_PASSWORD = "password123"

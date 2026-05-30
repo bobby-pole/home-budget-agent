@@ -2,16 +2,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Receipt, Upload, Loader2, FileText } from "lucide-react";
+import { Receipt, Upload, Loader2, FileText, Plus } from "lucide-react";
 import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { toast } from "sonner";
 import { useRef } from "react";
 import type { AxiosError } from "axios";
 import { t } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTransactionActions } from "@/hooks/use-transaction-actions";
 
 export function TransactionsPage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = useIsMobile();
+  const { setQuickEntryOpen, renderModals } = useTransactionActions();
 
   const { data: transactions = [], isLoading, error } = useQuery({
     queryKey: ["transactions"],
@@ -67,6 +71,14 @@ export function TransactionsPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {!isMobile && (
+            <Button
+              onClick={() => setQuickEntryOpen(true)}
+              className="rounded-full font-bold shadow-lg shadow-primary/20 h-10 px-6 transition-all active:scale-95 mr-2"
+            >
+              <Plus className="mr-2 size-4" /> {t("dashboard.header.add_transaction")}
+            </Button>
+          )}
           <input
             type="file"
             ref={fileInputRef}
@@ -112,6 +124,9 @@ export function TransactionsPage() {
             </CardContent>
          </Card>
       )}
+
+      {/* Modals & Drawers */}
+      {renderModals()}
     </div>
   );
 }

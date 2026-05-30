@@ -92,6 +92,22 @@ class Category(CategoryBase, table=True):
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="category")
 
 
+class ProductCategoryCache(SQLModel, table=True):
+    __tablename__: str = "product_category_cache"  # type: ignore
+    __table_args__ = (
+        UniqueConstraint("user_id", "normalized_name", name="uq_user_normalized_name"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    normalized_name: str = Field(index=True)
+    original_name: str
+    category_id: int = Field(foreign_key="category.id")
+    hit_count: int = Field(default=1)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class TagBase(SQLModel):
     name: str
     color: Optional[str] = None

@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
@@ -6,23 +5,22 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { QuickEntryDrawer } from "@/components/QuickEntryDrawer";
-import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal";
 import { BudgetSummaryCard } from "@/components/dashboard/BudgetSummaryCard";
 import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
 import { TopEnvelopesCard } from "@/components/dashboard/TopEnvelopesCard";
 import { RecentTransactionsList } from "@/components/dashboard/RecentTransactionsList";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useScanReceipt } from "@/hooks/use-scan-receipt";
-import { useAddTransaction } from "@/hooks/use-add-transaction";
+import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 
 export function Dashboard() {
-  const [quickEntryOpen, setQuickEntryOpen] = useState(false);
-  const { isAddTxOpen, setIsAddTxOpen, openAddTransaction } = useAddTransaction();
-  const { scanReceipt, isScanning } = useScanReceipt();
+  const {
+    setQuickEntryOpen,
+    renderModals
+  } = useTransactionActions();
+
   const isMobile = useIsMobile();
 
   const now = new Date();
@@ -30,18 +28,6 @@ export function Dashboard() {
   const curYear = now.getFullYear();
   const monthName = now.toLocaleString(getIntlLocale(), { month: "long" });
   const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "n" || e.key === "N") {
-        const tag = (e.target as HTMLElement).tagName;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-        setQuickEntryOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, []);
 
   const {
     data: transactions = [],
@@ -151,14 +137,7 @@ export function Dashboard() {
       <RecentTransactionsList transactions={transactions} categories={categories} isLoading={isTransactionsLoading} />
 
       {/* Modals & Drawers */}
-      <QuickEntryDrawer
-        open={quickEntryOpen}
-        onOpenChange={setQuickEntryOpen}
-        onScanReceipt={scanReceipt}
-        onManualEntry={openAddTransaction}
-        scanPending={isScanning}
-      />
-      <AddTransactionModal open={isAddTxOpen} onOpenChange={setIsAddTxOpen} />
-    </div >
+      {renderModals()}
+    </div>
   );
 }

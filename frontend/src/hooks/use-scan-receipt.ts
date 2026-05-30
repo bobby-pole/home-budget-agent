@@ -34,8 +34,12 @@ export function useScanReceipt() {
   });
 
   const scanReceipt = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      toast.error(t("scan_receipt.toast_invalid_file"));
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isJson = file.type === "application/json" || file.name.endsWith(".json");
+
+    if (!isImage && !isPdf && !isJson) {
+      toast.error(t("upload.toast_invalid_format"));
       return;
     }
     scanMutation.mutate({ file });

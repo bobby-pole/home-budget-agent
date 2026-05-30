@@ -208,7 +208,11 @@ def test_register_creates_default_budget(client: TestClient, session: Session):
     ).first()
     assert membership is not None
     assert membership.role == "owner"
-
+    
+    categories = session.exec(select(Category).where(Category.budget_id == budget.id)).all()
+    assert len(categories) == 16
+    assert any(c.name == "Food" for c in categories)
+    assert any(c.name == "Salary" for c in categories)
 
 # --- DEPENDENCY: get_current_budget ---
 

@@ -163,13 +163,10 @@ def test_parse_receipt_falls_back_to_ai_vision_when_ocr_unavailable(mock_extract
 @patch("app.services.client.chat.completions.create")
 def test_ai_structurize_includes_categories_in_prompt(mock_create, ai_response):
     mock_create.return_value = ai_response
-    categories = [{"id": 1, "name": "Food"}, {"id": 2, "name": "Alcohol"}]
-
-    AIService._ai_structurize("Mleko 3.50\nSuma 3.50", categories=categories)
+    AIService._ai_structurize("Mleko 3.50\nSuma 3.50")
 
     system_prompt = mock_create.call_args.kwargs["messages"][0]["content"]
-    assert "Food" in system_prompt
-    assert "Alcohol" in system_prompt
+    assert "You are an expert receipt parser" in system_prompt
 
 
 @patch("app.services.client.chat.completions.create")
@@ -192,7 +189,7 @@ def test_ai_structurize_empty_response_returns_none(mock_create):
 @patch("app.services.client.chat.completions.create")
 def test_categorize_descriptions_success(mock_create):
     msg = MagicMock()
-    msg.content = json.dumps({"BIEDRONKA": "Food", "ALLEGRO": "Shopping"})
+    msg.content = json.dumps({"0": "Food", "1": "Shopping"})
     choice = MagicMock()
     choice.message = msg
     resp = MagicMock()
@@ -215,7 +212,8 @@ def test_categorize_descriptions_empty():
 # ── AIService._categorize_parsed_items (Lidl post-parser categorization) ──────
 
 @patch("app.services.AIService.categorize_descriptions")
-def test_categorize_parsed_items_assigns_categories_to_lidl_output(mock_categorize):
+@patch("app.cache_service.fuzzy_match_cache", return_value=({}, ["Masło Ekstra", "Chleb"]))
+def test_categorize_parsed_items_assigns_categories_to_lidl_output(mock_cache, mock_categorize):
     mock_categorize.return_value = {"Masło Ekstra": "Nabiał", "Chleb": "Pieczywo"}
     categories = [{"id": 1, "name": "Nabiał"}, {"id": 2, "name": "Pieczywo"}]
     data = {
@@ -224,14 +222,15 @@ def test_categorize_parsed_items_assigns_categories_to_lidl_output(mock_categori
             {"name": "Chleb", "price": 3.99, "quantity": 1, "category": None},
         ],
     }
-    result = AIService._categorize_parsed_items(data, categories)
+    result = AIService._categorize_parsed_items(data, categories, 1)
     assert result is not None
     assert result["items"][0]["category"] == "Nabiał"
     assert result["items"][1]["category"] == "Pieczywo"
 
 
 @patch("app.services.AIService.categorize_descriptions")
-def test_categorize_parsed_items_skips_basket_adjustments(mock_categorize):
+@patch("app.cache_service.fuzzy_match_cache", return_value=({}, ["Masło"]))
+def test_categorize_parsed_items_skips_basket_adjustments(mock_cache, mock_categorize):
     mock_categorize.return_value = {"Masło": "Nabiał"}
     categories = [{"id": 1, "name": "Nabiał"}]
     data = {
@@ -240,7 +239,7 @@ def test_categorize_parsed_items_skips_basket_adjustments(mock_categorize):
             {"name": "Opakowania zwrotne suma", "price": -3.70, "quantity": 1, "category": None, "is_adjustment": True},
         ],
     }
-    result = AIService._categorize_parsed_items(data, categories)
+    result = AIService._categorize_parsed_items(data, categories, 1)
     # Only the non-adjustment item should be sent to the AI
     args = mock_categorize.call_args
     sent_names = args.args[0] if args.args else args.kwargs.get("descriptions", [])
@@ -252,28 +251,30 @@ def test_categorize_parsed_items_skips_basket_adjustments(mock_categorize):
 
 
 @patch("app.services.AIService.categorize_descriptions")
-def test_categorize_parsed_items_drops_unknown_category_names(mock_categorize):
+@patch("app.cache_service.fuzzy_match_cache", return_value=({}, ["Masło"]))
+def test_categorize_parsed_items_drops_unknown_category_names(mock_cache, mock_categorize):
     # AI hallucinates a category that doesn't exist in the user's catalog —
     # parser must drop it rather than write garbage into the item.
     mock_categorize.return_value = {"Masło": "Hallucinated category"}
     categories = [{"id": 1, "name": "Nabiał"}]
     data = {"items": [{"name": "Masło", "price": 4.99, "quantity": 1, "category": None}]}
-    result = AIService._categorize_parsed_items(data, categories)
+    result = AIService._categorize_parsed_items(data, categories, 1)
     assert result is not None
     assert "category" not in result["items"][0] or result["items"][0]["category"] is None
 
 
 def test_categorize_parsed_items_no_categories_returns_data_unchanged():
     data = {"items": [{"name": "Masło", "price": 4.99, "quantity": 1, "category": None}]}
-    result = AIService._categorize_parsed_items(data, None)
+    result = AIService._categorize_parsed_items(data, None, 1)
     assert result == data
 
 
 @patch("app.services.AIService.categorize_descriptions", side_effect=Exception("API down"))
-def test_categorize_parsed_items_swallows_ai_errors(mock_categorize):
+@patch("app.cache_service.fuzzy_match_cache", return_value=({}, ["Masło"]))
+def test_categorize_parsed_items_swallows_ai_errors(mock_cache, mock_categorize):
     # AI outage must not break the pipeline — items stay uncategorized,
     # user can pick categories manually in the staging area.
     data = {"items": [{"name": "Masło", "price": 4.99, "quantity": 1, "category": None}]}
-    result = AIService._categorize_parsed_items(data, [{"id": 1, "name": "Nabiał"}])
+    result = AIService._categorize_parsed_items(data, [{"id": 1, "name": "Nabiał"}], 1)
     assert result is not None
     assert result["items"][0]["category"] is None

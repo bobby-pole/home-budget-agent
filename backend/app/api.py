@@ -48,53 +48,7 @@ def health_check():
 
 # --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
 
-def get_current_budget(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_ops_session),
-) -> Budget:
-    membership = session.exec(
-        select(BudgetMember).where(BudgetMember.user_id == current_user.id)
-    ).first()
-    if membership:
-        budget = session.get(Budget, membership.budget_id)
-        if budget:
-            return budget
-
-    # Lazy migration: user existed before multi-tenancy — create a default budget on the fly
-    new_budget = Budget(name="Domowy", owner_id=current_user.id)
-    session.add(new_budget)
-    session.commit()
-    session.refresh(new_budget)
-    if new_budget.id is None:
-        raise HTTPException(status_code=500, detail="Failed to create budget")
-    session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
-    session.commit()
-    return new_budget
-
-
-# --- AUTH ---
-
-@router.post("/auth/register", response_model=Token)
-def register(user_data: UserCreate, session: Session = Depends(get_session)):
-    existing = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(email=user_data.email, hashed_password=hash_password(user_data.password))
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    if user.id is None:
-        raise HTTPException(status_code=500, detail="Failed to create user")
-
-    # Create default budget for the new user and link user as owner
-    new_budget = Budget(name="Domowy", owner_id=user.id)
-    session.add(new_budget)
-    session.commit()
-    session.refresh(new_budget)
-    if new_budget.id is None:
-        raise HTTPException(status_code=500, detail="Failed to create budget")
-    session.add(BudgetMember(budget_id=new_budget.id, user_id=user.id, role="owner"))
-
+def seed_default_categories(session: Session, budget_id: int):
     default_cats = [
         {"name": "Food", "icon": "🍔", "color": "#f87171"},
         {"name": "Housing", "icon": "🏠", "color": "#fb923c"},
@@ -119,12 +73,70 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
             icon=cat_data["icon"],
             color=cat_data["color"],
             is_system=True,
-            budget_id=new_budget.id,
+            budget_id=budget_id,
             order_index=i
         )
         session.add(new_category)
-
     session.commit()
+
+def get_current_budget(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session),
+) -> Budget:
+    membership = session.exec(
+        select(BudgetMember).where(BudgetMember.user_id == current_user.id)
+    ).first()
+    if membership:
+        budget = session.get(Budget, membership.budget_id)
+        if budget:
+            # Check if categories exist, if not, seed them (for users migrated before this fix)
+            if not session.exec(select(Category).where(Category.budget_id == budget.id)).first():
+                if budget.id is not None:
+                    seed_default_categories(session, budget.id)
+            return budget
+
+    # Lazy migration: user existed before multi-tenancy — create a default budget on the fly
+    new_budget = Budget(name="Domowy", owner_id=current_user.id)
+    session.add(new_budget)
+    session.commit()
+    session.refresh(new_budget)
+    if new_budget.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create budget")
+    session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
+    session.commit()
+    seed_default_categories(session, new_budget.id)
+    return new_budget
+
+
+# --- AUTH ---
+
+@router.post("/auth/register", response_model=Token)
+def register(
+    user_data: UserCreate, 
+    session: Session = Depends(get_session),
+    ops_session: Session = Depends(get_ops_session)
+):
+    existing = session.exec(select(User).where(User.email == user_data.email)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = User(email=user_data.email, hashed_password=hash_password(user_data.password))
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    if user.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create user")
+
+    # Create default budget for the new user and link user as owner
+    new_budget = Budget(name="Domowy", owner_id=user.id)
+    ops_session.add(new_budget)
+    ops_session.commit()
+    ops_session.refresh(new_budget)
+    if new_budget.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create budget")
+    ops_session.add(BudgetMember(budget_id=new_budget.id, user_id=user.id, role="owner"))
+    ops_session.commit()
+    
+    seed_default_categories(ops_session, new_budget.id)
 
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
@@ -181,7 +193,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
 
         stage_start = time.monotonic()
         data = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts)
+            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
         )
         logger.info(
             "OCR completed",

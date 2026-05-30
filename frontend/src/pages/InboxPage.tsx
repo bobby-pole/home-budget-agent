@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Inbox, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { Inbox, Loader2, Sparkles, AlertCircle, Plus } from "lucide-react";
 import { api } from "@/lib/api";
 import { PendingVerificationList } from "@/components/inbox/PendingVerificationList";
 import { VerificationCard } from "@/components/inbox/VerificationCard";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -13,12 +15,14 @@ export function InboxPage() {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const isMobile = useIsMobile();
+  const { setQuickEntryOpen, renderModals } = useTransactionActions();
 
   const { data: transactions = [], isLoading, error } = useQuery({
     queryKey: ["inbox"],
     queryFn: api.getInbox,
-    refetchInterval: 5000, 
+    refetchInterval: 5000,
   });
+
 
   // Decide which transaction to show
   const currentTransaction = transactions.find(t => t.id === selectedId) || (transactions.length > 0 && !isMobile ? transactions[0] : null);
@@ -55,18 +59,30 @@ export function InboxPage() {
               )}
             </div>
           </div>
-          
-          {transactions.length > 0 && (
-            <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-primary/5 rounded-full border border-primary/10">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              <span className="text-[10px] md:text-xs font-bold text-primary">
-                {transactions.length} {t("inbox.pending_count_label")}
-              </span>
-            </div>
-          )}
+
+
+          <div className="flex items-center gap-4">
+            {!isMobile && (
+              <Button
+                onClick={() => setQuickEntryOpen(true)}
+                className="rounded-full font-bold shadow-lg shadow-primary/20 h-10 px-6 transition-all active:scale-95"
+              >
+                <Plus className="mr-2 size-4" /> {t("dashboard.header.add_transaction")}
+              </Button>
+            )}
+            
+            {transactions.length > 0 && (
+              <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-primary/5 rounded-full border border-primary/10">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                </span>
+                <span className="text-[10px] md:text-xs font-bold text-primary">
+                  {transactions.length} {t("inbox.pending_count_label")}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -98,8 +114,8 @@ export function InboxPage() {
                   </CardContent>
                 </Card>
               ) : (
-                <PendingVerificationList 
-                  transactions={transactions} 
+                <PendingVerificationList
+                  transactions={transactions}
                   selectedId={currentTransaction?.id}
                   onSelect={(t) => setSelectedId(t.id)}
                 />
@@ -114,9 +130,9 @@ export function InboxPage() {
             "flex-1 overflow-hidden",
             isMobile && "fixed inset-0 z-50 bg-background pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+64px)]"
           )}>
-            <VerificationCard 
+            <VerificationCard
               key={currentTransaction.id}
-              transaction={currentTransaction} 
+              transaction={currentTransaction}
               onSuccess={handleSuccess}
               onBack={isMobile ? () => setSelectedId(null) : undefined}
             />
@@ -135,6 +151,8 @@ export function InboxPage() {
           </div>
         )}
       </div>
+
+      {renderModals()}
     </div>
   );
 }
