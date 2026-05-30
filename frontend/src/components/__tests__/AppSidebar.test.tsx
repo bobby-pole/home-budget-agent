@@ -7,10 +7,10 @@ import { SidebarProvider } from "../ui/sidebar"
 // Mockujemy api aby kontrolować badge AI Inbox
 vi.mock("@/lib/api", () => ({
   api: {
-    getTransactions: vi.fn().mockResolvedValue([
-      { id: 1, total_amount: 100, receipt_scan: { status: "processing" } },
-      { id: 2, total_amount: 200, receipt_scan: { status: "done" } },
-      { id: 3, total_amount: 300, receipt_scan: { status: "pending" } },
+    getTransactions: vi.fn().mockResolvedValue([]),
+    getInbox: vi.fn().mockResolvedValue([
+      { id: 1, total_amount: 100 },
+      { id: 3, total_amount: 300 },
     ])
   }
 }))
