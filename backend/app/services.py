@@ -60,6 +60,8 @@ class AIService:
             print(f"📡 [Pipeline] Detected source: {source.value}")
 
             image_to_process = image_bytes
+            raw_text: Optional[str] = None
+            extracted_lines: Optional[list[str]] = None
 
             if source == ReceiptSource.EPARAGON:
                 print("⚡ [Pipeline] Structured e-Paragon JSON detected. Running fast extraction.")
@@ -72,16 +74,22 @@ class AIService:
                     print("📄 [Pipeline] PDF has text layer. skipping Google Vision OCR.")
                     text = PDFTextLayerAdapter.extract_text(image_to_process)
                     lines = [line.strip() for line in text.splitlines() if line.strip()]
+                    raw_text = text
+                    extracted_lines = lines
                 else:
                     print("⚠️ [Pipeline] PDF has no text layer. Rendering first page to PNG.")
                     image_to_process = PDFTextLayerAdapter.convert_to_image(image_to_process)
                     ocr = GoogleVisionOCRService()
                     result = ocr.extract(image_to_process)
                     lines = reconstruct_lines(result.words, source=source)
+                    raw_text = result.raw_text
+                    extracted_lines = lines
             else:
                 ocr = GoogleVisionOCRService()
                 result = ocr.extract(image_to_process)
                 lines = reconstruct_lines(result.words, source=source)
+                raw_text = result.raw_text
+                extracted_lines = lines
 
             if source == ReceiptSource.PHOTO_IMAGE:
                 print("📸 [Pipeline] Camera photo detected. Bypassing deterministic parser.")
@@ -101,7 +109,11 @@ class AIService:
                     data = AIService._ai_structurize("\n".join(lines))
                     data = AIService._categorize_parsed_items(data, categories, user_id)
 
-            return AIService._validate_and_annotate(data)
+            data = AIService._validate_and_annotate(data)
+            if data is not None:
+                data["_raw_ocr_text"] = raw_text
+                data["_reconstructed_lines"] = extracted_lines
+            return data
 
         except Exception as e:
             # Catch all OCR-related errors (including Google API 403) and fallback to OpenAI Vision

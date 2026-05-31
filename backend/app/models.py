@@ -2,7 +2,7 @@
 from enum import Enum
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import UniqueConstraint, Index, String, Column
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -173,6 +173,8 @@ class ReceiptScan(SQLModel, table=True):
     keep_image: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     validation_message: Optional[str] = Field(default=None)
+    raw_ocr_text: Optional[str] = Field(default=None)
+    reconstructed_lines: Optional[list[str]] = Field(default=None, sa_column=Column(JSON))
 
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
 
@@ -248,6 +250,8 @@ class ReceiptScanRead(SQLModel):
     created_at: datetime
     validation_message: Optional[str] = None
     error_message: Optional[str] = None
+    raw_ocr_text: Optional[str] = None
+    reconstructed_lines: Optional[list[str]] = None
 
 
 class TransactionRead(TransactionBase):
