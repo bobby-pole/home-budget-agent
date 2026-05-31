@@ -219,6 +219,22 @@ class EnvelopeAllocation(SQLModel, table=True):
     budget: Optional[Budget] = Relationship(back_populates="envelope_allocations")
     category: Optional["Category"] = Relationship(back_populates="envelope_allocations")
 
+# ─── BudgetAlert (Notifications for Zeroed Envelopes) ──────────────────────────
+
+class BudgetAlert(SQLModel, table=True):
+    __tablename__: str = "budgetalert"  # type: ignore
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    category_name: str
+    message: str
+    is_read: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    budget: Optional[Budget] = Relationship()
+    user: Optional[User] = Relationship()
+
 # ─── API DTOs ────────────────────────────────────────────────────────────────
 
 class EnvelopeAllocationRead(SQLModel):
@@ -404,3 +420,18 @@ class Token(SQLModel):
     access_token: str
     token_type: str = "bearer"
     user: UserRead
+
+
+class BudgetAlertRead(SQLModel):
+    id: int
+    budget_id: int
+    user_id: int
+    category_name: str
+    message: str
+    is_read: bool
+    created_at: datetime
+
+
+class AppStatusRead(SQLModel):
+    inbox_items: List[TransactionRead]
+    unread_alerts: List[BudgetAlertRead]

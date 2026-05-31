@@ -5,7 +5,9 @@ import {
   Sparkles,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useEffect } from "react"
+import { toast } from "sonner"
 import { api } from "@/lib/api"
 
 import { cn } from "@/lib/utils"
@@ -57,14 +59,34 @@ export function AppSidebar() {
   const pathname = location.pathname
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
+  const queryClient = useQueryClient()
 
-  const { data: inboxItems = [] } = useQuery({
-    queryKey: ["inbox"],
-    queryFn: api.getInbox,
+  const { data: statusData } = useQuery({
+    queryKey: ["status"],
+    queryFn: api.getAppStatus,
     refetchInterval: 5000,
   })
 
-  const pendingScansCount = inboxItems.length
+  const markReadMutation = useMutation({
+    mutationFn: api.markAlertRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["status"] })
+    }
+  })
+
+  useEffect(() => {
+    if (statusData?.unread_alerts && statusData.unread_alerts.length > 0) {
+      statusData.unread_alerts.forEach(alert => {
+        toast.warning("Uwaga: Wyzerowana koperta", {
+          description: alert.message,
+          duration: 10000,
+        })
+        markReadMutation.mutate(alert.id)
+      })
+    }
+  }, [statusData?.unread_alerts, markReadMutation])
+
+  const pendingScansCount = statusData?.inbox_items?.length || 0
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">

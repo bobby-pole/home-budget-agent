@@ -23,7 +23,8 @@ from .models import (
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
-    BudgetMemberCreate, BudgetMemberRead
+    BudgetMemberCreate, BudgetMemberRead,
+    BudgetAlert, AppStatusRead
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -307,6 +308,59 @@ async def process_transaction_in_background(transaction_id: int, scan_id: int, i
 
 
 
+def _check_envelope_balance_and_alert(session: Session, transaction: Transaction, delta_amount: float):
+    if transaction.type != "expense" or not transaction.category_id or not transaction.budget_id:
+        return
+
+    date_obj = transaction.date or datetime.now(timezone.utc)
+    year = date_obj.year
+    month = date_obj.month
+
+    planned = session.exec(
+        select(EnvelopeAllocation.amount).where(
+            EnvelopeAllocation.budget_id == transaction.budget_id,
+            EnvelopeAllocation.category_id == transaction.category_id,
+            EnvelopeAllocation.year == year,
+            EnvelopeAllocation.month == month
+        )
+    ).first() or 0.0
+
+    spent = session.exec(
+        select(func.sum(Transaction.total_amount)).where(
+            Transaction.budget_id == transaction.budget_id,
+            Transaction.category_id == transaction.category_id,
+            Transaction.type == "expense",
+            extract('year', col(Transaction.date)) == year,
+            extract('month', col(Transaction.date)) == month
+        )
+    ).first() or 0.0
+
+    remaining = planned - spent
+    remaining_before = remaining + delta_amount
+
+    if remaining_before > 0 and remaining <= 0:
+        category = session.get(Category, transaction.category_id)
+        cat_name = category.name if category else "Nieznana"
+        
+        other_members = session.exec(
+            select(BudgetMember.user_id).where(
+                BudgetMember.budget_id == transaction.budget_id,
+                BudgetMember.user_id != transaction.uploaded_by
+            )
+        ).all()
+        
+        for member_id in other_members:
+            if member_id is None:
+                continue
+            alert = BudgetAlert(
+                budget_id=transaction.budget_id,
+                user_id=member_id,
+                category_name=cat_name,
+                message=f"Koperta '{cat_name}' została wyzerowana. Zostało {remaining:.2f} PLN.",
+            )
+            session.add(alert)
+        session.commit()
+
 # --- TRANSACTIONS ---
 
 @router.post("/transactions/manual", response_model=TransactionRead)
@@ -365,6 +419,9 @@ def create_manual_transaction(
 
     session.commit()
     session.refresh(transaction)
+    
+    _check_envelope_balance_and_alert(session, transaction, transaction.total_amount)
+    
     return transaction
 
 
@@ -507,6 +564,62 @@ async def get_transactions(
     return results
 
 
+@router.get("/status", response_model=AppStatusRead)
+async def get_app_status(
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Fetch global app status: inbox items and unread alerts."""
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    inbox_statuses = [
+        ScanStatus.NEEDS_REVIEW,
+        ScanStatus.FAILED,
+        "needs_review",
+        "error",
+    ]
+    inbox_statement = (
+        select(Transaction)
+        .join(ReceiptScan)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(ReceiptScan.status).in_(inbox_statuses),
+        )
+        .order_by(desc(Transaction.date))
+    )
+    inbox_results = session.exec(inbox_statement).all()
+
+    alerts_statement = select(BudgetAlert).where(
+        BudgetAlert.budget_id == current_budget.id,
+        BudgetAlert.user_id == current_user.id,
+        BudgetAlert.is_read == False  # noqa: E712
+    ).order_by(col(BudgetAlert.created_at))
+    unread_alerts = session.exec(alerts_statement).all()
+
+    return {
+        "inbox_items": list(inbox_results),
+        "unread_alerts": list(unread_alerts)
+    }
+
+
+@router.post("/alerts/{alert_id}/read")
+async def mark_alert_read(
+    alert_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+):
+    alert = session.get(BudgetAlert, alert_id)
+    if not alert or alert.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    
+    alert.is_read = True
+    session.add(alert)
+    session.commit()
+    return {"status": "ok"}
+
+
 @router.get("/transactions/inbox", response_model=List[TransactionRead])
 async def get_inbox(
     session: Session = Depends(get_ops_session),
@@ -632,6 +745,8 @@ async def verify_transaction(
     session.commit()
     session.refresh(db_transaction)
 
+    _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
+
     # Delete image only if user did not request to keep it
     if not scan.keep_image and scan.image_path and os.path.exists(scan.image_path):
         try:
@@ -663,6 +778,9 @@ async def update_transaction(
     if db_transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to modify this transaction")
 
+    old_amount = db_transaction.total_amount
+    old_category = db_transaction.category_id
+
     transaction_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in transaction_data.items():
         setattr(db_transaction, key, value)
@@ -674,6 +792,10 @@ async def update_transaction(
     session.add(db_transaction)
     session.commit()
     session.refresh(db_transaction)
+    
+    delta_amount = db_transaction.total_amount if old_category != db_transaction.category_id else (db_transaction.total_amount - old_amount)
+    _check_envelope_balance_and_alert(session, db_transaction, delta_amount)
+
     return db_transaction
 
 

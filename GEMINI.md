@@ -100,6 +100,12 @@ Owner: "start issue #X"
 git checkout -b feat/<issue-number>-short-description
 ```
 
+### Planning & Artifacts Rule
+**IMPORTANT:** Whenever creating an implementation plan (e.g. `implementation.md` artifact) or acting as a Project Manager/Tech Lead:
+1. **Never put questions for the owner in the artifact file itself.** Any questions, doubts, or requests for clarification MUST be printed directly in the terminal chat.
+2. Always proactively search for and report any codebase inconsistencies, architectural risks, or potential security threats related to the current implementation.
+3. If any requirements are underspecified, explicitly ask the owner for details in the chat before proceeding.
+
 ---
 
 ## GitHub-First Rule

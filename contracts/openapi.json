@@ -337,6 +337,72 @@
         }
       }
     },
+    "/api/status": {
+      "get": {
+        "summary": "Get App Status",
+        "description": "Fetch global app status: inbox items and unread alerts.",
+        "operationId": "get_app_status_api_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppStatusRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/alerts/{alert_id}/read": {
+      "post": {
+        "summary": "Mark Alert Read",
+        "operationId": "mark_alert_read_api_alerts__alert_id__read_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/transactions/inbox": {
       "get": {
         "summary": "Get Inbox",
@@ -1295,6 +1361,30 @@
   },
   "components": {
     "schemas": {
+      "AppStatusRead": {
+        "properties": {
+          "inbox_items": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionRead"
+            },
+            "type": "array",
+            "title": "Inbox Items"
+          },
+          "unread_alerts": {
+            "items": {
+              "$ref": "#/components/schemas/BudgetAlertRead"
+            },
+            "type": "array",
+            "title": "Unread Alerts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "inbox_items",
+          "unread_alerts"
+        ],
+        "title": "AppStatusRead"
+      },
       "Body_import_transactions_api_transactions_import_post": {
         "properties": {
           "file": {
@@ -1333,6 +1423,50 @@
           "file"
         ],
         "title": "Body_scan_transaction_api_transactions_scan_post"
+      },
+      "BudgetAlertRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "budget_id": {
+            "type": "integer",
+            "title": "Budget Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "category_name": {
+            "type": "string",
+            "title": "Category Name"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "is_read": {
+            "type": "boolean",
+            "title": "Is Read"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "budget_id",
+          "user_id",
+          "category_name",
+          "message",
+          "is_read",
+          "created_at"
+        ],
+        "title": "BudgetAlertRead"
       },
       "BudgetMemberCreate": {
         "properties": {
@@ -1852,6 +1986,31 @@
               }
             ],
             "title": "Error Message"
+          },
+          "raw_ocr_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Ocr Text"
+          },
+          "reconstructed_lines": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconstructed Lines"
           }
         },
         "type": "object",

@@ -8,10 +8,14 @@ import { SidebarProvider } from "../ui/sidebar"
 vi.mock("@/lib/api", () => ({
   api: {
     getTransactions: vi.fn().mockResolvedValue([]),
-    getInbox: vi.fn().mockResolvedValue([
-      { id: 1, total_amount: 100 },
-      { id: 3, total_amount: 300 },
-    ])
+    getAppStatus: vi.fn().mockResolvedValue({
+      inbox_items: [
+        { id: 1, total_amount: 100 },
+        { id: 3, total_amount: 300 },
+      ],
+      unread_alerts: []
+    }),
+    markAlertRead: vi.fn().mockResolvedValue({ status: "ok" }),
   }
 }))
 

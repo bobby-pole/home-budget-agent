@@ -8,7 +8,8 @@ import type {
   BudgetMemberRead as BudgetMember, 
   BudgetMemberCreate,
   TransactionUpdate,
-  TransactionLineUpdate
+  TransactionLineUpdate,
+  AppStatusRead
 } from "@/client";
 import { getToken, clearAuth } from "@/lib/auth";
 import axios from "axios";
@@ -74,6 +75,16 @@ export const api = {
 
   getInbox: async () => {
     const response = await apiClient.get<Transaction[]>("/transactions/inbox");
+    return response.data;
+  },
+
+  getAppStatus: async () => {
+    const response = await apiClient.get<AppStatusRead>("/status");
+    return response.data;
+  },
+
+  markAlertRead: async (id: number) => {
+    const response = await apiClient.post(`/alerts/${id}/read`);
     return response.data;
   },
 
