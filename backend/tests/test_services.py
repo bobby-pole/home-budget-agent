@@ -54,6 +54,25 @@ def test_detect_source_pdf():
 def test_detect_source_pdf_by_filename():
     assert ReceiptSourceDetector.detect("receipt.pdf") == ReceiptSource.PDF_TEXT
 
+def test_detect_source_photo_with_exif():
+    from io import BytesIO
+    from PIL import Image
+    img = Image.new('RGB', (100, 100))
+    exif = img.getexif()
+    exif[271] = "Apple"  # Make
+    exif[272] = "iPhone 13" # Model
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='JPEG', exif=exif)
+    assert ReceiptSourceDetector.detect("receipt.jpg", "image/jpeg", file_bytes=img_bytes.getvalue()) == ReceiptSource.PHOTO_IMAGE
+
+def test_detect_source_app_png_no_exif():
+    from io import BytesIO
+    from PIL import Image
+    img = Image.new('RGB', (100, 100))
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='PNG')
+    assert ReceiptSourceDetector.detect("receipt.png", "image/png", file_bytes=img_bytes.getvalue()) == ReceiptSource.APP_PNG
+
 
 # ── reconstruct_lines ─────────────────────────────────────────────────────────
 
@@ -68,6 +87,21 @@ def test_reconstruct_lines_two_rows():
     assert len(lines) == 2
     assert "Mleko" in lines[0] and "3.50" in lines[0]
     assert "Chleb" in lines[1] and "2.00" in lines[1]
+
+def test_reconstruct_lines_photo_relaxed_y():
+    # word height is 10 by default
+    words = [
+        _make_word("Mleko", x=10, y=100),
+        _make_word("3.50", x=200, y=107), # 7 pixels delta in Y
+    ]
+    # APP_PNG -> tight tolerance (5.0) -> splits into 2 lines
+    lines_app = reconstruct_lines(words, source=ReceiptSource.APP_PNG)
+    assert len(lines_app) == 2
+    
+    # PHOTO_IMAGE -> relaxed tolerance (8.0) -> merges into 1 line
+    lines_photo = reconstruct_lines(words, source=ReceiptSource.PHOTO_IMAGE)
+    assert len(lines_photo) == 1
+    assert "Mleko 3.50" in lines_photo[0]
 
 
 def test_reconstruct_lines_single_row():
