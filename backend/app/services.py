@@ -99,6 +99,7 @@ class AIService:
                 merchant = detect_merchant(lines)
                 print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
 
+
                 if merchant == "lidl":
                     from .lidl_parser import LidlReceiptParser
                     parsed = LidlReceiptParser().parse(lines)
