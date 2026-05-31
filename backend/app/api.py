@@ -220,6 +220,8 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         if not scan2:
             return
         scan2.status = ScanStatus.PARSING_OK
+        scan2.raw_ocr_text = data.get("_raw_ocr_text")
+        scan2.reconstructed_lines = data.get("_reconstructed_lines")
 
         if not val_is_valid:
             logger.warning("Validation failed", extra={"scan_id": scan_id, "message": val_message})

@@ -13,7 +13,7 @@
       "bash -c 'cd frontend && npx eslint --no-warn-ignored --max-warnings=0 \"${@}\"' --"
     ],
     "backend/**/*.py": [
-      "bash -c 'cd backend && source venv/bin/activate && ruff check \"${@}\"' --"
+      "bash -c 'cd backend && uv run ruff check \"${@}\"' --"
     ]
   },
   "devDependencies": {
