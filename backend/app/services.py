@@ -77,24 +77,29 @@ class AIService:
                     image_to_process = PDFTextLayerAdapter.convert_to_image(image_to_process)
                     ocr = GoogleVisionOCRService()
                     result = ocr.extract(image_to_process)
-                    lines = reconstruct_lines(result.words)
+                    lines = reconstruct_lines(result.words, source=source)
             else:
                 ocr = GoogleVisionOCRService()
                 result = ocr.extract(image_to_process)
-                lines = reconstruct_lines(result.words)
+                lines = reconstruct_lines(result.words, source=source)
 
-            merchant = detect_merchant(lines)
-            print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
-
-            if merchant == "lidl":
-                from .lidl_parser import LidlReceiptParser
-                parsed = LidlReceiptParser().parse(lines)
-                data = parsed.to_dict()
-                data = AIService._categorize_parsed_items(data, categories, user_id)
-            else:
-                # AI structurizer fallback for all unknown / not-yet-parsed merchants.
+            if source == ReceiptSource.PHOTO_IMAGE:
+                print("📸 [Pipeline] Camera photo detected. Bypassing deterministic parser.")
                 data = AIService._ai_structurize("\n".join(lines))
                 data = AIService._categorize_parsed_items(data, categories, user_id)
+            else:
+                merchant = detect_merchant(lines)
+                print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
+
+                if merchant == "lidl":
+                    from .lidl_parser import LidlReceiptParser
+                    parsed = LidlReceiptParser().parse(lines)
+                    data = parsed.to_dict()
+                    data = AIService._categorize_parsed_items(data, categories, user_id)
+                else:
+                    # AI structurizer fallback for all unknown / not-yet-parsed merchants.
+                    data = AIService._ai_structurize("\n".join(lines))
+                    data = AIService._categorize_parsed_items(data, categories, user_id)
 
             return AIService._validate_and_annotate(data)
 

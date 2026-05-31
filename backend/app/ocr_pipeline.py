@@ -66,6 +66,23 @@ class ReceiptSourceDetector:
                 except Exception:
                     pass
 
+            # Check EXIF for camera photo detection
+            try:
+                from PIL import Image
+                from io import BytesIO
+                
+                # PNG or JPEG magic bytes
+                if file_bytes.startswith(b"\x89PNG\r\n\x1a\n") or file_bytes.startswith(b"\xff\xd8\xff"):
+                    image = Image.open(BytesIO(file_bytes))
+                    exif = image.getexif()
+                    if exif:
+                        # 271: Make, 272: Model, 274: Orientation, 306: DateTime, 34665: ExifOffset (contains detailed camera EXIF)
+                        camera_tags = {271, 272, 274, 306, 34665}
+                        if any(tag in exif for tag in camera_tags):
+                            return ReceiptSource.PHOTO_IMAGE
+            except Exception as e:
+                print(f"⚠️ Error checking EXIF metadata: {e}")
+
         # 2. Fall back to filename and content type heuristics
         mime = (content_type or "").lower()
         name = (filename or "").lower()
@@ -299,7 +316,7 @@ class GoogleVisionOCRService:
 
 # ── Line Reconstruction ────────────────────────────────────────────────────────
 
-def reconstruct_lines(words: list[OCRWord], y_tolerance: Optional[float] = None) -> list[str]:
+def reconstruct_lines(words: list[OCRWord], y_tolerance: Optional[float] = None, source: Optional[ReceiptSource] = None) -> list[str]:
     """
     Reconstruct text lines from bounding box geometry.
 
@@ -318,7 +335,10 @@ def reconstruct_lines(words: list[OCRWord], y_tolerance: Optional[float] = None)
     if y_tolerance is None:
         heights = [w.bounding_box.height for w in words if w.bounding_box.height > 0]
         avg_height = sum(heights) / len(heights) if heights else 10.0
-        y_tolerance = max(5.0, avg_height * 0.5)
+        if source == ReceiptSource.PHOTO_IMAGE:
+            y_tolerance = max(8.0, avg_height * 0.8)
+        else:
+            y_tolerance = max(5.0, avg_height * 0.5)
 
     sorted_words = sorted(words, key=lambda w: w.bounding_box.center_y)
 
