@@ -18,11 +18,19 @@ vi.mock("@/lib/auth", () => ({
   getStoredUser: vi.fn().mockReturnValue(null),
   setStoredUser: vi.fn(),
   clearAuth: vi.fn(),
+  getActiveBudget: vi.fn().mockReturnValue(null),
+  setActiveBudget: vi.fn(),
 }));
 
 // Import after vi.mock (hoisting guarantees correct order)
 const { api } = await import("@/lib/api");
 const authHelpers = await import("@/lib/auth");
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+});
 
 // Helper — test consumer component that exposes context state
 // login/register catch errors to prevent unhandled rejections in event handlers
@@ -38,11 +46,19 @@ function TestConsumer() {
   );
 }
 
+function Wrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
+}
+
 function renderWithProvider() {
   return render(
-    <AuthProvider>
+    <Wrapper>
       <TestConsumer />
-    </AuthProvider>
+    </Wrapper>
   );
 }
 

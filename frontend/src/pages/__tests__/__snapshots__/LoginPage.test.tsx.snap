@@ -23,7 +23,7 @@ exports[`LoginPage > snapshot 1`] = `
           class="text-muted-foreground text-sm"
           data-slot="card-description"
         >
-          Zaloguj się do swojego konta
+          Zaloguj się na swoje konto
         </div>
       </div>
       <div
@@ -97,7 +97,7 @@ exports[`LoginPage > snapshot 1`] = `
         <p
           class="mt-4 text-center text-sm text-muted-foreground"
         >
-          Nie masz konta?
+          Nie masz jeszcze konta?
            
           <a
             class="underline underline-offset-4 hover:text-primary"

@@ -35,6 +35,7 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
+    default_budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", ondelete="SET NULL")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     owned_budgets: List["Budget"] = Relationship(back_populates="owner")
@@ -354,6 +355,17 @@ class BudgetMemberCreate(SQLModel):
     role: str = "viewer"
 
 
+class UserBudgetRead(SQLModel):
+    id: int
+    name: str
+    role: str
+
+
+class ChangePasswordRequest(SQLModel):
+    old_password: str
+    new_password: str = Field(min_length=6)
+
+
 class CategoryBudgetSummaryItem(SQLModel):
     category_id: int
     category_name: str
@@ -410,9 +422,13 @@ class UserCreate(SQLModel):
     password: str
 
 
+class UserUpdate(SQLModel):
+    default_budget_id: Optional[int] = None
+
 class UserRead(SQLModel):
     id: int
     email: str
+    default_budget_id: Optional[int] = None
     created_at: datetime
 
 

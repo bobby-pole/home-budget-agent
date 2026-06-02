@@ -113,7 +113,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
 
                       {tx.receipt_scan?.status === "processing" && (
                         <div className="mt-1">
-                          <Badge variant="outline" className="h-4 px-1.5 text-[9px] animate-pulse uppercase border-amber-500 text-amber-500">AI Processing</Badge>
+                          <Badge variant="outline" className="h-4 px-1.5 text-[9px] animate-pulse uppercase border-amber-500 text-amber-500">{t("transactions.ai_processing")}</Badge>
                         </div>
                       )}
                     </div>

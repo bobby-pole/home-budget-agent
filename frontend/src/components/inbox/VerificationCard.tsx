@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   FileText,
   FileJson,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -344,8 +345,8 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         ) : imageType === "application/json" ? (
           <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
             <FileJson className="h-12 w-12 mb-4 opacity-20" />
-            <p className="font-medium text-sm">Podgląd niedostępny</p>
-            <p className="text-xs mt-1 max-w-[200px]">Pliki strukturalne (e-Paragon) nie posiadają reprezentacji wizualnej.</p>
+            <p className="font-medium text-sm">{t("inbox.no_preview")}</p>
+            <p className="text-xs mt-1 max-w-[200px]">{t("inbox.no_visual_rep")}</p>
           </div>
         ) : imageUrl ? (
           <>
@@ -405,7 +406,9 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                   onClick={() => { zoomRef.current = 1; setZoom(1); }}
                   className="w-6 h-6 flex items-center justify-center text-xs text-muted-foreground hover:text-primary transition-colors"
                   title="Reset zoom"
-                >↺</button>
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
               </div>
             )}
           </>

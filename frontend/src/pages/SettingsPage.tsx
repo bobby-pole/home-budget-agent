@@ -1,7 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CategoriesTab } from "@/components/settings/CategoriesTab";
 import { TagsTab } from "@/components/settings/TagsTab";
-import { BudgetTab } from "@/components/settings/BudgetTab";
 import { LanguageTab } from "@/components/settings/LanguageTab";
 import { t } from "@/lib/i18n";
 
@@ -17,10 +16,9 @@ export function SettingsPage() {
         </div>
 
         <Tabs defaultValue="categories" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="categories">{t("settings.page.tab_categories")}</TabsTrigger>
             <TabsTrigger value="tags">{t("settings.page.tab_tags")}</TabsTrigger>
-            <TabsTrigger value="budget">{t("settings.page.tab_budget")}</TabsTrigger>
             <TabsTrigger value="language">{t("settings.page.tab_language")}</TabsTrigger>
           </TabsList>
           <TabsContent value="categories" className="mt-6">
@@ -28,9 +26,6 @@ export function SettingsPage() {
           </TabsContent>
           <TabsContent value="tags" className="mt-6">
             <TagsTab />
-          </TabsContent>
-          <TabsContent value="budget" className="mt-6">
-            <BudgetTab />
           </TabsContent>
           <TabsContent value="language" className="mt-6">
             <LanguageTab />

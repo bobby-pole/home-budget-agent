@@ -24,7 +24,8 @@
       "validation": {
         "email_invalid": "Invalid email address",
         "password_required": "Password is required"
-      }
+      },
+      "test_data": "🧪 Fill test data (Dev)"
     },
     "register": {
       "title": "Create an account",
@@ -164,7 +165,9 @@
         "name_required": "Name is required",
         "merchant_required": "Merchant name is required"
       }
-    }
+    },
+    "no_preview": "Preview unavailable",
+    "no_visual_rep": "Structural files (e-Receipt) do not have a visual representation."
   },
   "transactions": {
     "page_title": "Transaction History",
@@ -204,7 +207,7 @@
       "title": "Transaction details #",
       "close": "Close",
       "items_section": {
-        "header": "Receipt items",
+        "header": "Items",
         "no_items": "No items detected."
       }
     },
@@ -291,7 +294,9 @@
       "placeholder_name": "Item name",
       "placeholder_price": "Price",
       "placeholder_quantity": "Quantity"
-    }
+    },
+    "ai_processing": "AI Processing",
+    "error_loading": "Error loading transactions."
   },
   "budget": {
     "page": {
@@ -436,7 +441,8 @@
     "toast_invalid_format_description": "Please upload a photo or PDF.",
     "toast_duplicate_title": "Duplicate detected!",
     "toast_duplicate_description": "This transaction has already been uploaded. Do you want to add it again?",
-    "toast_duplicate_action": "Yes, add"
+    "toast_duplicate_action": "Yes, add",
+    "or": "or"
   },
   "quick_entry": {
     "dialog_title": "How would you like to add a transaction?",
@@ -461,7 +467,10 @@
   "common": {
     "cancel": "Cancel",
     "save": "Save",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "currency": "PLN",
+    "unit_pcs": "pcs",
+    "delete": "Delete"
   },
   "tags": {
     "placeholder_new": "New tag..."
@@ -488,5 +497,63 @@
       "future_date": "Receipt date is in the future."
     },
     "csv_import_complete": "Imported {imported} transactions from {filename}. Skipped {skipped} duplicates."
+  },
+  "profile": {
+    "title": "My Profile",
+    "subtitle": "Manage your account and budgets",
+    "account_details": "Account Details",
+    "email": "Email",
+    "change_password": "Change Password",
+    "old_password": "Old Password",
+    "new_password": "New Password",
+    "confirm_password": "Confirm New Password",
+    "my_budgets": "My Budgets",
+    "budgets_subtitle": "Select your active budget or manage existing ones.",
+    "active": "Active",
+    "default": "Default",
+    "role_label": "Role:",
+    "set_default": "Set default",
+    "switch": "Switch",
+    "invite": "Invite",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "delete_budget_title": "Delete Budget",
+    "delete_budget_desc1": "This action is irreversible. It will delete all financial information contained within this budget.",
+    "delete_budget_desc2": "To confirm, please type {keyword} below.",
+    "delete_keyword": "DELETE",
+    "type_delete_to_confirm": "Type {keyword} to confirm",
+    "invite_to_budget": "Invite to Budget",
+    "role": "Role",
+    "role_viewer": "Viewer",
+    "role_editor": "Editor",
+    "role_owner": "Owner",
+    "send_invite": "Invite",
+    "passwords_dont_match": "Passwords don't match",
+    "old_password_required": "Old password is required",
+    "password_min": "Password must be at least 6 characters",
+    "confirm_required": "Confirm password is required",
+    "email_invalid": "Invalid email address",
+    "loading_budgets": "Loading budgets...",
+    "success_password": "Password changed successfully",
+    "error_password": "Failed to change password",
+    "success_invite": "User invited to budget",
+    "error_invite": "Failed to invite user",
+    "success_default": "Default budget updated",
+    "error_default": "Failed to set default budget",
+    "success_delete": "Budget deleted",
+    "error_delete_fallback": "Failed to delete budget"
+  },
+  "sidebar": {
+    "smart_budget": "Smart Budget",
+    "personal_finance": "Personal Finance"
+  },
+  "header": {
+    "smart_budget_ai": "Smart Budget AI",
+    "profile": "My Profile",
+    "settings": "Settings",
+    "logout": "Log out"
+  },
+  "theme": {
+    "toggle": "Toggle theme"
   }
 }

@@ -120,15 +120,15 @@
         ]
       }
     },
-    "/api/transactions/manual": {
-      "post": {
-        "summary": "Create Manual Transaction",
-        "operationId": "create_manual_transaction_api_transactions_manual_post",
+    "/api/users/me": {
+      "patch": {
+        "summary": "Update Me",
+        "operationId": "update_me_api_users_me_patch",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ManualTransactionCreate"
+                "$ref": "#/components/schemas/UserUpdate"
               }
             }
           },
@@ -140,7 +140,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransactionRead"
+                  "$ref": "#/components/schemas/UserRead"
                 }
               }
             }
@@ -163,6 +163,177 @@
         ]
       }
     },
+    "/api/auth/change-password": {
+      "post": {
+        "summary": "Change Password",
+        "operationId": "change_password_api_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/budgets": {
+      "get": {
+        "summary": "Get My Budgets",
+        "operationId": "get_my_budgets_api_users_me_budgets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserBudgetRead"
+                  },
+                  "type": "array",
+                  "title": "Response Get My Budgets Api Users Me Budgets Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/budgets/{budget_id}": {
+      "delete": {
+        "summary": "Delete Budget",
+        "operationId": "delete_budget_api_budgets__budget_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "budget_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Budget Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactions/manual": {
+      "post": {
+        "summary": "Create Manual Transaction",
+        "operationId": "create_manual_transaction_api_transactions_manual_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTransactionCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/transactions/scan": {
       "post": {
         "summary": "Scan Transaction",
@@ -181,6 +352,22 @@
               "type": "boolean",
               "default": false,
               "title": "Force"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -235,6 +422,22 @@
             "schema": {
               "type": "integer",
               "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -307,6 +510,22 @@
               ],
               "title": "Type"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "responses": {
@@ -342,6 +561,29 @@
         "summary": "Get App Status",
         "description": "Fetch global app status: inbox items and unread alerts.",
         "operationId": "get_app_status_api_status_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -352,13 +594,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/alerts/{alert_id}/read": {
@@ -408,27 +655,55 @@
         "summary": "Get Inbox",
         "description": "Fetch all transactions that require user attention (NEEDS_REVIEW or FAILED).",
         "operationId": "get_inbox_api_transactions_inbox_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/TransactionRead"
                   },
-                  "type": "array",
                   "title": "Response Get Inbox Api Transactions Inbox Get"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/transactions/{transaction_id}/receipt": {
@@ -449,6 +724,22 @@
             "schema": {
               "type": "integer",
               "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -492,6 +783,22 @@
             "schema": {
               "type": "integer",
               "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -547,6 +854,22 @@
               "type": "integer",
               "title": "Transaction Id"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "requestBody": {
@@ -599,6 +922,22 @@
               "type": "integer",
               "title": "Transaction Id"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "responses": {
@@ -645,6 +984,22 @@
               "type": "integer",
               "title": "Line Id"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "requestBody": {
@@ -685,15 +1040,38 @@
       "post": {
         "summary": "Import Transactions",
         "operationId": "import_transactions_api_transactions_import_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_import_transactions_api_transactions_import_post"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -701,8 +1079,8 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Import Transactions Api Transactions Import Post"
                 }
               }
@@ -718,12 +1096,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/budget/{year}/{month}/limits": {
@@ -752,6 +1125,22 @@
             "schema": {
               "type": "integer",
               "title": "Month"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -818,6 +1207,22 @@
             "schema": {
               "type": "integer",
               "title": "Category Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -889,6 +1294,22 @@
               "type": "integer",
               "title": "Category Id"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "responses": {
@@ -943,6 +1364,22 @@
               "title": "Month"
             },
             "description": "Month of the budget (1-12)"
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "responses": {
@@ -973,15 +1410,38 @@
       "post": {
         "summary": "Invite Member",
         "operationId": "invite_member_api_budget_members_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/BudgetMemberCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1004,52 +1464,98 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/categories": {
       "get": {
         "summary": "Get Categories",
         "operationId": "get_categories_api_categories_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/CategoryRead"
                   },
-                  "type": "array",
                   "title": "Response Get Categories Api Categories Get"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "summary": "Create Category",
         "operationId": "create_category_api_categories_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CategoryCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1072,12 +1578,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/categories/{category_id}": {
@@ -1097,6 +1598,22 @@
             "schema": {
               "type": "integer",
               "title": "Category Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -1166,6 +1683,22 @@
               ],
               "title": "Reassign To"
             }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
           }
         ],
         "responses": {
@@ -1189,40 +1722,91 @@
       "get": {
         "summary": "Get Tags",
         "operationId": "get_tags_api_tags_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/TagRead"
                   },
-                  "type": "array",
                   "title": "Response Get Tags Api Tags Get"
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "summary": "Create Tag",
         "operationId": "create_tag_api_tags_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/TagCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1245,12 +1829,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/tags/{tag_id}": {
@@ -1270,6 +1849,22 @@
             "schema": {
               "type": "integer",
               "title": "Tag Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -1322,6 +1917,22 @@
             "schema": {
               "type": "integer",
               "title": "Tag Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
             }
           }
         ],
@@ -1735,6 +2346,24 @@
         },
         "type": "object",
         "title": "CategoryUpdate"
+      },
+      "ChangePasswordRequest": {
+        "properties": {
+          "old_password": {
+            "type": "string",
+            "title": "Old Password"
+          },
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_password",
+          "new_password"
+        ],
+        "title": "ChangePasswordRequest"
       },
       "EnvelopeAllocation": {
         "properties": {
@@ -2683,6 +3312,29 @@
         "type": "object",
         "title": "TransactionUpdate"
       },
+      "UserBudgetRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role"
+        ],
+        "title": "UserBudgetRead"
+      },
       "UserCreate": {
         "properties": {
           "email": {
@@ -2711,6 +3363,17 @@
             "type": "string",
             "title": "Email"
           },
+          "default_budget_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Budget Id"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -2724,6 +3387,23 @@
           "created_at"
         ],
         "title": "UserRead"
+      },
+      "UserUpdate": {
+        "properties": {
+          "default_budget_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Budget Id"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
       },
       "ValidationError": {
         "properties": {

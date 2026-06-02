@@ -21,6 +21,7 @@ const routeTitles: Record<string, string> = {
   "/transactions": t("nav.route_titles.transactions"),
   "/inbox": t("nav.route_titles.inbox"),
   "/settings": t("nav.route_titles.settings"),
+  "/profile": t("nav.user_menu.profile"),
 }
 
 function getPageTitle(pathname: string): string {
@@ -75,7 +76,7 @@ export function DashboardHeader() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => navigate("/settings")}
+              onClick={() => navigate("/profile")}
               className="cursor-pointer"
             >
               <User className="mr-2 h-4 w-4" />

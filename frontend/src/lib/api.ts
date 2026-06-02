@@ -9,9 +9,12 @@ import type {
   BudgetMemberCreate,
   TransactionUpdate,
   TransactionLineUpdate,
-  AppStatusRead
+  AppStatusRead,
+  UserBudgetRead,
+  ChangePasswordRequest,
+  UserRead
 } from "@/client";
-import { getToken, clearAuth } from "@/lib/auth";
+import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import axios from "axios";
 
 export const apiClient = axios.create({
@@ -26,6 +29,10 @@ apiClient.interceptors.request.use((config) => {
   const token = getToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const budgetId = getActiveBudget();
+  if (budgetId) {
+    config.headers["X-Budget-Id"] = budgetId.toString();
   }
   return config;
 });
@@ -221,7 +228,25 @@ export const api = {
   // --- MEMBERS ---
 
   inviteMember: async (data: BudgetMemberCreate): Promise<BudgetMember> => {
-    const response = await apiClient.post<BudgetMember>("/budget/members", data);
-    return response.data;
+    const res = await apiClient.post<BudgetMember>("/budget/members", data);
+    return res.data;
+  },
+  
+  getMyBudgets: async (): Promise<UserBudgetRead[]> => {
+    const res = await apiClient.get<UserBudgetRead[]>("/users/me/budgets");
+    return res.data;
+  },
+
+  deleteBudget: async (id: number): Promise<void> => {
+    await apiClient.delete(`/budgets/${id}`);
+  },
+
+  changePassword: async (data: ChangePasswordRequest): Promise<void> => {
+    await apiClient.post("/auth/change-password", data);
+  },
+
+  updateMe: async (data: { default_budget_id: number | null }): Promise<UserRead> => {
+    const res = await apiClient.patch<UserRead>("/users/me", data);
+    return res.data;
   },
 };

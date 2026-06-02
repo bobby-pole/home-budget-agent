@@ -218,7 +218,7 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
                       className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums"
                       title={t("inbox.verification_card.label_unit_price")}
                     />
-                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">zł</span>
+                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{t("common.currency")}</span>
                   </div>
                 </FormControl>
               </FormItem>
@@ -240,7 +240,7 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
                       className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums"
                       title={t("inbox.verification_card.label_quantity")}
                     />
-                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">szt</span>
+                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{t("common.unit_pcs")}</span>
                   </div>
                 </FormControl>
               </FormItem>
@@ -248,7 +248,7 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
           />
           <span className="text-muted-foreground">=</span>
           <span className="font-medium text-muted-foreground/80 tabular-nums w-20 text-right shrink-0">
-            {formatMoney(gross)} zł
+            {formatMoney(gross)} {t("common.currency")}
           </span>
         </div>
 
@@ -275,7 +275,7 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
                         }}
                         className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums text-emerald-600 dark:text-emerald-400"
                       />
-                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">zł</span>
+                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{t("common.currency")}</span>
                     </div>
                   </FormControl>
                 </FormItem>
@@ -287,7 +287,7 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
               {t("inbox.verification_card.label_total")}
             </span>
             <span className="text-sm font-bold tabular-nums">
-              {formatMoney(total)} zł
+              {formatMoney(total)} {t("common.currency")}
             </span>
           </div>
         </div>
@@ -381,7 +381,7 @@ function AdjustmentRow({ form, index, onRemove }: AdjustmentRowProps) {
                   onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                   className="h-8 text-xs bg-transparent border-amber-500/20 pr-5 text-right tabular-nums font-semibold text-amber-700 dark:text-amber-400"
                 />
-                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-amber-700/60">zł</span>
+                <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-amber-700/60">{t("common.currency")}</span>
               </div>
             </FormControl>
           </FormItem>

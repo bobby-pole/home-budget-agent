@@ -144,7 +144,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
           {/* Separator */}
           <div className="flex flex-col items-center justify-center gap-1 shrink-0">
             <div className="h-full w-px bg-border/60" />
-            <span className="text-[9px] text-muted-foreground font-medium shrink-0 py-1">lub</span>
+            <span className="text-[9px] text-muted-foreground font-medium shrink-0 py-1">{t("upload.or")}</span>
             <div className="h-full w-px bg-border/60" />
           </div>
 
