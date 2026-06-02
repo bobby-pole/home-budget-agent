@@ -48,6 +48,12 @@ class User(SQLModel, table=True):
 
 # ─── Budget (multi-tenant household container) ────────────────────────────────
 
+class BudgetCreate(SQLModel):
+    name: str
+
+class BudgetUpdate(SQLModel):
+    name: str
+
 class Budget(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
@@ -237,7 +243,7 @@ class BudgetAlert(SQLModel, table=True):
     category_name: str
     message: str
     is_read: bool = Field(default=False)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
 
     budget: Optional[Budget] = Relationship()
     user: Optional[User] = Relationship()

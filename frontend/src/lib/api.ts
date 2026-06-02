@@ -249,4 +249,12 @@ export const api = {
     const res = await apiClient.patch<UserRead>("/users/me", data);
     return res.data;
   },
+  createBudget: async (data: { name: string }): Promise<UserBudgetRead> => {
+    const res = await apiClient.post("/budgets", data);
+    return res.data;
+  },
+  updateBudget: async (id: number, data: { name: string }): Promise<UserBudgetRead> => {
+    const res = await apiClient.patch(`/budgets/${id}`, data);
+    return res.data;
+  },
 };

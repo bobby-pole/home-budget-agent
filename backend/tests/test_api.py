@@ -528,3 +528,81 @@ def test_retry_accepts_legacy_error_status(client: TestClient, session: Session)
         response = client.post(f"/api/transactions/{tx.id}/retry")
 
     assert response.status_code == 200
+
+def test_create_budget(client: TestClient, session: Session):
+    """Test creating a new budget via POST /budgets"""
+    response = client.post("/api/budgets", json={"name": "New Project Budget"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "New Project Budget"
+    assert data["role"] == "owner"
+    assert "id" in data
+    
+    # Verify DB state
+    budget_id = data["id"]
+    from app.models import Budget, BudgetMember, Category, User
+    from sqlmodel import select
+    
+    current_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert current_user is not None, "Test user 'test@example.com' was not found in the DB"
+    
+    budget = session.get(Budget, budget_id)
+    assert budget is not None
+    assert budget.owner_id == current_user.id
+    
+    member = session.exec(select(BudgetMember).where(BudgetMember.budget_id == budget_id, BudgetMember.user_id == current_user.id)).first()
+    assert member is not None
+    assert member.role == "owner"
+    
+    categories = session.exec(select(Category).where(Category.budget_id == budget_id)).all()
+    assert len(categories) > 0  # ensure default categories are seeded
+
+def test_update_budget(client: TestClient, session: Session):
+    """Test renaming an existing budget via PATCH /budgets/{id}"""
+    from app.models import Budget, BudgetMember, User
+    from sqlmodel import select
+    
+    current_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert current_user is not None
+    
+    # Create test budget
+    b = Budget(name="Old Name", owner_id=current_user.id)
+    session.add(b)
+    session.commit()
+    session.refresh(b)
+    session.add(BudgetMember(budget_id=b.id, user_id=current_user.id, role="owner"))
+    session.commit()
+    
+    response = client.patch(f"/api/budgets/{b.id}", json={"name": "Renamed Budget"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Renamed Budget"
+    
+    session.refresh(b)
+    assert b.name == "Renamed Budget"
+
+def test_update_budget_forbidden(client: TestClient, session: Session):
+    """Test that non-owners cannot rename a budget"""
+    from app.models import Budget, BudgetMember, User
+    from sqlmodel import select
+    
+    current_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert current_user is not None
+    
+    other_user = User(email="otherowner@example.com", hashed_password="x")
+    session.add(other_user)
+    session.commit()
+    session.refresh(other_user)
+    
+    b = Budget(name="Others Budget", owner_id=other_user.id)
+    session.add(b)
+    session.commit()
+    session.refresh(b)
+    
+    # current_user is only an editor
+    session.add(BudgetMember(budget_id=b.id, user_id=current_user.id, role="editor"))
+    session.add(BudgetMember(budget_id=b.id, user_id=other_user.id, role="owner"))
+    session.commit()
+    
+    response = client.patch(f"/api/budgets/{b.id}", json={"name": "Hacked Name"})
+    assert response.status_code == 403
