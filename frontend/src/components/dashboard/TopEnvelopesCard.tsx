@@ -73,7 +73,7 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                     {/* Spent & Limit */}
                     <div className="flex flex-col items-end text-right">
                       <span className="text-base font-black tracking-tight">
-                        {env.spent.toLocaleString(getIntlLocale())} PLN
+                        {env.spent.toLocaleString(getIntlLocale())} {t("common.currency")}
                       </span>
                       <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-70">
                         {t("dashboard.top_envelopes.limit_prefix")} {env.limit.toLocaleString(getIntlLocale())}
