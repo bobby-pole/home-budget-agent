@@ -13,8 +13,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { Trash2, UserPlus, CheckCircle, Shield } from "lucide-react";
-import type { BudgetMemberCreate } from "@/client";
+import { Trash2, UserPlus, CheckCircle, Shield, Plus, Pencil } from "lucide-react";
+import type { BudgetMemberCreate, UserBudgetRead } from "@/client";
 
 const passwordSchema = z.object({
   old_password: z.string().min(1, t("profile.old_password_required")),
@@ -34,19 +34,27 @@ const inviteSchema = z.object({
 
 type InviteFormValues = z.infer<typeof inviteSchema>;
 
+const budgetNameSchema = z.object({
+  name: z.string().min(1, t("profile.budget_name_required")),
+});
+
+type BudgetNameFormValues = z.infer<typeof budgetNameSchema>;
+
 export function ProfilePage() {
   const { user, activeBudgetId, switchBudget, updateUser } = useAuth();
   const queryClient = useQueryClient();
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<number | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isCreateBudgetModalOpen, setIsCreateBudgetModalOpen] = useState(false);
+  const [budgetToRename, setBudgetToRename] = useState<{id: number, name: string} | null>(null);
 
   const { data: budgets = [], isLoading } = useQuery({
     queryKey: ["my-budgets"],
     queryFn: api.getMyBudgets,
   });
 
-  const activeBudget = budgets.find(b => b.id === activeBudgetId) || budgets[0];
+  const activeBudget = budgets.find(b => b.id === activeBudgetId) || budgets?.[0];
   const isOwner = activeBudget?.role === "owner";
   const canInvite = isOwner;
 
@@ -101,11 +109,49 @@ export function ProfilePage() {
       toast.success(t("profile.success_delete"));
       queryClient.invalidateQueries({ queryKey: ["my-budgets"] });
       if (activeBudgetId === budgetToDelete) {
-        const nextBudget = budgets.find(b => b.id !== budgetToDelete);
+        const freshBudgets = queryClient.getQueryData<UserBudgetRead[]>(["my-budgets"]) || budgets;
+        const nextBudget = freshBudgets.find(b => b.id !== budgetToDelete);
         if (nextBudget) switchBudget(nextBudget.id);
       }
     },
     onError: (err: Error & { response?: { data?: { detail?: string } } }) => toast.error(err.response?.data?.detail || t("profile.error_delete_fallback")),
+  });
+
+  // Create Budget
+  const createBudgetForm = useForm<BudgetNameFormValues>({
+    resolver: zodResolver(budgetNameSchema),
+    defaultValues: { name: "" },
+  });
+
+  const createBudgetMutation = useMutation({
+    mutationFn: (values: BudgetNameFormValues) => api.createBudget(values),
+    onSuccess: () => {
+      toast.success(t("profile.success_create_budget"));
+      setIsCreateBudgetModalOpen(false);
+      createBudgetForm.reset();
+      queryClient.invalidateQueries({ queryKey: ["my-budgets"] });
+    },
+    onError: () => toast.error(t("profile.error_create_budget")),
+  });
+
+  // Rename Budget
+  const renameBudgetForm = useForm<BudgetNameFormValues>({
+    resolver: zodResolver(budgetNameSchema),
+    defaultValues: { name: "" },
+  });
+
+  const renameBudgetMutation = useMutation({
+    mutationFn: (values: BudgetNameFormValues) => {
+      if (!budgetToRename) throw new Error("No budget selected");
+      return api.updateBudget(budgetToRename.id, values);
+    },
+    onSuccess: () => {
+      toast.success(t("profile.success_rename_budget"));
+      setBudgetToRename(null);
+      renameBudgetForm.reset();
+      queryClient.invalidateQueries({ queryKey: ["my-budgets"] });
+    },
+    onError: () => toast.error(t("profile.error_rename_budget")),
   });
 
   return (
@@ -180,9 +226,14 @@ export function ProfilePage() {
 
         {/* Budgets List */}
         <Card>
-          <CardHeader>
-            <CardTitle>{t("profile.my_budgets")}</CardTitle>
-            <CardDescription>{t("profile.budgets_subtitle")}</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>{t("profile.my_budgets")}</CardTitle>
+              <CardDescription>{t("profile.budgets_subtitle")}</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setIsCreateBudgetModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" /> {t("profile.create_budget")}
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
@@ -224,9 +275,17 @@ export function ProfilePage() {
                           )}
                         </div>
                         {b.role === "owner" && (
-                          <Button variant="destructive" size="icon" onClick={() => setBudgetToDelete(b.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="icon" onClick={() => {
+                              setBudgetToRename({ id: b.id, name: b.name });
+                              renameBudgetForm.setValue("name", b.name);
+                            }}>
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button variant="destructive" size="icon" onClick={() => setBudgetToDelete(b.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -325,6 +384,66 @@ export function ProfilePage() {
               </Button>
             </DialogFooter>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCreateBudgetModalOpen} onOpenChange={setIsCreateBudgetModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("profile.create_budget_title")}</DialogTitle>
+            <DialogDescription>{t("profile.create_budget_desc")}</DialogDescription>
+          </DialogHeader>
+          <Form {...createBudgetForm}>
+            <form onSubmit={createBudgetForm.handleSubmit((v) => createBudgetMutation.mutate(v))} className="space-y-4">
+              <FormField
+                control={createBudgetForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("profile.budget_name")}</FormLabel>
+                    <FormControl><Input placeholder={t("profile.budget_name")} {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => setIsCreateBudgetModalOpen(false)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button type="submit" disabled={createBudgetMutation.isPending}>{t("profile.create")}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={budgetToRename !== null} onOpenChange={(open) => !open && setBudgetToRename(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("profile.rename_budget_title")}</DialogTitle>
+            <DialogDescription>{t("profile.rename_budget_desc")}</DialogDescription>
+          </DialogHeader>
+          <Form {...renameBudgetForm}>
+            <form onSubmit={renameBudgetForm.handleSubmit((v) => renameBudgetMutation.mutate(v))} className="space-y-4">
+              <FormField
+                control={renameBudgetForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("profile.budget_name")}</FormLabel>
+                    <FormControl><Input placeholder={t("profile.budget_name")} {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button type="button" variant="outline" onClick={() => setBudgetToRename(null)}>
+                  {t("common.cancel")}
+                </Button>
+                <Button type="submit" disabled={renameBudgetMutation.isPending}>{t("profile.rename")}</Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
     </div>

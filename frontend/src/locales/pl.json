@@ -472,6 +472,11 @@
     "unit_pcs": "szt",
     "delete": "Usuń"
   },
+  "alerts": {
+    "default_title": "Powiadomienie",
+    "zeroed_envelope_title": "Uwaga: Wyzerowana koperta",
+    "zeroed_envelope_desc": "Koperta '{{category}}' została wyzerowana. Zostało {{remaining}} PLN."
+  },
   "tags": {
     "placeholder_new": "Nowy tag..."
   },
@@ -541,7 +546,21 @@
     "success_default": "Zaktualizowano domyślny budżet",
     "error_default": "Nie udało się ustawić domyślnego budżetu",
     "success_delete": "Budżet został usunięty",
-    "error_delete_fallback": "Nie udało się usunąć budżetu"
+    "error_delete_fallback": "Nie udało się usunąć budżetu",
+    "create_budget": "Utwórz budżet",
+    "create_budget_title": "Utwórz nowy budżet",
+    "create_budget_desc": "Wprowadź nazwę dla nowego budżetu.",
+    "budget_name": "Nazwa budżetu",
+    "budget_name_required": "Nazwa budżetu jest wymagana",
+    "create": "Utwórz",
+    "success_create_budget": "Budżet został utworzony pomyślnie",
+    "error_create_budget": "Nie udało się utworzyć budżetu",
+    "rename_budget": "Zmień nazwę budżetu",
+    "rename_budget_title": "Zmień nazwę budżetu",
+    "rename_budget_desc": "Wprowadź nową nazwę dla tego budżetu.",
+    "rename": "Zmień nazwę",
+    "success_rename_budget": "Nazwa budżetu została pomyślnie zmieniona",
+    "error_rename_budget": "Nie udało się zmienić nazwy budżetu"
   },
   "sidebar": {
     "smart_budget": "Smart Budget",

@@ -68,7 +68,7 @@ export function AppSidebar() {
     refetchInterval: 5000,
   })
 
-  const markReadMutation = useMutation({
+  const { mutate: markRead } = useMutation({
     mutationFn: api.markAlertRead,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["status"] })
@@ -78,14 +78,27 @@ export function AppSidebar() {
   useEffect(() => {
     if (statusData?.unread_alerts && statusData.unread_alerts.length > 0) {
       statusData.unread_alerts.forEach(alert => {
-        toast.warning("Uwaga: Wyzerowana koperta", {
-          description: alert.message,
+        let title = t("alerts.default_title");
+        let description = alert.message;
+        
+        try {
+          const payload = JSON.parse(alert.message);
+          if (payload.type === "zeroed_envelope") {
+            title = t("alerts.zeroed_envelope_title");
+            description = t("alerts.zeroed_envelope_desc", { category: alert.category_name, remaining: payload.remaining.toFixed(2) });
+          }
+        } catch {
+          // Fallback to raw string if not JSON
+        }
+
+        toast.warning(title, {
+          description,
           duration: 10000,
         })
-        markReadMutation.mutate(alert.id)
+        markRead(alert.id)
       })
     }
-  }, [statusData?.unread_alerts, markReadMutation])
+  }, [statusData?.unread_alerts, markRead])
 
   const pendingScansCount = statusData?.inbox_items?.length || 0
 

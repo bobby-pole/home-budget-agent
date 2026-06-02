@@ -472,6 +472,11 @@
     "unit_pcs": "pcs",
     "delete": "Delete"
   },
+  "alerts": {
+    "default_title": "Alert",
+    "zeroed_envelope_title": "Warning: Zeroed Envelope",
+    "zeroed_envelope_desc": "Envelope '{{category}}' has been zeroed. Remaining balance: {{remaining}} PLN."
+  },
   "tags": {
     "placeholder_new": "New tag..."
   },
@@ -541,7 +546,21 @@
     "success_default": "Default budget updated",
     "error_default": "Failed to set default budget",
     "success_delete": "Budget deleted",
-    "error_delete_fallback": "Failed to delete budget"
+    "error_delete_fallback": "Failed to delete budget",
+    "create_budget": "Create Budget",
+    "create_budget_title": "Create New Budget",
+    "create_budget_desc": "Enter a name for your new budget.",
+    "budget_name": "Budget Name",
+    "budget_name_required": "Budget name is required",
+    "create": "Create",
+    "success_create_budget": "Budget created successfully",
+    "error_create_budget": "Failed to create budget",
+    "rename_budget": "Rename Budget",
+    "rename_budget_title": "Rename Budget",
+    "rename_budget_desc": "Enter a new name for this budget.",
+    "rename": "Rename",
+    "success_rename_budget": "Budget renamed successfully",
+    "error_rename_budget": "Failed to rename budget"
   },
   "sidebar": {
     "smart_budget": "Smart Budget",

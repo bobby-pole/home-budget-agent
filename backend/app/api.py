@@ -11,6 +11,8 @@ import time
 from pypdf import PdfReader
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
+import json
+from decimal import Decimal
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete
@@ -19,7 +21,7 @@ from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan, ScanStatus, VerifyRequest,
-    Budget, BudgetMember,
+    Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
@@ -253,8 +255,8 @@ def delete_budget(
         raise HTTPException(status_code=403, detail="Only the owner can delete the budget")
 
     # Counts total budgets the user belongs to, preventing deletion of their last remaining budget access.
-    owned_budget_count = session.exec(select(func.count(col(BudgetMember.id))).where(BudgetMember.user_id == current_user.id)).one()
-    if owned_budget_count <= 1:
+    membered_budget_count = session.exec(select(func.count(col(BudgetMember.id))).where(BudgetMember.user_id == current_user.id)).one()
+    if membered_budget_count <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete your only budget.")
         
     session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
@@ -274,6 +276,53 @@ def delete_budget(
     session.delete(budget)
     session.commit()
     return {"status": "ok"}
+
+
+@router.post("/budgets", response_model=UserBudgetRead)
+def create_budget(
+    data: BudgetCreate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session)
+):
+    new_budget = Budget(name=data.name, owner_id=current_user.id)
+    session.add(new_budget)
+    session.commit()
+    session.refresh(new_budget)
+    
+    if new_budget.id is None:
+        raise HTTPException(status_code=500, detail="Failed to create budget")
+
+    session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
+    session.commit()
+    
+    seed_default_categories(session, new_budget.id)
+    
+    return UserBudgetRead(id=new_budget.id, name=new_budget.name, role="owner")
+
+
+@router.patch("/budgets/{budget_id}", response_model=UserBudgetRead)
+def update_budget(
+    budget_id: int,
+    data: BudgetUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session)
+):
+    budget = session.get(Budget, budget_id)
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+        
+    if budget.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the owner can edit the budget")
+
+    budget.name = data.name
+    session.add(budget)
+    session.commit()
+    session.refresh(budget)
+
+    if budget.id is None:
+        raise HTTPException(status_code=500, detail="Invalid budget state")
+
+    return UserBudgetRead(id=budget.id, name=budget.name, role="owner")
 
 
 
@@ -441,7 +490,8 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
             EnvelopeAllocation.year == year,
             EnvelopeAllocation.month == month
         )
-    ).first() or 0.0
+    ).first()
+    planned_dec = Decimal(str(planned)) if planned is not None else Decimal("0.00")
 
     spent = session.exec(
         select(func.sum(Transaction.total_amount)).where(
@@ -451,12 +501,14 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month
         )
-    ).first() or 0.0
+    ).first()
+    spent_dec = Decimal(str(spent)) if spent is not None else Decimal("0.00")
 
-    remaining = planned - spent
-    remaining_before = remaining + delta_amount
+    remaining = planned_dec - spent_dec
+    delta_dec = Decimal(str(delta_amount))
+    remaining_before = remaining + delta_dec
 
-    if remaining_before > 0 and remaining <= 0:
+    if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
         category = session.get(Category, transaction.category_id)
         cat_name = category.name if category else "Nieznana"
         
@@ -470,14 +522,18 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
         for member_id in other_members:
             if member_id is None:
                 continue
+            alert_msg = json.dumps({
+                "type": "zeroed_envelope",
+                "remaining": float(remaining)
+            })
             alert = BudgetAlert(
                 budget_id=transaction.budget_id,
                 user_id=member_id,
                 category_name=cat_name,
-                message=f"Koperta '{cat_name}' została wyzerowana. Zostało {remaining:.2f} PLN.",
+                message=alert_msg,
             )
             session.add(alert)
-        session.commit()
+        # Note: Caller is responsible for committing the session
 
 # --- TRANSACTIONS ---
 
@@ -535,10 +591,10 @@ def create_manual_transaction(
             transaction_id=transaction.id,
         ))
 
+    _check_envelope_balance_and_alert(session, transaction, transaction.total_amount)
+
     session.commit()
     session.refresh(transaction)
-    
-    _check_envelope_balance_and_alert(session, transaction, transaction.total_amount)
     
     return transaction
 
@@ -860,10 +916,11 @@ async def verify_transaction(
     scan.status = ScanStatus.CATEGORIZATION_OK
     session.add(db_transaction)
     session.add(scan)
+    
+    _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
+    
     session.commit()
     session.refresh(db_transaction)
-
-    _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
 
     # Delete image only if user did not request to keep it
     if not scan.keep_image and scan.image_path and os.path.exists(scan.image_path):
@@ -907,12 +964,12 @@ async def update_transaction(
         tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
         db_transaction.tags = list(tags)
 
+    delta_amount = db_transaction.total_amount if old_category != db_transaction.category_id else (db_transaction.total_amount - old_amount)
+    _check_envelope_balance_and_alert(session, db_transaction, delta_amount)
+
     session.add(db_transaction)
     session.commit()
     session.refresh(db_transaction)
-    
-    delta_amount = db_transaction.total_amount if old_category != db_transaction.category_id else (db_transaction.total_amount - old_amount)
-    _check_envelope_balance_and_alert(session, db_transaction, delta_amount)
 
     return db_transaction
 
