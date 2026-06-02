@@ -38,7 +38,10 @@ class User(SQLModel, table=True):
     default_budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", ondelete="SET NULL")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    owned_budgets: List["Budget"] = Relationship(back_populates="owner")
+    owned_budgets: List["Budget"] = Relationship(
+        back_populates="owner",
+        sa_relationship_kwargs={"foreign_keys": "[Budget.owner_id]"}
+    )
     memberships: List["BudgetMember"] = Relationship(back_populates="user")
     transactions: List["Transaction"] = Relationship(back_populates="uploader")
 
@@ -51,7 +54,10 @@ class Budget(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    owner: Optional[User] = Relationship(back_populates="owned_budgets")
+    owner: Optional[User] = Relationship(
+        back_populates="owned_budgets",
+        sa_relationship_kwargs={"foreign_keys": "[Budget.owner_id]"}
+    )
     members: List["BudgetMember"] = Relationship(back_populates="budget")
     transactions: List["Transaction"] = Relationship(back_populates="budget")
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="budget")
