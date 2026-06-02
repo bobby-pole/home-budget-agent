@@ -11,9 +11,9 @@ import time
 from pypdf import PdfReader
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header
 from fastapi.responses import FileResponse
-from sqlmodel import Session, select, desc, col
+from sqlmodel import Session, select, desc, col, delete
 from sqlalchemy import extract, func
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
@@ -24,7 +24,8 @@ from .models import (
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead,
-    BudgetAlert, AppStatusRead
+    BudgetAlert, AppStatusRead,
+    UserBudgetRead, ChangePasswordRequest, UserUpdate
 )
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
@@ -83,10 +84,34 @@ def seed_default_categories(session: Session, budget_id: int):
 def get_current_budget(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_ops_session),
+    x_budget_id: Optional[str] = Header(None),
 ) -> Budget:
+    if x_budget_id:
+        try:
+            budget_id = int(x_budget_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid X-Budget-Id header")
+            
+        membership = session.exec(
+            select(BudgetMember).where(
+                BudgetMember.user_id == current_user.id,
+                BudgetMember.budget_id == budget_id
+            )
+        ).first()
+        
+        if membership:
+            budget = session.get(Budget, membership.budget_id)
+            if budget:
+                if not session.exec(select(Category).where(Category.budget_id == budget.id)).first():
+                    if budget.id is not None:
+                        seed_default_categories(session, budget.id)
+                return budget
+        raise HTTPException(status_code=403, detail="Access denied to the requested budget")
+
     membership = session.exec(
         select(BudgetMember).where(BudgetMember.user_id == current_user.id)
     ).first()
+    
     if membership:
         budget = session.get(Budget, membership.budget_id)
         if budget:
@@ -140,7 +165,7 @@ def register(
     seed_default_categories(ops_session, new_budget.id)
 
     token = create_access_token({"sub": user.email})
-    return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
+    return Token(access_token=token, user=UserRead(id=user.id, email=user.email, default_budget_id=user.default_budget_id, created_at=user.created_at))
 
 
 @router.post("/auth/login", response_model=Token)
@@ -151,12 +176,105 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
     if user.id is None:
         raise HTTPException(status_code=500, detail="Invalid user state")
     token = create_access_token({"sub": user.email})
-    return Token(access_token=token, user=UserRead(id=user.id, email=user.email, created_at=user.created_at))
+    return Token(access_token=token, user=UserRead(id=user.id, email=user.email, default_budget_id=user.default_budget_id, created_at=user.created_at))
 
 
 @router.get("/auth/me", response_model=UserRead)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/users/me", response_model=UserRead)
+def update_me(
+    data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    if data.default_budget_id is not None:
+        membership = session.exec(
+            select(BudgetMember).where(
+                BudgetMember.user_id == current_user.id,
+                BudgetMember.budget_id == data.default_budget_id
+            )
+        ).first()
+        if not membership:
+            raise HTTPException(status_code=403, detail="Not a member of this budget")
+        current_user.default_budget_id = data.default_budget_id
+    
+    session.add(current_user)
+    session.commit()
+    session.refresh(current_user)
+    return current_user
+
+
+@router.post("/auth/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session)
+):
+    if not verify_password(data.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Invalid old password")
+    
+    current_user.hashed_password = hash_password(data.new_password)
+    session.add(current_user)
+    session.commit()
+    return {"status": "ok"}
+
+
+@router.get("/users/me/budgets", response_model=List[UserBudgetRead])
+def get_my_budgets(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session)
+):
+    memberships = session.exec(
+        select(BudgetMember, Budget)
+        .join(Budget, col(BudgetMember.budget_id) == Budget.id)
+        .where(BudgetMember.user_id == current_user.id)
+    ).all()
+    
+    return [
+        UserBudgetRead(id=b.id or 0, name=b.name, role=m.role)
+        for m, b in memberships
+    ]
+
+
+@router.delete("/budgets/{budget_id}")
+def delete_budget(
+    budget_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session)
+):
+    budget = session.get(Budget, budget_id)
+    if not budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+        
+    if budget.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the owner can delete the budget")
+
+    # Counts total budgets the user belongs to, preventing deletion of their last remaining budget access.
+    owned_budget_count = session.exec(select(func.count(col(BudgetMember.id))).where(BudgetMember.user_id == current_user.id)).one()
+    if owned_budget_count <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete your only budget.")
+        
+    session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
+    session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
+    
+    transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
+    for t in transactions:
+        session.exec(delete(TransactionLine).where(col(TransactionLine.transaction_id) == t.id))
+        session.exec(delete(ReceiptScan).where(col(ReceiptScan.transaction_id) == t.id))
+        session.exec(delete(TransactionTagLink).where(col(TransactionTagLink.transaction_id) == t.id))
+        session.delete(t)
+        
+    session.exec(delete(Tag).where(col(Tag.budget_id) == budget_id))
+    session.exec(delete(Category).where(col(Category.budget_id) == budget_id))
+    session.exec(delete(BudgetMember).where(col(BudgetMember.budget_id) == budget_id))
+    
+    session.delete(budget)
+    session.commit()
+    return {"status": "ok"}
+
 
 
 # --- ASYNC OCR WORKER ---

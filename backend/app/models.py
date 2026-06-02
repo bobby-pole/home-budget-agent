@@ -35,9 +35,13 @@ class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
+    default_budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", ondelete="SET NULL")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    owned_budgets: List["Budget"] = Relationship(back_populates="owner")
+    owned_budgets: List["Budget"] = Relationship(
+        back_populates="owner",
+        sa_relationship_kwargs={"foreign_keys": "[Budget.owner_id]"}
+    )
     memberships: List["BudgetMember"] = Relationship(back_populates="user")
     transactions: List["Transaction"] = Relationship(back_populates="uploader")
 
@@ -50,7 +54,10 @@ class Budget(SQLModel, table=True):
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    owner: Optional[User] = Relationship(back_populates="owned_budgets")
+    owner: Optional[User] = Relationship(
+        back_populates="owned_budgets",
+        sa_relationship_kwargs={"foreign_keys": "[Budget.owner_id]"}
+    )
     members: List["BudgetMember"] = Relationship(back_populates="budget")
     transactions: List["Transaction"] = Relationship(back_populates="budget")
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="budget")
@@ -354,6 +361,17 @@ class BudgetMemberCreate(SQLModel):
     role: str = "viewer"
 
 
+class UserBudgetRead(SQLModel):
+    id: int
+    name: str
+    role: str
+
+
+class ChangePasswordRequest(SQLModel):
+    old_password: str
+    new_password: str = Field(min_length=6)
+
+
 class CategoryBudgetSummaryItem(SQLModel):
     category_id: int
     category_name: str
@@ -410,9 +428,13 @@ class UserCreate(SQLModel):
     password: str
 
 
+class UserUpdate(SQLModel):
+    default_budget_id: Optional[int] = None
+
 class UserRead(SQLModel):
     id: int
     email: str
+    default_budget_id: Optional[int] = None
     created_at: datetime
 
 

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 import {
   LayoutDashboard,
   Wallet,
@@ -102,10 +103,10 @@ export function AppSidebar() {
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
                 <span className="text-sm font-semibold text-sidebar-foreground tracking-tight truncate leading-none">
-                  Smart Budget
+                  {t("sidebar.smart_budget")}
                 </span>
                 <span className="text-[10px] text-muted-foreground truncate mt-0.5">
-                  Personal Finance
+                  {t("sidebar.personal_finance")}
                 </span>
               </div>
             )}

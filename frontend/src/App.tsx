@@ -14,6 +14,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { BudgetPage } from "@/pages/BudgetPage";
 import { TransactionsPage } from "@/pages/TransactionsPage";
 import { InboxPage } from "@/pages/InboxPage";
+import { ProfilePage } from "@/pages/ProfilePage";
 import type { ReactNode } from "react";
 
 function ProtectedLayout({ children }: { children: ReactNode }) {
@@ -73,6 +74,14 @@ function AppRoutes() {
         element={
           <ProtectedLayout>
             <InboxPage />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedLayout>
+            <ProfilePage />
           </ProtectedLayout>
         }
       />

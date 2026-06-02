@@ -14,17 +14,18 @@
   "auth": {
     "login": {
       "title": "Smart Budget AI",
-      "description": "Zaloguj się do swojego konta",
+      "description": "Zaloguj się na swoje konto",
       "password_label": "Hasło",
       "submit_idle": "Zaloguj się",
       "submit_pending": "Logowanie...",
-      "no_account": "Nie masz konta?",
+      "no_account": "Nie masz jeszcze konta?",
       "register_link": "Zarejestruj się",
       "error_default": "Nieprawidłowy email lub hasło",
       "validation": {
         "email_invalid": "Nieprawidłowy adres email",
         "password_required": "Hasło jest wymagane"
-      }
+      },
+      "test_data": "🧪 Uzupełnij dane testowe (Dev)"
     },
     "register": {
       "title": "Utwórz konto",
@@ -164,7 +165,9 @@
         "name_required": "Nazwa jest wymagana",
         "merchant_required": "Nazwa sprzedawcy jest wymagana"
       }
-    }
+    },
+    "no_preview": "Podgląd niedostępny",
+    "no_visual_rep": "Pliki strukturalne (e-Paragon) nie posiadają reprezentacji wizualnej."
   },
   "transactions": {
     "page_title": "Historia Transakcji",
@@ -204,7 +207,7 @@
       "title": "Szczegóły transakcji #",
       "close": "Zamknij",
       "items_section": {
-        "header": "Pozycje na paragonie",
+        "header": "Pozycje",
         "no_items": "Brak wykrytych pozycji."
       }
     },
@@ -291,7 +294,9 @@
       "placeholder_name": "Nazwa pozycji",
       "placeholder_price": "Cena",
       "placeholder_quantity": "Ilość"
-    }
+    },
+    "ai_processing": "AI Przetwarza",
+    "error_loading": "Błąd ładowania transakcji."
   },
   "budget": {
     "page": {
@@ -436,7 +441,8 @@
     "toast_invalid_format_description": "Proszę wgrać zdjęcie lub PDF.",
     "toast_duplicate_title": "Wykryto duplikat!",
     "toast_duplicate_description": "Ta transakcja została już przesłana. Czy chcesz ją dodać ponownie?",
-    "toast_duplicate_action": "Tak, dodaj"
+    "toast_duplicate_action": "Tak, dodaj",
+    "or": "lub"
   },
   "quick_entry": {
     "dialog_title": "Jak chcesz dodać transakcję?",
@@ -461,7 +467,10 @@
   "common": {
     "cancel": "Anuluj",
     "save": "Zapisz",
-    "confirm": "Potwierdź"
+    "confirm": "Potwierdź",
+    "currency": "zł",
+    "unit_pcs": "szt",
+    "delete": "Usuń"
   },
   "tags": {
     "placeholder_new": "Nowy tag..."
@@ -488,5 +497,63 @@
       "future_date": "Data na paragonie jest w przyszłości."
     },
     "csv_import_complete": "Zaimportowano {imported} transakcji z pliku {filename}. Pominięto {skipped} duplikatów."
+  },
+  "profile": {
+    "title": "Mój profil",
+    "subtitle": "Zarządzaj kontem i budżetami",
+    "account_details": "Szczegóły konta",
+    "email": "Email",
+    "change_password": "Zmień hasło",
+    "old_password": "Stare hasło",
+    "new_password": "Nowe hasło",
+    "confirm_password": "Potwierdź nowe hasło",
+    "my_budgets": "Moje budżety",
+    "budgets_subtitle": "Wybierz aktywny budżet lub zarządzaj istniejącymi.",
+    "active": "Aktywny",
+    "default": "Domyślny",
+    "role_label": "Rola:",
+    "set_default": "Ustaw domyślny",
+    "switch": "Przełącz",
+    "invite": "Zaproś",
+    "delete": "Usuń",
+    "cancel": "Anuluj",
+    "delete_budget_title": "Usuń budżet",
+    "delete_budget_desc1": "Ta akcja jest nieodwracalna. Spowoduje usunięcie wszystkich informacji finansowych z tego budżetu.",
+    "delete_budget_desc2": "Aby potwierdzić, wpisz słowo {keyword} poniżej.",
+    "delete_keyword": "DELETE",
+    "type_delete_to_confirm": "Wpisz {keyword} aby potwierdzić",
+    "invite_to_budget": "Zaproś do budżetu",
+    "role": "Rola",
+    "role_viewer": "Obserwator",
+    "role_editor": "Edytor",
+    "role_owner": "Właściciel",
+    "send_invite": "Zaproś",
+    "passwords_dont_match": "Hasła nie są identyczne",
+    "old_password_required": "Stare hasło jest wymagane",
+    "password_min": "Hasło musi mieć co najmniej 6 znaków",
+    "confirm_required": "Potwierdzenie hasła jest wymagane",
+    "email_invalid": "Nieprawidłowy adres email",
+    "loading_budgets": "Ładowanie budżetów...",
+    "success_password": "Hasło zostało zmienione",
+    "error_password": "Nie udało się zmienić hasła",
+    "success_invite": "Użytkownik został zaproszony",
+    "error_invite": "Nie udało się zaprosić użytkownika",
+    "success_default": "Zaktualizowano domyślny budżet",
+    "error_default": "Nie udało się ustawić domyślnego budżetu",
+    "success_delete": "Budżet został usunięty",
+    "error_delete_fallback": "Nie udało się usunąć budżetu"
+  },
+  "sidebar": {
+    "smart_budget": "Smart Budget",
+    "personal_finance": "Finanse Osobiste"
+  },
+  "header": {
+    "smart_budget_ai": "Smart Budget AI",
+    "profile": "Mój Profil",
+    "settings": "Ustawienia",
+    "logout": "Wyloguj się"
+  },
+  "theme": {
+    "toggle": "Przełącz motyw"
   }
 }

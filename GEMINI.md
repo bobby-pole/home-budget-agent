@@ -78,6 +78,7 @@ Every code change should aim to reach the highest possible level for the given i
 - **Flat text concatenation from Vision** — loses column structure, use line reconstruction
 - **AI for structuring known formats** — regex parser is cheaper, faster, deterministic
 - **Float for money**
+- **Hardcoded strings in frontend UI** — always use `import { t } from "@/lib/i18n"` and `t("key")`. We use `eslint-plugin-i18next` with `i18next/no-literal-string` to enforce this.
 - **DDD refactor (#164)** — icebox
 - **WireGuard / local LLM (#172)** — icebox
 

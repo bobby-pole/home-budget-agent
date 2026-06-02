@@ -1,8 +1,8 @@
+import { t } from "@/lib/i18n";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { t } from "@/lib/i18n";
 import {
   Table,
   TableBody,
@@ -94,7 +94,7 @@ export function TransactionsTable({
   };
 
   if (error) {
-    return <div className="text-red-500">Error loading transactions.</div>;
+    return <div className="text-red-500">{t("transactions.error_loading")}</div>;
   }
 
   return (

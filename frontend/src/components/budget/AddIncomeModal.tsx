@@ -30,12 +30,7 @@ const incomeSchema = z.object({
     const num = parseFloat(val);
     return !isNaN(num) && num > 0;
   }, t("budget.add_income_modal.validation.amount_positive")),
-  date: z.string().refine((val) => {
-    const date = new Date(val);
-    const now = new Date();
-    now.setHours(23, 59, 59, 999);
-    return date <= now;
-  }, t("budget.add_income_modal.validation.date_future")),
+  date: z.string(),
   merchant_name: z.string().min(1, t("budget.add_income_modal.validation.source_required")),
 });
 

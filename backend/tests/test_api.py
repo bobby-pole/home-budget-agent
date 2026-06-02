@@ -228,7 +228,7 @@ def test_get_current_budget_lazy_creates_for_user_without_budget(session: Sessio
     # Confirm no membership exists yet
     assert session.exec(select(BudgetMember).where(BudgetMember.user_id == orphan_user.id)).first() is None
 
-    budget = get_current_budget(current_user=orphan_user, session=session)
+    budget = get_current_budget(current_user=orphan_user, session=session, x_budget_id=None)
 
     assert budget.id is not None
     assert budget.name == "Domowy"
@@ -258,7 +258,7 @@ def test_get_current_budget_returns_existing(session: Session):
     session.add(BudgetMember(budget_id=existing_budget.id, user_id=user.id, role="owner"))
     session.commit()
 
-    budget = get_current_budget(current_user=user, session=session)
+    budget = get_current_budget(current_user=user, session=session, x_budget_id=None)
 
     assert budget.id == existing_budget.id
     # No extra budgets should have been created

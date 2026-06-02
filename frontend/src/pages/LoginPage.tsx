@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n";
 // frontend/src/pages/LoginPage.tsx
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { t } from "@/lib/i18n";
 
 const schema = z.object({
   email: z.email(t("auth.login.validation.email_invalid")),
@@ -54,7 +54,7 @@ export function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-1">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("profile.email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -87,7 +87,7 @@ export function LoginPage() {
                   className="w-full text-xs"
                   onClick={handleFillTestData}
                 >
-                  🧪 Uzupełnij dane testowe (Dev)
+                  {t("auth.login.test_data")}
                 </Button>
               )}
             </div>

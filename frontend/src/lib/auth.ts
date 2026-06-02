@@ -26,7 +26,20 @@ export function setStoredUser(user: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
+const BUDGET_KEY = "active_budget";
+
+export function getActiveBudget(): number | null {
+  const raw = localStorage.getItem(BUDGET_KEY);
+  if (!raw) return null;
+  return parseInt(raw, 10);
+}
+
+export function setActiveBudget(budgetId: number): void {
+  localStorage.setItem(BUDGET_KEY, budgetId.toString());
+}
+
 export function clearAuth(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(BUDGET_KEY);
 }

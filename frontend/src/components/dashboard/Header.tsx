@@ -8,8 +8,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { t } from "@/lib/i18n";
 import { useNavigate } from "react-router-dom";
 
 export function Header() {
@@ -25,7 +26,7 @@ export function Header() {
 
   return (
     <header className="flex items-center justify-between px-6 py-4">
-      <h1 className="text-2xl font-bold text-foreground cursor-pointer" onClick={() => navigate("/")}>Smart Budget AI</h1>
+      <h1 className="text-2xl font-bold text-foreground cursor-pointer" onClick={() => navigate("/")}>{t("header.smart_budget_ai")}</h1>
       <div className="flex items-center gap-2 lg:gap-4">
         <ThemeToggle />
         <DropdownMenu>
@@ -41,14 +42,18 @@ export function Header() {
               <p className="text-sm font-medium truncate">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
+              <User className="mr-2 h-4 w-4" />
+              {t("header.profile")}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate("/settings/categories")} className="cursor-pointer">
               <Settings className="mr-2 h-4 w-4" />
-              Ustawienia
+              {t("header.settings")}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
-              Wyloguj się
+              {t("header.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
