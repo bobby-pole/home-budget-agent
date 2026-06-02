@@ -476,64 +476,99 @@ async def process_transaction_in_background(transaction_id: int, scan_id: int, i
 
 
 def _check_envelope_balance_and_alert(session: Session, transaction: Transaction, delta_amount: float):
-    if transaction.type != "expense" or not transaction.category_id or not transaction.budget_id:
+    if transaction.type != "expense" or not transaction.budget_id:
+        return
+
+    # 1. Gather all categories and their amount in this transaction
+    category_amounts = {}
+    
+    lines = session.exec(
+        select(TransactionLine).where(TransactionLine.transaction_id == transaction.id)
+    ).all()
+    
+    if lines:
+        for line in lines:
+            if line.category_id is not None:
+                category_amounts[line.category_id] = category_amounts.get(line.category_id, 0.0) + (line.price * line.quantity)
+    else:
+        if transaction.category_id is not None:
+            category_amounts[transaction.category_id] = transaction.total_amount
+
+    if not category_amounts:
         return
 
     date_obj = transaction.date or datetime.now(timezone.utc)
     year = date_obj.year
     month = date_obj.month
 
-    planned = session.exec(
-        select(EnvelopeAllocation.amount).where(
-            EnvelopeAllocation.budget_id == transaction.budget_id,
-            EnvelopeAllocation.category_id == transaction.category_id,
-            EnvelopeAllocation.year == year,
-            EnvelopeAllocation.month == month
-        )
-    ).first()
-    planned_dec = Decimal(str(planned)) if planned is not None else Decimal("0.00")
-
-    spent = session.exec(
-        select(func.sum(Transaction.total_amount)).where(
-            Transaction.budget_id == transaction.budget_id,
-            Transaction.category_id == transaction.category_id,
-            Transaction.type == "expense",
-            extract('year', col(Transaction.date)) == year,
-            extract('month', col(Transaction.date)) == month
-        )
-    ).first()
-    spent_dec = Decimal(str(spent)) if spent is not None else Decimal("0.00")
-
-    remaining = planned_dec - spent_dec
-    delta_dec = Decimal(str(delta_amount))
-    remaining_before = remaining + delta_dec
-
-    if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
-        category = session.get(Category, transaction.category_id)
-        cat_name = category.name if category else "Nieznana"
-        
-        other_members = session.exec(
-            select(BudgetMember.user_id).where(
-                BudgetMember.budget_id == transaction.budget_id,
-                BudgetMember.user_id != transaction.uploaded_by
+    # 2. Check each category's balance
+    for cat_id, amt in category_amounts.items():
+        planned = session.exec(
+            select(EnvelopeAllocation.amount).where(
+                EnvelopeAllocation.budget_id == transaction.budget_id,
+                EnvelopeAllocation.category_id == cat_id,
+                EnvelopeAllocation.year == year,
+                EnvelopeAllocation.month == month
             )
-        ).all()
-        
-        for member_id in other_members:
-            if member_id is None:
-                continue
-            alert_msg = json.dumps({
-                "type": "zeroed_envelope",
-                "remaining": float(remaining)
-            })
-            alert = BudgetAlert(
-                budget_id=transaction.budget_id,
-                user_id=member_id,
-                category_name=cat_name,
-                message=alert_msg,
+        ).first()
+        planned_dec = Decimal(str(planned)) if planned is not None else Decimal("0.00")
+        # Sum spent from transactions without lines in this category
+        spent_no_lines = session.scalar(
+            select(func.sum(Transaction.total_amount)).where(
+                Transaction.budget_id == transaction.budget_id,
+                Transaction.type == "expense",
+                extract('year', col(Transaction.date)) == year,
+                extract('month', col(Transaction.date)) == month,
+                col(Transaction.category_id) == cat_id,
+                ~col(Transaction.id).in_(select(TransactionLine.transaction_id).where(col(TransactionLine.transaction_id).is_not(None)))
             )
-            session.add(alert)
-        # Note: Caller is responsible for committing the session
+        ) or 0.0
+
+        # Sum spent from transaction lines in this category
+        spent_with_lines = session.scalar(
+            select(func.sum(TransactionLine.price * TransactionLine.quantity)).join(
+                Transaction, col(Transaction.id) == col(TransactionLine.transaction_id)
+            ).where(
+                Transaction.budget_id == transaction.budget_id,
+                Transaction.type == "expense",
+                extract('year', col(Transaction.date)) == year,
+                extract('month', col(Transaction.date)) == month,
+                col(TransactionLine.category_id) == cat_id
+            )
+        ) or 0.0
+
+        spent_dec = Decimal(str(spent_no_lines)) + Decimal(str(spent_with_lines))
+
+        remaining = planned_dec - spent_dec
+        delta_dec = Decimal(str(amt))
+        remaining_before = remaining + delta_dec
+
+        if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
+            category = session.get(Category, cat_id)
+            cat_name = category.name if category else "Nieznana"
+            
+            other_members = session.exec(
+                select(BudgetMember.user_id).where(
+                    BudgetMember.budget_id == transaction.budget_id,
+                    BudgetMember.user_id != transaction.uploaded_by
+                )
+            ).all()
+            
+            for member_id in other_members:
+                if member_id is None:
+                    continue
+                alert_msg = json.dumps({
+                    "type": "zeroed_envelope",
+                    "remaining": float(remaining)
+                })
+                alert = BudgetAlert(
+                    budget_id=transaction.budget_id,
+                    user_id=member_id,
+                    category_name=cat_name,
+                    message=alert_msg,
+                )
+                session.add(alert)
+
 
 # --- TRANSACTIONS ---
 
@@ -1565,17 +1600,42 @@ def get_summary(
     total_planned = sum(a.amount for a in allocations)
 
     # Calculate category expenses breakdown
-    expenses_by_cat_stmt = select(
-        Transaction.category_id, 
+    no_lines_stmt = select(
+        Transaction.category_id,
         func.sum(Transaction.total_amount)
     ).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
         extract('year', col(Transaction.date)) == year,
-        extract('month', col(Transaction.date)) == month
+        extract('month', col(Transaction.date)) == month,
+        col(Transaction.category_id).is_not(None),
+        ~col(Transaction.id).in_(select(TransactionLine.transaction_id).where(col(TransactionLine.transaction_id).is_not(None)))
     ).group_by(col(Transaction.category_id))
     
-    spent_by_category = dict(session.exec(expenses_by_cat_stmt).all())
+    spent_no_lines = dict(session.exec(no_lines_stmt).all())
+
+    lines_stmt = select(
+        TransactionLine.category_id,
+        func.sum(TransactionLine.price * TransactionLine.quantity)
+    ).join(Transaction, col(Transaction.id) == col(TransactionLine.transaction_id)).where(
+        Transaction.budget_id == current_budget.id,
+        Transaction.type == "expense",
+        extract('year', col(Transaction.date)) == year,
+        extract('month', col(Transaction.date)) == month,
+        col(TransactionLine.category_id).is_not(None)
+    ).group_by(col(TransactionLine.category_id))
+    
+    spent_with_lines = dict(session.exec(lines_stmt).all())
+
+    spent_by_category = {}
+    for cat_id, amt in spent_no_lines.items():
+        if cat_id is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+            
+    for cat_id, amt in spent_with_lines.items():
+        if cat_id is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+
 
     # Build the category summary items
     categories_summary = []
@@ -1584,22 +1644,22 @@ def get_summary(
         select(Category).where(Category.budget_id == current_budget.id)
     ).all()
     
-    allocations_by_cat = {a.category_id: a.amount for a in allocations}
+    allocations_by_cat = {a.category_id: Decimal(str(a.amount)) for a in allocations}
     
     for cat in all_categories:
         if cat.id is None:
             continue
-        planned = allocations_by_cat.get(cat.id, 0.0)
-        spent = spent_by_category.get(cat.id, 0.0)
+        planned = allocations_by_cat.get(cat.id, Decimal("0.00"))
+        spent = spent_by_category.get(cat.id, Decimal("0.00"))
         
         # Only include if there is planned or spent amount
-        if planned > 0 or spent > 0:
+        if planned > Decimal("0.00") or spent > Decimal("0.00"):
             categories_summary.append(CategoryBudgetSummaryItem(
                 category_id=cat.id,
                 category_name=cat.name,
-                planned=planned,
-                spent=spent,
-                remaining=planned - spent
+                planned=float(planned),
+                spent=float(spent),
+                remaining=float(planned - spent)
             ))
 
     net_cash_flow = total_income - total_spent

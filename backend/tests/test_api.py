@@ -606,3 +606,144 @@ def test_update_budget_forbidden(client: TestClient, session: Session):
     
     response = client.patch(f"/api/budgets/{b.id}", json={"name": "Hacked Name"})
     assert response.status_code == 403
+
+
+def test_get_summary_with_multi_item_receipt(client: TestClient, session: Session):
+    """Monthly summary must aggregate spent amount from TransactionLine categories when transaction.category_id is None."""
+    from app.models import Category, EnvelopeAllocation, Budget
+    
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_budget is not None
+    
+    # 1. Create a category
+    cat = Category(name="Jedzenie", budget_id=test_budget.id)
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    
+    # 2. Add an envelope allocation
+    assert test_budget.id is not None
+    assert cat.id is not None
+    alloc = EnvelopeAllocation(
+        budget_id=test_budget.id,
+        category_id=cat.id,
+        year=2026,
+        month=4,
+        amount=500.0
+    )
+    session.add(alloc)
+    session.commit()
+    
+    # 3. Create a manual transaction with multiple lines matching this category
+    payload = {
+        "merchant_name": "Lidl",
+        "total_amount": 150.0,
+        "currency": "PLN",
+        "date": "2026-04-10T10:00:00Z",
+        "type": "expense",
+        "category_id": None,
+        "lines": [
+            {
+                "name": "Chleb",
+                "price": 5.0,
+                "quantity": 2.0,
+                "category_id": cat.id
+            },
+            {
+                "name": "Ser",
+                "price": 140.0,
+                "quantity": 1.0,
+                "category_id": cat.id
+            }
+        ]
+    }
+    
+    response = client.post("/api/transactions/manual", json=payload)
+    assert response.status_code == 200
+    
+    # 4. Fetch budget summary and verify
+    sum_response = client.get("/api/budget/2026/4/summary")
+    assert sum_response.status_code == 200
+    summary_data = sum_response.json()
+    
+    # Category "Jedzenie" should have spent = 150.0 (5.0*2.0 + 140.0)
+    cat_summary = next(c for c in summary_data["categories"] if c["category_id"] == cat.id)
+    assert cat_summary["spent"] == 150.0
+    assert cat_summary["remaining"] == 350.0
+    assert summary_data["total_spent"] == 150.0
+
+
+def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: Session):
+    """BudgetAlert must be created for other members when a multi-item receipt triggers overspending in an envelope."""
+    import json
+    from app.models import Category, EnvelopeAllocation, Budget, BudgetMember, BudgetAlert
+    
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    assert test_user is not None
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_budget is not None
+    
+    # Create another user and invite to budget
+    other_user = User(email="partner@example.com", hashed_password="abc")
+    session.add(other_user)
+    session.commit()
+    session.refresh(other_user)
+    
+    member = BudgetMember(budget_id=test_budget.id, user_id=other_user.id, role="editor")
+    session.add(member)
+    
+    cat = Category(name="Rozrywka", budget_id=test_budget.id)
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    
+    # Limit of 50 PLN
+    assert test_budget.id is not None
+    assert cat.id is not None
+    alloc = EnvelopeAllocation(
+        budget_id=test_budget.id,
+        category_id=cat.id,
+        year=2026,
+        month=4,
+        amount=50.0
+    )
+    session.add(alloc)
+    session.commit()
+    
+    # Create transaction with lines exceeding the 50 PLN limit
+    payload = {
+        "merchant_name": "Kino",
+        "total_amount": 60.0,
+        "currency": "PLN",
+        "date": "2026-04-12T19:00:00Z",
+        "type": "expense",
+        "category_id": None,
+        "lines": [
+            {
+                "name": "Bilet",
+                "price": 30.0,
+                "quantity": 2.0,
+                "category_id": cat.id
+            }
+        ]
+    }
+    
+    response = client.post("/api/transactions/manual", json=payload)
+    assert response.status_code == 200
+    
+    # Check if budget alert was generated for partner@example.com
+    alerts = session.exec(
+        select(BudgetAlert).where(
+            BudgetAlert.budget_id == test_budget.id,
+            BudgetAlert.user_id == other_user.id
+        )
+    ).all()
+    
+    assert len(alerts) == 1
+    assert alerts[0].category_name == "Rozrywka"
+    alert_details = json.loads(alerts[0].message)
+    assert alert_details["type"] == "zeroed_envelope"
+    assert alert_details["remaining"] == -10.0
+

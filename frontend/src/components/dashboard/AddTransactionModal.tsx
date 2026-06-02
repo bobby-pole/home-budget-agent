@@ -86,6 +86,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       toast.success(t("transactions.add_modal.toast_success"));
       onOpenChange(false);
     },

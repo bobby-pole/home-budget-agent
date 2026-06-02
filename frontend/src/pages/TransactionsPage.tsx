@@ -31,6 +31,7 @@ export function TransactionsPage() {
     mutationFn: api.importTransactions,
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       let description: string;
       if (data.summary && typeof data.summary === "object" && data.summary.code === "CSV_IMPORT_COMPLETE") {
         description = t("errors.csv_import_complete", {

@@ -84,6 +84,7 @@ interface VerificationCardProps {
 
 export function VerificationCard({ transaction, onSuccess, onBack }: VerificationCardProps) {
   const queryClient = useQueryClient();
+  const [collapsedRows, setCollapsedRows] = useState<Record<string, boolean>>({});
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageType, setImageType] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(true);
@@ -259,6 +260,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       toast.success(t("inbox.verification_card.toast_deleted"));
       queryClient.invalidateQueries({ queryKey: ["inbox"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       onSuccess();
     },
     onError: () => {
@@ -441,10 +443,10 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
               </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="form" className="flex-1 overflow-hidden m-0 p-0">
+          <TabsContent value="form" className="flex-1 data-[state=active]:flex flex-col overflow-hidden m-0 p-0 min-h-0">
             {renderForm(true)}
           </TabsContent>
-          <TabsContent value="receipt" className="flex-1 overflow-hidden m-0 p-0">
+          <TabsContent value="receipt" className="flex-1 data-[state=active]:flex flex-col overflow-hidden m-0 p-0 min-h-0">
             {receiptPreview}
           </TabsContent>
         </Tabs>
@@ -598,6 +600,19 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                 append={append}
                 remove={remove}
                 categories={categories}
+                collapsedRows={collapsedRows}
+                onToggleCollapse={(id) => setCollapsedRows(prev => ({ ...prev, [id]: !prev[id] }))}
+                onCollapseAll={() => {
+                  const newMap: Record<string, boolean> = {};
+                  const lines = form.getValues("lines") || [];
+                  fields.forEach((f, idx) => {
+                    if (f.id && !lines[idx]?.is_adjustment) {
+                      newMap[f.id] = true;
+                    }
+                  });
+                  setCollapsedRows(newMap);
+                }}
+                onExpandAll={() => setCollapsedRows({})}
               />
 
             </CardContent>
