@@ -91,24 +91,38 @@ class AIService:
                 raw_text = result.raw_text
                 extracted_lines = lines
 
-            if source == ReceiptSource.PHOTO_IMAGE:
+            merchant = detect_merchant(lines)
+            print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
+
+            # Try deterministic parser if supported merchant is detected
+            if merchant == "lidl":
+                print("⚡ [Pipeline] Lidl merchant detected. Running deterministic parser.")
+                from .lidl_parser import LidlReceiptParser
+                parsed = LidlReceiptParser().parse(lines)
+                data = parsed.to_dict()
+                already_categorized = False
+
+                # Validate before categorizing — on photo, fall back to AI if parsing was messy
+                if source == ReceiptSource.PHOTO_IMAGE:
+                    val_data = AIService._validate_and_annotate(data)
+                    validation = val_data.get("_validation", {}) if val_data else {}
+                    if not validation.get("is_valid", True) or validation.get("issues"):
+                        print("⚠️ [Pipeline] Deterministic parser failed validation on photo. Falling back to AI.")
+                        data = AIService._ai_structurize("\n".join(lines))
+                        data = AIService._categorize_parsed_items(data, categories, user_id)
+                        already_categorized = True
+
+                if not already_categorized:
+                    data = AIService._categorize_parsed_items(data, categories, user_id)
+            elif source == ReceiptSource.PHOTO_IMAGE:
                 print("📸 [Pipeline] Camera photo detected. Bypassing deterministic parser.")
                 data = AIService._ai_structurize("\n".join(lines))
                 data = AIService._categorize_parsed_items(data, categories, user_id)
             else:
-                merchant = detect_merchant(lines)
-                print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
-
-
-                if merchant == "lidl":
-                    from .lidl_parser import LidlReceiptParser
-                    parsed = LidlReceiptParser().parse(lines)
-                    data = parsed.to_dict()
-                    data = AIService._categorize_parsed_items(data, categories, user_id)
-                else:
-                    # AI structurizer fallback for all unknown / not-yet-parsed merchants.
-                    data = AIService._ai_structurize("\n".join(lines))
-                    data = AIService._categorize_parsed_items(data, categories, user_id)
+                # App PNG/PDF text but merchant not identified or not supported deterministically
+                print("🧠 [Pipeline] App export of unknown merchant. Running AI fallback.")
+                data = AIService._ai_structurize("\n".join(lines))
+                data = AIService._categorize_parsed_items(data, categories, user_id)
 
             data = AIService._validate_and_annotate(data)
             if data is not None:

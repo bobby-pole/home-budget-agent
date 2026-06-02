@@ -60,6 +60,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
       api.updateTransactionLine(transactionId, item.id, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       toast.success(t("transactions.item_row.toast_updated"));
       setIsEditing(false);
     },

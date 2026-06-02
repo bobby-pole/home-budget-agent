@@ -97,6 +97,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       toast.success(t("transactions.header_form.toast_saved"));
       setIsEditing(false);
     },

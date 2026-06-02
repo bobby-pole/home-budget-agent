@@ -6,7 +6,7 @@ import type {
   FieldArrayWithId,
 } from "react-hook-form";
 import { useWatch } from "react-hook-form";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,6 +36,10 @@ interface ItemsSectionProps {
   append: UseFieldArrayAppend<VerificationFormValues, "lines">;
   remove: UseFieldArrayRemove;
   categories: CategoryRead[];
+  collapsedRows: Record<string, boolean>;
+  onToggleCollapse: (id: string) => void;
+  onCollapseAll: () => void;
+  onExpandAll: () => void;
 }
 
 const blankItem: LineFormShape = {
@@ -63,7 +67,17 @@ function formatMoney(value: number): string {
   });
 }
 
-export function ItemsSection({ form, fields, append, remove, categories }: ItemsSectionProps) {
+export function ItemsSection({
+  form,
+  fields,
+  append,
+  remove,
+  categories,
+  collapsedRows,
+  onToggleCollapse,
+  onCollapseAll,
+  onExpandAll,
+}: ItemsSectionProps) {
   // Watch all lines so basket-adjustment rows update reactively when edited.
   const watchedLines = useWatch({ control: form.control, name: "lines" });
 
@@ -82,6 +96,10 @@ export function ItemsSection({ form, fields, append, remove, categories }: Items
     return { productIndices: products, adjustmentIndices: adjustments };
   }, [fields, watchedLines]);
 
+  const allCollapsed =
+    productIndices.length > 0 &&
+    productIndices.every((idx) => !!collapsedRows[fields[idx].id]);
+
   return (
     <div className="space-y-5">
       <div className="space-y-2">
@@ -89,15 +107,38 @@ export function ItemsSection({ form, fields, append, remove, categories }: Items
           <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground/70">
             {t("inbox.verification_card.items_section_header")}
           </h3>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => append(blankItem)}
-            className="h-8 text-xs gap-1 border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors shrink-0"
-          >
-            <Plus className="h-3 w-3" /> {t("inbox.verification_card.add_item_button")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {productIndices.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={allCollapsed ? onExpandAll : onCollapseAll}
+                className="h-8 text-xs text-muted-foreground hover:text-primary transition-colors shrink-0 gap-1"
+              >
+                {allCollapsed ? (
+                  <>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                    {t("inbox.verification_card.expand_all")}
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="h-3.5 w-3.5" />
+                    {t("inbox.verification_card.collapse_all")}
+                  </>
+                )}
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => append(blankItem)}
+              className="h-8 text-xs gap-1 border-primary/20 hover:bg-primary/5 hover:text-primary transition-colors shrink-0"
+            >
+              <Plus className="h-3 w-3" /> {t("inbox.verification_card.add_item_button")}
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -108,6 +149,8 @@ export function ItemsSection({ form, fields, append, remove, categories }: Items
               index={index}
               categories={categories}
               onRemove={() => remove(index)}
+              isCollapsed={!!collapsedRows[fields[index].id]}
+              onToggleCollapse={() => onToggleCollapse(fields[index].id)}
             />
           ))}
         </div>
@@ -129,11 +172,22 @@ interface ItemRowProps {
   index: number;
   categories: CategoryRead[];
   onRemove: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
-function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
+function ItemRow({
+  form,
+  index,
+  categories,
+  onRemove,
+  isCollapsed,
+  onToggleCollapse,
+}: ItemRowProps) {
   // Watch just this row so the computed gross/total update as the user types
   // without re-rendering siblings.
+  const name = useWatch({ control: form.control, name: `lines.${index}.name` }) || "";
+  const categoryId = useWatch({ control: form.control, name: `lines.${index}.category_id` }) || "";
   const unitPrice = useWatch({ control: form.control, name: `lines.${index}.unit_price` }) ?? 0;
   const qty = useWatch({ control: form.control, name: `lines.${index}.quantity` }) ?? 1;
   const discount = useWatch({ control: form.control, name: `lines.${index}.discount_total` }) ?? 0;
@@ -141,10 +195,83 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
   const gross = (Number(unitPrice) || 0) * (Number(qty) || 0);
   const total = gross + (Number(discount) || 0);
 
+  const selectedCategory = categories.find((c) => c.id.toString() === categoryId);
+
+  if (isCollapsed) {
+    return (
+      <div
+        onClick={onToggleCollapse}
+        className="group relative bg-card border border-border/40 hover:border-primary/30 p-2 sm:p-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:shadow-sm transition-all"
+      >
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {/* Category Icon */}
+          <div className="size-8 rounded-full flex items-center justify-center bg-muted text-base shrink-0 select-none">
+            {selectedCategory?.icon || "💰"}
+          </div>
+
+          {/* Name & Qty/Price Summary */}
+          <div className="flex flex-col min-w-0 flex-1">
+            <span className="text-sm font-bold truncate pr-2">
+              {name || (
+                <span className="text-muted-foreground/50 italic">
+                  {t("inbox.verification_card.placeholder_item_name")}
+                </span>
+              )}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1.5 mt-0.5">
+              {qty !== 1 && (
+                <span className="tabular-nums">
+                  {qty} × {formatMoney(unitPrice)} {t("common.currency")}
+                </span>
+              )}
+              {discount < 0 && (
+                <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
+                  {t("inbox.verification_card.label_discount")}: {formatMoney(discount)} {t("common.currency")}
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        {/* Right side: total price + action buttons */}
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="text-right flex flex-col justify-center select-none">
+            <span className="text-sm font-black tabular-nums">
+              {formatMoney(total)} {t("common.currency")}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onToggleCollapse}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+              aria-label={t("inbox.verification_card.expand_item")}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onRemove}
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+              aria-label={t("inbox.verification_card.remove_item")}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="group relative bg-card border border-border/40 p-3 rounded-xl hover:border-primary/30 transition-all hover:shadow-sm">
       <div className="flex flex-col gap-2">
-        {/* Row 1: name + category + delete */}
+        {/* Row 1: name + category + toggle collapse + delete */}
         <div className="flex gap-2 items-start">
           <FormField
             control={form.control}
@@ -189,16 +316,28 @@ function ItemRow({ form, index, categories, onRemove }: ItemRowProps) {
               </FormItem>
             )}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onRemove}
-            className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
-            aria-label={t("inbox.verification_card.remove_item")}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onToggleCollapse}
+              className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
+              aria-label={t("inbox.verification_card.collapse_item")}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onRemove}
+              className="h-9 w-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+              aria-label={t("inbox.verification_card.remove_item")}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {/* Row 2: unit × qty = gross  (all editable except gross, which is computed) */}

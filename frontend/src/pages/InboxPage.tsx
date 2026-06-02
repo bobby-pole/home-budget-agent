@@ -30,6 +30,7 @@ export function InboxPage() {
   const handleSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ["inbox"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
     if (isMobile) {
       setSelectedId(null);
     }

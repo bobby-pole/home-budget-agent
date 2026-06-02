@@ -79,6 +79,7 @@ export function TransactionsTable({
     mutationFn: api.deleteTransaction,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       toast.success(t("transactions.table.deleted_toast"));
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {

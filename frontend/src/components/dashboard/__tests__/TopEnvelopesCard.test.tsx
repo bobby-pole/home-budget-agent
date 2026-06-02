@@ -21,7 +21,7 @@ describe("TopEnvelopesCard", () => {
     expect(screen.getAllByText(/z 1\s*000|z 1\.000|z 1000/)).toHaveLength(2);
     
     expect(screen.getByText("Rozrywka")).toBeInTheDocument();
-    expect(screen.getByText("Pozostało 0 PLN")).toBeInTheDocument();
+    expect(screen.getByText("Pozostało -200 PLN")).toBeInTheDocument();
   });
 
   it("shows empty state when no envelopes", () => {

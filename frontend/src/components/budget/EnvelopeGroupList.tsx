@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
@@ -71,10 +72,13 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
             return (
               <Card 
                 key={env.categoryId} 
-                className="rounded-[32px] border-border/50 shadow-sm bg-card hover:bg-muted/30 transition-colors cursor-pointer group"
+                className={cn(
+                  "rounded-[32px] border-border/50 shadow-sm bg-card hover:bg-muted/30 transition-all cursor-pointer group",
+                  isOverLimit && "border-destructive/30 bg-destructive/5 dark:bg-destructive/10 hover:bg-destructive/10 dark:hover:bg-destructive/15"
+                )}
                 onClick={() => onEnvelopeClick(env)}
                 role="button"
-                aria-label={`Edytuj limit dla ${env.categoryName}. Pozostało ${env.remaining} PLN.`}
+                aria-label={`${t("budget.allocation_drawer.set_limit_subtitle")}: ${env.categoryName}. ${t("dashboard.top_envelopes.remaining_prefix")} ${env.remaining} ${t("common.currency")}.`}
               >                <CardContent className="p-4 sm:p-6">
                   <div className="flex flex-col gap-4">
                     {/* Header: Icon, Name, Pacing */}
@@ -84,7 +88,10 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                           {env.icon}
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-base font-bold leading-tight">{env.categoryName}</span>
+                          <span className="text-base font-bold leading-tight flex items-center gap-1.5">
+                            {env.categoryName}
+                            {isOverLimit && <AlertTriangle className="h-4 w-4 text-destructive shrink-0 animate-bounce" style={{ animationDuration: '2s' }} />}
+                          </span>
                           <span className={cn(
                             "text-[11px] font-bold uppercase tracking-tight mt-0.5",
                             isOverLimit ? "text-destructive" : (isPacingSafe ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")
