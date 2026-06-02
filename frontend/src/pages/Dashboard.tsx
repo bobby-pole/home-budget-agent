@@ -81,7 +81,7 @@ export function Dashboard() {
         spent: c.spent,
         limit: c.planned,
         color: cat?.color ?? "#3b82f6",
-        icon: cat?.icon ?? "💰",
+        icon: cat?.icon ?? "coins",
       };
     })
     .sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit))
@@ -129,7 +129,7 @@ export function Dashboard() {
 
       {/* Row 2: Charts & Envelopes */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <SpendingPieChart data={pieData} isLoading={isBudgetLoading} total={totalSpent} />
+        <SpendingPieChart data={pieData} isLoading={isBudgetLoading} />
         <TopEnvelopesCard envelopes={envelopes} isLoading={isBudgetLoading} />
       </div>
 

@@ -5,8 +5,8 @@ import { MemoryRouter } from "react-router-dom";
 
 describe("TopEnvelopesCard", () => {
   const mockEnvelopes = [
-    { id: 1, name: "Jedzenie", spent: 800, limit: 1000, color: "#ff0000", icon: "🍔" },
-    { id: 2, name: "Rozrywka", spent: 1200, limit: 1000, color: "#00ff00", icon: "🎬" },
+    { id: 1, name: "Jedzenie", spent: 800, limit: 1000, color: "#ff0000", icon: "utensils" },
+    { id: 2, name: "Rozrywka", spent: 1200, limit: 1000, color: "#00ff00", icon: "clapperboard" },
   ];
 
   it("renders envelopes with progress percentage", () => {

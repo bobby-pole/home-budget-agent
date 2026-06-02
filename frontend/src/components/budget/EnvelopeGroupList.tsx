@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 export interface EnvelopeItem {
   categoryId: number;
@@ -84,8 +85,11 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                     {/* Header: Icon, Name, Pacing */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="size-10 rounded-full flex items-center justify-center bg-muted text-xl shadow-inner shrink-0">
-                          {env.icon}
+                        <div 
+                          className="size-10 rounded-full flex items-center justify-center shrink-0" 
+                          style={{ backgroundColor: `${env.color || "#3b82f6"}15` }}
+                        >
+                          <CategoryIcon name={env.icon} className="size-5" style={{ color: env.color || "#3b82f6" }} />
                         </div>
                         <div className="flex flex-col">
                           <span className="text-base font-bold leading-tight flex items-center gap-1.5">

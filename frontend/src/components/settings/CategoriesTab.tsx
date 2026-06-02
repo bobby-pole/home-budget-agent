@@ -5,7 +5,7 @@ import type { CategoryRead as Category } from "@/client";
 import { t } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Lock, Trash2, Edit2, Plus, ChevronRight, ChevronDown, Save, X, GripVertical, ArrowUp, ArrowDown } from "lucide-react";
+import { Lock, Trash2, Edit2, Plus, ChevronRight, ChevronDown, Save, X, GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 export function CategoriesTab() {
   const queryClient = useQueryClient();
@@ -128,27 +129,6 @@ export function CategoriesTab() {
     deleteMutation.mutate({ id: deleteCatId, reassign: target });
   };
 
-  const handleMove = (id: number, direction: 'up' | 'down') => {
-    const catToMove = categories.find(c => c.id === id);
-    if (!catToMove) return;
-
-    const siblings = categories.filter(c => c.parent_id === catToMove.parent_id);
-    const index = siblings.findIndex(c => c.id === id);
-    
-    if (direction === 'up' && index > 0) {
-      const prev = siblings[index - 1];
-      reorderMutation.mutate([
-        { id: catToMove.id, order_index: prev.order_index ?? index - 1 },
-        { id: prev.id, order_index: catToMove.order_index ?? index }
-      ]);
-    } else if (direction === 'down' && index < siblings.length - 1) {
-      const next = siblings[index + 1];
-      reorderMutation.mutate([
-        { id: catToMove.id, order_index: next.order_index ?? index + 1 },
-        { id: next.id, order_index: catToMove.order_index ?? index }
-      ]);
-    }
-  };
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -172,21 +152,27 @@ export function CategoriesTab() {
     const [movedItem] = siblings.splice(sourceIndex, 1);
     siblings.splice(destIndex, 0, movedItem);
 
+    // Update order_index on the siblings so that sort() keeps them in the new order
+    const updatedSiblings = siblings.map((cat, idx) => ({
+      ...cat,
+      order_index: idx
+    }));
+
     // Optimistic UI update
     setCategories(prev => {
       const nonSiblings = prev.filter(c => c.parent_id !== movedItem.parent_id);
-      return [...nonSiblings, ...siblings].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
+      return [...nonSiblings, ...updatedSiblings].sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0));
     });
 
     // Send updates to backend
-    const updates = siblings.map((cat, idx) => ({
+    const updates = updatedSiblings.map((cat) => ({
       id: cat.id,
-      order_index: idx
+      order_index: cat.order_index ?? 0
     }));
     reorderMutation.mutate(updates);
   };
 
-  const renderCategoryRow = (cat: Category, level: number = 0, index: number, isLast: boolean) => {
+  const renderCategoryRow = (cat: Category, level: number = 0, index: number) => {
     const children = getChildren(cat.id);
     const hasChildren = children.length > 0;
     const isExpanded = expanded[cat.id];
@@ -206,22 +192,12 @@ export function CategoriesTab() {
           >
             <div className={`flex items-center justify-between p-3 transition-colors ${level > 0 ? 'pl-10 bg-muted/10 hover:bg-muted/30' : 'bg-card hover:bg-muted/50'}`}>
               <div className="flex items-center gap-3 flex-1">
-                {/* Drag Handle (Desktop) */}
+                {/* Drag Handle */}
                 <div 
-                  className="hidden md:flex text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing p-1 -ml-1 rounded"
+                  className="flex text-muted-foreground/50 hover:text-foreground cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded touch-none"
                   {...provided.dragHandleProps}
                 >
                   <GripVertical className="h-4 w-4" />
-                </div>
-                
-                {/* Arrows (Mobile) */}
-                <div className="flex flex-col md:hidden text-muted-foreground mr-1">
-                  <button disabled={index === 0} onClick={() => handleMove(cat.id, 'up')} className="disabled:opacity-20 p-1">
-                    <ArrowUp className="h-3 w-3" />
-                  </button>
-                  <button disabled={isLast} onClick={() => handleMove(cat.id, 'down')} className="disabled:opacity-20 p-1">
-                    <ArrowDown className="h-3 w-3" />
-                  </button>
                 </div>
 
                 {level === 0 && (
@@ -265,10 +241,10 @@ export function CategoriesTab() {
                     onClick={() => handleStartEdit(cat)}
                   >
                     <div 
-                      className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white text-sm shadow-sm"
+                      className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-white shadow-sm"
                       style={{ backgroundColor: cat.color || "#9ca3af" }}
                     >
-                      {cat.icon || "📦"}
+                      <CategoryIcon name={cat.icon || "package"} className="size-4.5" />
                     </div>
                     <span className="font-medium truncate">{CATEGORY_LABELS[cat.name] || cat.name}</span>
                     {cat.is_system && <div title="Kategoria systemowa"><Lock className="h-3 w-3 text-muted-foreground ml-1 shrink-0" /></div>}
@@ -310,7 +286,7 @@ export function CategoriesTab() {
                     ref={providedChild.innerRef}
                     {...providedChild.droppableProps}
                   >
-                    {children.map((child, childIdx) => renderCategoryRow(child, level + 1, childIdx, childIdx === children.length - 1))}
+                    {children.map((child, childIdx) => renderCategoryRow(child, level + 1, childIdx))}
                     {providedChild.placeholder}
                   </div>
                 )}
@@ -348,7 +324,7 @@ export function CategoriesTab() {
                     {t("settings.categories.no_categories")}
                   </div>
                 ) : (
-                  parents.map((cat, idx) => renderCategoryRow(cat, 0, idx, idx === parents.length - 1))
+                  parents.map((cat, idx) => renderCategoryRow(cat, 0, idx))
                 )}
                 {provided.placeholder}
               </div>
@@ -377,16 +353,16 @@ export function CategoriesTab() {
 
       {/* Delete Dialog */}
       <AlertDialog open={!!deleteCatId} onOpenChange={(open) => !open && setDeleteCatId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent className="pb-8">
           <AlertDialogHeader>
             <AlertDialogTitle>{t("settings.categories.delete_dialog_title")}</AlertDialogTitle>
             <AlertDialogDescription>
               {t("settings.categories.delete_dialog_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4">
+          <div className="py-2 min-w-0">
             <Select value={reassignTo} onValueChange={setReassignTo}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full min-w-0">
                 <SelectValue placeholder={t("settings.categories_tab.placeholder_action")} />
               </SelectTrigger>
               <SelectContent>
@@ -402,7 +378,7 @@ export function CategoriesTab() {
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("settings.categories.delete_dialog_cancel")}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={handleDelete} variant="destructive">
               {t("settings.categories.delete_dialog_confirm")}
             </AlertDialogAction>
           </AlertDialogFooter>

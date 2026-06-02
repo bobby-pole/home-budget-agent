@@ -18,22 +18,21 @@ def migrate_and_cleanup_categories():
     print("🔧 Rozpoczynam migrację i czyszczenie kategorii...")
     
     default_cats = [
-        {"name": "Food", "icon": "🍔", "color": "#f87171"},
-        {"name": "Housing", "icon": "🏠", "color": "#60a5fa"},
-        {"name": "Transport", "icon": "🚗", "color": "#facc15"},
-        {"name": "Utilities", "icon": "💡", "color": "#facc15"},
-        {"name": "Entertainment", "icon": "🎬", "color": "#c084fc"},
-        {"name": "Health", "icon": "⚕️", "color": "#4ade80"},
-        {"name": "Clothing", "icon": "👕", "color": "#f472b6"},
-        {"name": "Kids", "icon": "🧸", "color": "#38bdf8"},
-        {"name": "Pets", "icon": "🐕", "color": "#a78bfa"},
-        {"name": "Travel", "icon": "✈️", "color": "#34d399"},
-        {"name": "Education", "icon": "📚", "color": "#818cf8"},
-        {"name": "Savings", "icon": "💰", "color": "#fbbf24"},
-        {"name": "Gifts", "icon": "🎁", "color": "#fb7185"},
-        {"name": "Snacks", "icon": "🥨", "color": "#fcd34d"},
-        {"name": "Other", "icon": "📦", "color": "#9ca3af"},
-        {"name": "Salary", "icon": "💵", "color": "#10b981"},
+        {"name": "Food", "icon": "utensils", "color": "#f87171"},
+        {"name": "Housing", "icon": "home", "color": "#60a5fa"},
+        {"name": "Transport", "icon": "car", "color": "#facc15"},
+        {"name": "Utilities", "icon": "lightbulb", "color": "#facc15"},
+        {"name": "Entertainment", "icon": "clapperboard", "color": "#c084fc"},
+        {"name": "Health", "icon": "heart-pulse", "color": "#4ade80"},
+        {"name": "Clothing", "icon": "shirt", "color": "#f472b6"},
+        {"name": "Kids", "icon": "toy-brick", "color": "#38bdf8"},
+        {"name": "Pets", "icon": "paw-print", "color": "#a78bfa"},
+        {"name": "Travel", "icon": "plane", "color": "#34d399"},
+        {"name": "Education", "icon": "graduation-cap", "color": "#818cf8"},
+        {"name": "Savings", "icon": "coins", "color": "#fbbf24"},
+        {"name": "Gifts", "icon": "gift", "color": "#fb7185"},
+        {"name": "Snacks", "icon": "cookie", "color": "#fcd34d"},
+        {"name": "Other", "icon": "package", "color": "#9ca3af"},
     ]
 
     with Session(operations_engine) as session:
@@ -65,7 +64,7 @@ def migrate_and_cleanup_categories():
             if alcohol_cat:
                 print("  🍿 Zamieniam 'Alcohol' -> 'Snacks'")
                 alcohol_cat.name = "Snacks"
-                alcohol_cat.icon = "🥨"
+                alcohol_cat.icon = "cookie"
                 alcohol_cat.color = "#fcd34d"
                 session.add(alcohol_cat)
                 session.commit()

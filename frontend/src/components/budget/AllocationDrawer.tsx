@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 interface AllocationDrawerProps {
   open: boolean;
@@ -121,8 +122,8 @@ function AllocationForm({
   return (
     <>
       <div className="flex items-center gap-4 mb-4">
-        <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl shadow-inner shrink-0">
-          {categoryIcon}
+        <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center shadow-inner shrink-0">
+          <CategoryIcon name={categoryIcon} className="size-6 text-primary" />
         </div>
         <div>
           <h2 className="text-2xl font-black tracking-tight leading-tight">{categoryName}</h2>

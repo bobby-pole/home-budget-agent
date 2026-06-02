@@ -41,11 +41,11 @@ export function SpendingChart() {
   const curYear = now.getFullYear();
 
   const getCategoryById = (categoryId: number | null) => {
-    if (categoryId == null || !categories) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "📦" };
+    if (categoryId == null || !categories) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "package" };
     const cat = categories.find(c => c.id === categoryId);
-    if (!cat) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "📦" };
+    if (!cat) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "package" };
     const displayName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
-    return { name: displayName, color: cat.color || "#9ca3af", icon: cat.icon || "📦" };
+    return { name: displayName, color: cat.color || "#9ca3af", icon: cat.icon || "package" };
   };
 
   transactions?.forEach((transaction) => {

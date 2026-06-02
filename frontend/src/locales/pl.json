@@ -81,7 +81,9 @@
       "details_button": "Szczegóły",
       "center_label": "Suma",
       "no_data": "Brak danych",
-      "other_category": "Inne"
+      "other_category": "Inne",
+      "excluded_title": "Wykluczone kategorie",
+      "restore_all": "Przywróć wszystkie"
     },
     "top_envelopes": {
       "title": "Najważniejsze koperty",

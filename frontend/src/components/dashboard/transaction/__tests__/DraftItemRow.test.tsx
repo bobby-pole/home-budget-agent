@@ -9,7 +9,7 @@ import type { NewItemDraft } from "@/components/dashboard/transaction/DraftItemR
 vi.mock("@/lib/api", () => ({
   api: {
     getCategories: vi.fn().mockResolvedValue([
-      { id: 1, name: "food", is_system: true, color: "#4caf50", icon: "🍔" },
+      { id: 1, name: "food", is_system: true, color: "#4caf50", icon: "utensils" },
     ]),
   },
 }));

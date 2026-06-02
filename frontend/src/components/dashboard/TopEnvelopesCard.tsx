@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 interface EnvelopeData {
   id: number;
@@ -52,8 +53,11 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                     
                     <div className="flex items-center gap-4">
                       {/* Icon Circle */}
-                      <div className="size-11 rounded-full flex items-center justify-center bg-white dark:bg-muted shrink-0 text-xl shadow-[0_4px_12px_rgba(0,0,0,0.08)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-shadow border border-border/10">
-                        {env.icon || "💰"}
+                      <div 
+                        className="size-11 rounded-full flex items-center justify-center shrink-0 shadow-[0_4px_12px_rgba(0,0,0,0.08)] group-hover:shadow-[0_4px_12px_rgba(0,0,0,0.12)] transition-all border border-border/10"
+                        style={{ backgroundColor: `${env.color || "#3b82f6"}15` }}
+                      >
+                        <CategoryIcon name={env.icon || "coins"} className="size-5" style={{ color: env.color || "#3b82f6" }} />
                       </div>
                       
                       {/* Name & Left Amount */}
