@@ -210,9 +210,9 @@ def test_register_creates_default_budget(client: TestClient, session: Session):
     assert membership.role == "owner"
     
     categories = session.exec(select(Category).where(Category.budget_id == budget.id)).all()
-    assert len(categories) == 16
+    assert len(categories) == 15
     assert any(c.name == "Food" for c in categories)
-    assert any(c.name == "Salary" for c in categories)
+    assert any(c.name == "Other" for c in categories)
 
 # --- DEPENDENCY: get_current_budget ---
 
@@ -273,7 +273,7 @@ def test_create_and_get_category_uses_budget_id(client: TestClient, session: Ses
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert test_budget is not None
 
-    payload = {"name": "Groceries", "icon": "🛒", "color": "#00ff00"}
+    payload = {"name": "Groceries", "icon": "shopping-cart", "color": "#00ff00"}
     response = client.post("/api/categories", json=payload)
     assert response.status_code == 200
     data = response.json()

@@ -81,7 +81,9 @@
       "details_button": "Details",
       "center_label": "Total",
       "no_data": "No data",
-      "other_category": "Other"
+      "other_category": "Other",
+      "excluded_title": "Excluded categories",
+      "restore_all": "Restore all"
     },
     "top_envelopes": {
       "title": "Top envelopes",

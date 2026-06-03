@@ -54,22 +54,21 @@ def health_check():
 
 def seed_default_categories(session: Session, budget_id: int):
     default_cats = [
-        {"name": "Food", "icon": "🍔", "color": "#f87171"},
-        {"name": "Housing", "icon": "🏠", "color": "#fb923c"},
-        {"name": "Transport", "icon": "🚗", "color": "#60a5fa"},
-        {"name": "Utilities", "icon": "💡", "color": "#facc15"},
-        {"name": "Entertainment", "icon": "🎬", "color": "#c084fc"},
-        {"name": "Health", "icon": "⚕️", "color": "#4ade80"},
-        {"name": "Clothing", "icon": "👕", "color": "#f472b6"},
-        {"name": "Kids", "icon": "🧸", "color": "#38bdf8"},
-        {"name": "Pets", "icon": "🐕", "color": "#a78bfa"},
-        {"name": "Travel", "icon": "✈️", "color": "#34d399"},
-        {"name": "Education", "icon": "📚", "color": "#818cf8"},
-        {"name": "Savings", "icon": "💰", "color": "#fbbf24"},
-        {"name": "Gifts", "icon": "🎁", "color": "#fb7185"},
-        {"name": "Snacks", "icon": "🥨", "color": "#fcd34d"},
-        {"name": "Other", "icon": "📦", "color": "#9ca3af"},
-        {"name": "Salary", "icon": "💵", "color": "#10b981"},
+        {"name": "Food", "icon": "utensils", "color": "#f87171"},
+        {"name": "Housing", "icon": "home", "color": "#fb923c"},
+        {"name": "Transport", "icon": "car", "color": "#60a5fa"},
+        {"name": "Utilities", "icon": "lightbulb", "color": "#facc15"},
+        {"name": "Entertainment", "icon": "clapperboard", "color": "#c084fc"},
+        {"name": "Health", "icon": "heart-pulse", "color": "#4ade80"},
+        {"name": "Clothing", "icon": "shirt", "color": "#f472b6"},
+        {"name": "Kids", "icon": "toy-brick", "color": "#38bdf8"},
+        {"name": "Pets", "icon": "paw-print", "color": "#a78bfa"},
+        {"name": "Travel", "icon": "plane", "color": "#34d399"},
+        {"name": "Education", "icon": "graduation-cap", "color": "#818cf8"},
+        {"name": "Savings", "icon": "coins", "color": "#fbbf24"},
+        {"name": "Gifts", "icon": "gift", "color": "#fb7185"},
+        {"name": "Snacks", "icon": "cookie", "color": "#fcd34d"},
+        {"name": "Other", "icon": "package", "color": "#9ca3af"},
     ]
     for i, cat_data in enumerate(default_cats):
         new_category = Category(

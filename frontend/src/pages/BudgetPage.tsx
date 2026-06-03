@@ -43,7 +43,7 @@ export function BudgetPage() {
       planned: summaryItem?.planned ?? 0,
       spent: summaryItem?.spent ?? 0,
       remaining: summaryItem?.remaining ?? 0,
-      icon: cat.icon ?? "💰",
+      icon: cat.icon ?? "coins",
       color: cat.color ?? "#3b82f6",
     };
   }).sort((a, b) => {
@@ -87,7 +87,7 @@ export function BudgetPage() {
         onOpenChange={(open) => !open && setSelectedEnvelope(null)}
         categoryId={selectedEnvelope?.categoryId ?? null}
         categoryName={selectedEnvelope?.categoryName ?? ""}
-        categoryIcon={selectedEnvelope?.icon ?? "💰"}
+        categoryIcon={selectedEnvelope?.icon ?? "coins"}
         currentPlanned={selectedEnvelope?.planned ?? 0}
         year={curYear}
         month={curMonth + 1}

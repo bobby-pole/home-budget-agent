@@ -9,6 +9,7 @@ import { getIntlLocale } from "@/lib/dates";
 import { useAuth } from "@/context/AuthContext";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 interface RecentTransactionsListProps {
   transactions: TransactionRead[];
@@ -65,6 +66,7 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                 ? (CATEGORY_LABELS[category.name] || category.name)
                 : t("dashboard.recent_transactions.no_category");
               const categoryIcon = category?.icon;
+              const categoryColor = category?.color || "#9ca3af";
 
               const typeLabels: Record<string, string> = {
                 income: t("dashboard.recent_transactions.type_income"),
@@ -84,14 +86,17 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
                 <div key={tx.id} className="flex items-start justify-between gap-3 py-4 first:pt-2 last:pb-2 transition-colors">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     {/* Icon Circle */}
-                    <div className={cn(
-                      "size-12 rounded-full flex items-center justify-center shrink-0 shadow-inner text-xl",
-                      isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
-                      isExpense && categoryIcon ? "bg-muted" :
-                      isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
-                      "bg-muted text-muted-foreground"
-                    )}>
-                      {categoryIcon ? categoryIcon : (isIncome ? <ArrowUpRight className="size-6" /> :
+                    <div 
+                      className={cn(
+                        "size-12 rounded-full flex items-center justify-center shrink-0 shadow-inner",
+                        isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
+                        isExpense && categoryIcon ? "" :
+                        isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
+                        "bg-muted text-muted-foreground"
+                      )}
+                      style={isExpense && categoryIcon ? { backgroundColor: `${categoryColor}15` } : undefined}
+                    >
+                      {categoryIcon ? <CategoryIcon name={categoryIcon} className="size-5" style={{ color: categoryColor }} /> : (isIncome ? <ArrowUpRight className="size-6" /> :
                        isExpense ? <Store className="size-6" /> :
                        <ArrowDownRight className="size-6" />)}
                     </div>
