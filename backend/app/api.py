@@ -430,6 +430,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         for item_raw in data.get("items", []):
             category_name = item_raw.get("category", "")
             cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
+            cat_source = item_raw.get("category_source")
             orig = item_raw.get("original_price")
             fin = item_raw.get("final_price")
             session.add(TransactionLine(
@@ -437,6 +438,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                 price=float(item_raw.get("price", 0.0)),
                 quantity=float(item_raw.get("quantity", 1.0)),
                 category_id=cat_id,
+                category_source=cat_source,
                 transaction_id=transaction.id,
                 original_price=float(orig) if orig is not None else None,
                 discount_total=float(item_raw.get("discount_total", 0.0)),
@@ -1044,12 +1046,27 @@ async def update_line(
         raise HTTPException(status_code=403, detail="Not authorized to modify this line")
 
     line_data = line_update.model_dump(exclude_unset=True)
+    
+    category_changed = False
+    new_category_id = None
+    if "category_id" in line_data and line_data["category_id"] != db_line.category_id:
+        category_changed = True
+        new_category_id = line_data["category_id"]
+
     for key, value in line_data.items():
         setattr(db_line, key, value)
+
+    if category_changed:
+        db_line.category_source = "manual"
 
     session.add(db_line)
     session.commit()
     session.refresh(db_line)
+
+    if category_changed and new_category_id is not None and current_user.id is not None:
+        from .cache_service import save_to_cache
+        save_to_cache(session, current_user.id, {db_line.name: new_category_id}, overwrite=True)
+
     return db_line
 
 

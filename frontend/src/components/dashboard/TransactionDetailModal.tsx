@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import type { TransactionRead } from "@/client";
 import { TransactionHeaderForm } from "./transaction/TransactionHeaderForm";
+import { TransactionCategoryChart } from "./transaction/TransactionCategoryChart";
 import { TransactionItemsSection } from "./transaction/TransactionItemsSection";
 import { t } from "@/lib/i18n";
 
@@ -29,6 +30,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
 
         <div className="flex-1 overflow-y-auto p-1 space-y-6">
           <TransactionHeaderForm transaction={transaction} />
+          <TransactionCategoryChart lines={transaction.lines ?? []} currency={transaction.currency ?? "PLN"} />
           <TransactionItemsSection lines={transaction.lines ?? []} currency={transaction.currency ?? "PLN"} transactionId={transaction.id} />
         </div>
 

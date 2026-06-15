@@ -83,9 +83,9 @@ _QTY_PRICE_LINE = re.compile(
     re.IGNORECASE,
 )
 
-# "0,488 kg x 9,99 4,88 C"
+# "0,488 kg x 9,99 4,88 C" — OCR may insert spaces in decimal: "0 , 340kg"
 _WEIGHT_PRICE_LINE = re.compile(
-    r"^(\d+[.,]\d+)\s*kg\s*[x×xX]\s*(\d+[.,]\d+)\s+(\d+[.,]\d+)\s*([A-E])\s*$",
+    r"^(\d+\s*[.,]\s*\d+)\s*kg\s*[x×xX]\s*(\d+[.,]\d+)\s+(\d+[.,]\d+)\s*([A-E])\s*$",
     re.IGNORECASE,
 )
 
@@ -93,9 +93,10 @@ _WEIGHT_PRICE_LINE = re.compile(
 _DISCOUNT_LINE = re.compile(r"^(.+?)\s+(-\d+[.,]\d+)\s*$")
 
 # Basket-level adjustments inside the SUMMARY section.
-# Matches "Opakowania zwrotne suma -3,70" (bottle deposit refund).
+# Matches both negative (refund) and positive (deposit charge) amounts:
+# "Opakowania zwrotne suma -3,70" or "Opakowania zwrotne suma 0,50"
 _BASKET_ADJUSTMENT_LINE = re.compile(
-    r"^(Opakowania zwrotne suma|Kaucja zwrotna|Łączny rabat[^-\d]*|Rabat koszyka[^-\d]*)\s+(-\d+[.,]\d+)\s*$",
+    r"^(Opakowania zwrotne suma|Kaucja zwrotna|Łączny rabat[^-\d]*|Rabat koszyka[^-\d]*)\s+(-?\d+[.,]\d+)\s*$",
     re.IGNORECASE,
 )
 

@@ -188,6 +188,7 @@ function ItemRow({
   // without re-rendering siblings.
   const name = useWatch({ control: form.control, name: `lines.${index}.name` }) || "";
   const categoryId = useWatch({ control: form.control, name: `lines.${index}.category_id` }) || "";
+  const categorySource = useWatch({ control: form.control, name: `lines.${index}.category_source` }) || "";
   const unitPrice = useWatch({ control: form.control, name: `lines.${index}.unit_price` }) ?? 0;
   const qty = useWatch({ control: form.control, name: `lines.${index}.quantity` }) ?? 1;
   const discount = useWatch({ control: form.control, name: `lines.${index}.discount_total` }) ?? 0;
@@ -205,8 +206,16 @@ function ItemRow({
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {/* Category Icon */}
-          <div className="size-8 rounded-full flex items-center justify-center bg-muted text-base shrink-0 select-none">
+          <div className="relative size-8 rounded-full flex items-center justify-center bg-muted text-base shrink-0 select-none">
             {selectedCategory?.icon || "💰"}
+            {categorySource === "ai" && (
+              <div 
+                className="absolute -top-1 -right-2 flex h-[14px] px-1 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 text-[8px] font-bold uppercase tracking-wider shadow-sm"
+                title={t("transactions.item_row.ai_category_tooltip")}
+              >
+                AI
+              </div>
+            )}
           </div>
 
           {/* Name & Qty/Price Summary */}
@@ -293,7 +302,15 @@ function ItemRow({
             control={form.control}
             name={`lines.${index}.category_id`}
             render={({ field }) => (
-              <FormItem className="w-32 space-y-0">
+              <FormItem className="w-32 space-y-0 relative">
+                {categorySource === "ai" && (
+                  <div 
+                    className="absolute -top-2 -right-2 z-10 flex h-[14px] px-1 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 text-[8px] font-bold uppercase tracking-wider shadow-sm pointer-events-none"
+                    title={t("transactions.item_row.ai_category_tooltip")}
+                  >
+                    AI
+                  </div>
+                )}
                 <Select onValueChange={field.onChange} value={field.value || undefined}>
                   <FormControl>
                     <SelectTrigger className="h-9 text-xs bg-muted/20 px-2">

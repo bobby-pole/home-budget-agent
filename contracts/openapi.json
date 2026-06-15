@@ -3387,6 +3387,17 @@
             ],
             "title": "Category Id"
           },
+          "category_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Source"
+          },
           "original_price": {
             "anyOf": [
               {
@@ -3540,6 +3551,17 @@
               }
             ],
             "title": "Category Id"
+          },
+          "category_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Source"
           },
           "original_price": {
             "anyOf": [
