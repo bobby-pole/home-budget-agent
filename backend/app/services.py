@@ -44,102 +44,17 @@ class AIService:
         filename: str = "",
         user_id: Optional[int] = None,
     ) -> Optional[dict]:
-        from .ocr_pipeline import (
-            ReceiptSource,
-            ReceiptSourceDetector,
-            GoogleVisionOCRService,
-            reconstruct_lines,
-            detect_merchant,
-            PDFTextLayerAdapter,
-            EParagonJSONAdapter,
+        from .pipeline_logger import PipelineLogger
+        from .pipeline_runner import AICallbacks, PipelineRunner
+
+        logger = PipelineLogger(verbose=False)  # production: no terminal spam
+        ai = AICallbacks(
+            structurize=AIService._ai_structurize,
+            vision_fallback=AIService._ai_vision_fallback,
+            categorize=lambda data: AIService._categorize_parsed_items(data, categories, user_id),
         )
-
-        try:
-            # Detect source using magic bytes / filename
-            source = ReceiptSourceDetector.detect(filename=filename, file_bytes=image_bytes)
-            print(f"📡 [Pipeline] Detected source: {source.value}")
-
-            image_to_process = image_bytes
-            raw_text: Optional[str] = None
-            extracted_lines: Optional[list[str]] = None
-
-            if source == ReceiptSource.EPARAGON:
-                print("⚡ [Pipeline] Structured e-Paragon JSON detected. Running fast extraction.")
-                data = EParagonJSONAdapter.parse(image_to_process)
-                data = AIService._categorize_parsed_items(data, categories, user_id)
-                return AIService._validate_and_annotate(data)
-
-            if source == ReceiptSource.PDF_TEXT:
-                if PDFTextLayerAdapter.has_text_layer(image_to_process):
-                    print("📄 [Pipeline] PDF has text layer. skipping Google Vision OCR.")
-                    text = PDFTextLayerAdapter.extract_text(image_to_process)
-                    lines = [line.strip() for line in text.splitlines() if line.strip()]
-                    raw_text = text
-                    extracted_lines = lines
-                else:
-                    print("⚠️ [Pipeline] PDF has no text layer. Rendering first page to PNG.")
-                    image_to_process = PDFTextLayerAdapter.convert_to_image(image_to_process)
-                    ocr = GoogleVisionOCRService()
-                    result = ocr.extract(image_to_process)
-                    lines = reconstruct_lines(result.words, source=source)
-                    raw_text = result.raw_text
-                    extracted_lines = lines
-            else:
-                ocr = GoogleVisionOCRService()
-                result = ocr.extract(image_to_process)
-                lines = reconstruct_lines(result.words, source=source)
-                raw_text = result.raw_text
-                extracted_lines = lines
-
-            merchant = detect_merchant(lines)
-            print(f"🔍 [Pipeline] Detected merchant: {merchant or 'unknown'}")
-
-            # Try deterministic parser if supported merchant is detected
-            if merchant == "lidl":
-                print("⚡ [Pipeline] Lidl merchant detected. Running deterministic parser.")
-                from .lidl_parser import LidlReceiptParser
-                parsed = LidlReceiptParser().parse(lines)
-                data = parsed.to_dict()
-                already_categorized = False
-
-                # Validate before categorizing — on photo, fall back to AI if parsing was messy
-                if source == ReceiptSource.PHOTO_IMAGE:
-                    val_data = AIService._validate_and_annotate(data)
-                    validation = val_data.get("_validation", {}) if val_data else {}
-                    if not validation.get("is_valid", True) or validation.get("issues"):
-                        print("⚠️ [Pipeline] Deterministic parser failed validation on photo. Falling back to AI.")
-                        data = AIService._ai_structurize("\n".join(lines))
-                        data = AIService._categorize_parsed_items(data, categories, user_id)
-                        already_categorized = True
-
-                if not already_categorized:
-                    data = AIService._categorize_parsed_items(data, categories, user_id)
-            elif source == ReceiptSource.PHOTO_IMAGE:
-                print("📸 [Pipeline] Camera photo detected. Bypassing deterministic parser.")
-                data = AIService._ai_structurize("\n".join(lines))
-                data = AIService._categorize_parsed_items(data, categories, user_id)
-            else:
-                # App PNG/PDF text but merchant not identified or not supported deterministically
-                print("🧠 [Pipeline] App export of unknown merchant. Running AI fallback.")
-                data = AIService._ai_structurize("\n".join(lines))
-                data = AIService._categorize_parsed_items(data, categories, user_id)
-
-            data = AIService._validate_and_annotate(data)
-            if data is not None:
-                data["_raw_ocr_text"] = raw_text
-                data["_reconstructed_lines"] = extracted_lines
-            return data
-
-        except Exception as e:
-            # Catch all OCR-related errors (including Google API 403) and fallback to OpenAI Vision
-            print(f"⚠️ [Pipeline] OCR unavailable or failed ({e}), falling back to AI vision")
-            try:
-                data = AIService._ai_vision_fallback(image_bytes)
-                data = AIService._categorize_parsed_items(data, categories, user_id)
-                return AIService._validate_and_annotate(data)
-            except Exception as inner_e:
-                print(f"❌ Fallback AI Pipeline Error: {inner_e}")
-                return None
+        runner = PipelineRunner(logger=logger, ai=ai)
+        return runner.run(image_bytes, filename)
 
     @staticmethod
     def _categorize_parsed_items(
