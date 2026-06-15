@@ -101,6 +101,7 @@ class AIService:
                         cat_name = cat_id_to_name.get(cat_id)
                         if cat_name:
                             items[idx]["category"] = cat_name
+                            items[idx]["category_source"] = "cache"
 
             mapping = {}
             if misses:
@@ -120,6 +121,7 @@ class AIService:
                     cat = mapping[item["name"]]
                     if cat in valid_cat_names:
                         items[idx]["category"] = cat
+                        items[idx]["category_source"] = "ai"
                         new_cache_mappings[item["name"]] = valid_cat_names[cat]
                         
             if user_id and new_cache_mappings:

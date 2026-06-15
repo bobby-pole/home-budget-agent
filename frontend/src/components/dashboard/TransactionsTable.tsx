@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Check, Clock, AlertTriangle } from "lucide-react";
 import type { TransactionRead as Transaction, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
@@ -30,6 +30,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { getStatusLabel, getStatusVariant } from "@/lib/receiptStatus";
 
 interface TransactionsTableProps {
   transactions: Transaction[];
@@ -397,19 +398,33 @@ export function TransactionsTable({
                           const scanStatus = transaction.receipt_scan?.status;
                           if (!scanStatus) return null;
 
-                          const isDone = scanStatus === "done";
-                          const isError = scanStatus === "error";
+                          const variant = getStatusVariant(scanStatus);
+                          const label = getStatusLabel(scanStatus);
 
-                          let colors = "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/20";
-                          if (isDone) colors = "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-400/20";
-                          if (isError) colors = "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-400/20";
+                          let colors = "bg-blue-100/50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-400/20";
+                          let Icon = null;
+
+                          if (variant === "success") {
+                            colors = "bg-emerald-100/50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-400/20";
+                            Icon = <Check className="w-3 h-3 mr-1" />;
+                          } else if (variant === "warning") {
+                            colors = "bg-amber-100/50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-400/20";
+                            Icon = <Clock className="w-3 h-3 mr-1" />;
+                          } else if (variant === "error") {
+                            colors = "bg-red-100/50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-400/20";
+                            Icon = <AlertTriangle className="w-3 h-3 mr-1" />;
+                          } else {
+                            // in-progress
+                            Icon = <RefreshCcw className="w-3 h-3 mr-1 animate-spin" />;
+                          }
 
                           return (
                             <Badge
                               variant="outline"
-                              className={cn("rounded-md capitalize w-24 justify-center font-semibold", colors)}
+                              className={cn("rounded-md w-max px-2 py-0.5 justify-center font-semibold text-[10px] uppercase", colors)}
                             >
-                              {scanStatus}
+                              {Icon}
+                              <span className="truncate">{label}</span>
                             </Badge>
                           );
                         })()}

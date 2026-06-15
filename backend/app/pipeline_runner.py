@@ -165,8 +165,22 @@ class PipelineRunner:
             "source": "eparagon",
             "size_bytes": len(file_bytes),
         }) as log:
-            log.route_chosen = "eparagon_json_adapter"
+            # First, use the generic adapter to parse the JPK structure
             data = EParagonJSONAdapter.parse(file_bytes)
+            merchant = data.get("merchant_name", "").lower()
+            
+            # If we have a specific parser for this merchant, route through it
+            # This satisfies the requirement that the merchant parser handles both JSON and PDF
+            if "biedronka" in merchant:
+                from .biedronka_parser import BiedronkaReceiptParser
+                log.route_chosen = "biedronka_json_parser"
+                data = BiedronkaReceiptParser().parse_json(file_bytes)
+            elif "żabka" in merchant or "zabka" in merchant:
+                from .zabka_parser import ZabkaReceiptParser
+                log.route_chosen = "zabka_json_parser"
+                data = ZabkaReceiptParser().parse_json(file_bytes)
+            else:
+                log.route_chosen = "eparagon_json_adapter"
 
             items = data.get("items", [])
             log.output_summary = {
@@ -274,6 +288,10 @@ class PipelineRunner:
             # Known merchant with deterministic parser
             if merchant == "lidl":
                 return self._parse_lidl(lines, source, log)
+            elif merchant == "biedronka":
+                return self._parse_biedronka(lines, source, log)
+            elif merchant == "zabka":
+                return self._parse_zabka(lines, source, log)
 
             # Camera photo with unknown merchant → AI structurizer
             if source == ReceiptSource.PHOTO_IMAGE:
@@ -296,6 +314,46 @@ class PipelineRunner:
         items = data.get("items", [])
         log.output_summary = {
             "parser": "LidlReceiptParser",
+            "merchant": data.get("merchant_name"),
+            "date": data.get("date"),
+            "total": data.get("total_amount"),
+            "items_count": len(items),
+        }
+        self.logger.detail_items(items)
+        return data
+
+    def _parse_biedronka(
+        self, lines: list[str], source: ReceiptSource, log: Any
+    ) -> Optional[dict[str, Any]]:
+        from .biedronka_parser import BiedronkaReceiptParser
+
+        log.route_chosen = "biedronka_deterministic_parser"
+        parsed = BiedronkaReceiptParser().parse(lines)
+        data = parsed.to_dict()
+
+        items = data.get("items", [])
+        log.output_summary = {
+            "parser": "BiedronkaReceiptParser",
+            "merchant": data.get("merchant_name"),
+            "date": data.get("date"),
+            "total": data.get("total_amount"),
+            "items_count": len(items),
+        }
+        self.logger.detail_items(items)
+        return data
+
+    def _parse_zabka(
+        self, lines: list[str], source: ReceiptSource, log: Any
+    ) -> Optional[dict[str, Any]]:
+        from .zabka_parser import ZabkaReceiptParser
+
+        log.route_chosen = "zabka_deterministic_parser"
+        parsed = ZabkaReceiptParser().parse(lines)
+        data = parsed.to_dict()
+
+        items = data.get("items", [])
+        log.output_summary = {
+            "parser": "ZabkaReceiptParser",
             "merchant": data.get("merchant_name"),
             "date": data.get("date"),
             "total": data.get("total_amount"),

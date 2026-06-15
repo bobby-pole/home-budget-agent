@@ -60,6 +60,7 @@ const lineSchema = z.object({
   // total discount on this line (always ≤ 0)
   discount_total: z.number().max(0),
   category_id: z.string().optional(),
+  category_source: z.string().optional(),
   // True for basket-level adjustments (kaucja, basket coupons). UI hides
   // category/qty for these and renders them in a dedicated footer section.
   is_adjustment: z.boolean(),
@@ -241,6 +242,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         quantity: l.quantity || 1,
         discount_total: l.discount_total ?? 0,
         category_id: l.category_id?.toString() || "",
+        category_source: l.category_source || "",
         is_adjustment: l.is_adjustment ?? false,
       })),
       keep_image: false,
