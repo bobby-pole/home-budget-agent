@@ -7,6 +7,8 @@ export const transactionSchema = z.object({
   currency: z.string().min(1),
   date: z.string().optional(),
   category_id: z.string().optional(),
+  account_id: z.string().optional(),
+  transfer_id: z.string().optional(),
   note: z.string().optional(),
   tag_ids: z.array(z.number()).default([]),
   type: z.enum(["expense", "income", "transfer"]).default("expense"),

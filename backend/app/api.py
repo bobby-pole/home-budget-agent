@@ -22,6 +22,7 @@ from .models import (
     TransactionLineUpdate, ManualTransactionCreate,
     ReceiptScan, ScanStatus, VerifyRequest,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
+    Account, AccountCreate, AccountUpdate, AccountRead,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
@@ -586,6 +587,13 @@ def create_manual_transaction(
         else data.total_amount
     )
 
+    # Resolve category from account if not provided
+    final_category_id = data.category_id
+    if not final_category_id and data.account_id:
+        acc = session.get(Account, data.account_id)
+        if acc and acc.category_id:
+            final_category_id = acc.category_id
+
     transaction = Transaction(
         merchant_name=data.merchant_name,
         total_amount=total,
@@ -595,7 +603,9 @@ def create_manual_transaction(
         type=data.type,
         uploaded_by=current_user.id,
         budget_id=current_budget.id,
-        category_id=data.category_id,
+        category_id=final_category_id,
+        account_id=data.account_id,
+        transfer_id=data.transfer_id,
         note=data.note,
     )
 
@@ -621,7 +631,7 @@ def create_manual_transaction(
             name=data.note or "Manual entry",
             price=data.total_amount,
             quantity=1.0,
-            category_id=data.category_id,
+            category_id=final_category_id,
             transaction_id=transaction.id,
         ))
 
@@ -925,6 +935,12 @@ async def verify_transaction(
     update_data = body.transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in update_data.items():
         setattr(db_transaction, key, value)
+
+    # Resolve category from account if not provided
+    if not db_transaction.category_id and db_transaction.account_id:
+        acc = session.get(Account, db_transaction.account_id)
+        if acc and acc.category_id:
+            db_transaction.category_id = acc.category_id
 
     if body.transaction_update.tag_ids is not None:
         tags = session.exec(select(Tag).where(col(Tag.id).in_(body.transaction_update.tag_ids))).all()
@@ -1877,5 +1893,110 @@ async def delete_tag(
         session.delete(link)
 
     session.delete(tag)
+    session.commit()
+    return None
+
+
+# --- ACCOUNTS ---
+
+@router.get("/accounts", response_model=List[AccountRead])
+async def get_accounts(
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    statement = select(Account).where(Account.budget_id == current_budget.id)
+    accounts = session.exec(statement).all()
+
+    # Calculate balances dynamically
+    stmt_out = select(
+        Transaction.account_id,
+        Transaction.type,
+        func.sum(Transaction.total_amount).label('total')
+    ).where(
+        Transaction.budget_id == current_budget.id,
+        col(Transaction.account_id).is_not(None)
+    ).group_by(col(Transaction.account_id), col(Transaction.type))
+    res_out = session.exec(stmt_out).all()
+
+    stmt_in = select(
+        Transaction.transfer_id,
+        func.sum(Transaction.total_amount).label('total')
+    ).where(
+        Transaction.budget_id == current_budget.id,
+        Transaction.type == "transfer",
+        col(Transaction.transfer_id).is_not(None)
+    ).group_by(col(Transaction.transfer_id))
+    res_in = session.exec(stmt_in).all()
+
+    balances = {acc.id: acc.initial_balance or 0.0 for acc in accounts}
+
+    for acc_id, tx_type, total in res_out:
+        if acc_id in balances and total:
+            if tx_type == "income":
+                balances[acc_id] += total
+            elif tx_type in ("expense", "transfer"):
+                balances[acc_id] -= total
+
+    for acc_id, total in res_in:
+        if acc_id in balances and total:
+            balances[acc_id] += total
+
+    for acc in accounts:
+        acc.current_balance = round(balances[acc.id], 2)
+
+    return accounts
+
+@router.post("/accounts", response_model=AccountRead)
+async def create_account(
+    account_data: AccountCreate,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    account = Account(**account_data.model_dump(), budget_id=current_budget.id)
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+    return account
+
+@router.patch("/accounts/{account_id}", response_model=AccountRead)
+async def update_account(
+    account_id: int,
+    account_update: AccountUpdate,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    account = session.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.budget_id != current_budget.id:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this account")
+
+    update_data = account_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(account, key, value)
+
+    session.add(account)
+    session.commit()
+    session.refresh(account)
+    return account
+
+@router.delete("/accounts/{account_id}", status_code=204)
+async def delete_account(
+    account_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    account = session.get(Account, account_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    if account.budget_id != current_budget.id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this account")
+
+    # Zabezpieczenie przed usunięciem konta z transakcjami
+    statement = select(Transaction).where((Transaction.account_id == account_id) | (Transaction.transfer_id == account_id))
+    if session.exec(statement).first():
+        raise HTTPException(status_code=400, detail="Cannot delete account with existing transactions")
+
+    session.delete(account)
     session.commit()
     return None

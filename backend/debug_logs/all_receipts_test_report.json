@@ -1,0 +1,3417 @@
+[
+  {
+    "label": "Żabka eParagon (JSON)",
+    "store": "Żabka",
+    "format": "JSON (e-paragon)",
+    "filename": "Żabka eParagon 14.06.2026.json",
+    "file_size_bytes": 6647,
+    "pipeline_log": {
+      "run_id": "2144df69",
+      "started_at": "2026-06-15T10:39:41.928767+00:00",
+      "file_info": {
+        "filename": "Żabka eParagon 14.06.2026.json",
+        "size_bytes": 6647,
+        "size_human": "6 KB",
+        "sha256": "58867d85311fc48b",
+        "magic_bytes": "7b227072"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 0.05,
+          "input_summary": {
+            "filename": "Żabka eParagon 14.06.2026.json",
+            "size_bytes": 6647,
+            "magic_bytes_hex": "7b227072"
+          },
+          "output_summary": {
+            "source": "eparagon"
+          },
+          "route_chosen": "eparagon",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 0.38,
+          "input_summary": {
+            "source": "eparagon",
+            "size_bytes": 6647
+          },
+          "output_summary": {
+            "merchant": "F.H.U Anna Anna Krzyworączka",
+            "date": "2026-06-14",
+            "total": 13.98,
+            "items_count": 1
+          },
+          "route_chosen": "eparagon_json_adapter",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 1.71,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 1
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 2.14
+    },
+    "result": {
+      "merchant_name": "F.H.U Anna Anna Krzyworączka",
+      "date": "2026-06-14",
+      "total_amount": 13.98,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "ZELKI HARIBO 175g-A",
+          "price": 6.99,
+          "quantity": 2.0,
+          "original_price": 8.99,
+          "discount_total": -4.0,
+          "final_price": 6.99,
+          "is_adjustment": false
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      }
+    },
+    "sum_analysis": {
+      "items_sum": 13.98,
+      "adjustment_sum": 0.0,
+      "discount_sum": -4.0,
+      "items_plus_adjustments": 13.98,
+      "receipt_total": 13.98,
+      "delta": 0.0,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "ZELKI HARIBO 175g-A",
+        "category": null,
+        "unit_price": 8.99,
+        "quantity": 2.0,
+        "discount": -4.0,
+        "total_after_discount": 13.98,
+        "is_adjustment": false
+      }
+    ],
+    "stats": {
+      "items_count": 1,
+      "adjustments_count": 0,
+      "has_discounts": true,
+      "merchant_name": "F.H.U Anna Anna Krzyworączka",
+      "date": "2026-06-14",
+      "total_amount": 13.98,
+      "parser_used": "eparagon_json_adapter"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  },
+  {
+    "label": "Biedronka eParagon (JSON)",
+    "store": "Biedronka",
+    "format": "JSON (e-paragon)",
+    "filename": "receipt 2.json",
+    "file_size_bytes": 20235,
+    "pipeline_log": {
+      "run_id": "1e4a2aed",
+      "started_at": "2026-06-15T10:39:41.931650+00:00",
+      "file_info": {
+        "filename": "receipt 2.json",
+        "size_bytes": 20235,
+        "size_human": "20 KB",
+        "sha256": "83c2bdc2c22641e5",
+        "magic_bytes": "7b227072"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 0.09,
+          "input_summary": {
+            "filename": "receipt 2.json",
+            "size_bytes": 20235,
+            "magic_bytes_hex": "7b227072"
+          },
+          "output_summary": {
+            "source": "eparagon"
+          },
+          "route_chosen": "eparagon",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 0.16,
+          "input_summary": {
+            "source": "eparagon",
+            "size_bytes": 20235
+          },
+          "output_summary": {
+            "merchant": "JERONIMO MARTINS POLSKA S.A.",
+            "date": "2026-06-13",
+            "total": 101.74,
+            "items_count": 13
+          },
+          "route_chosen": "eparagon_json_adapter",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 0.06,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 13
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 0.31
+    },
+    "result": {
+      "merchant_name": "JERONIMO MARTINS POLSKA S.A.",
+      "date": "2026-06-13",
+      "total_amount": 101.74,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "Torba T-SHIRT            A",
+          "price": 0.79,
+          "quantity": 1.0,
+          "original_price": 0.79,
+          "discount_total": 0.0,
+          "final_price": 0.79,
+          "is_adjustment": false
+        },
+        {
+          "name": "PomidorPaprycz500g       C",
+          "price": 5.99,
+          "quantity": 2.0,
+          "original_price": 14.99,
+          "discount_total": -18.0,
+          "final_price": 5.99,
+          "is_adjustment": false
+        },
+        {
+          "name": "CukierkiKrówkaMixLuz     A",
+          "price": 19.9,
+          "quantity": 0.038,
+          "original_price": 19.9,
+          "discount_total": 0.0,
+          "final_price": 19.9,
+          "is_adjustment": false
+        },
+        {
+          "name": "BułkaKajzerka55g         C",
+          "price": 0.34,
+          "quantity": 3.0,
+          "original_price": 0.34,
+          "discount_total": 0.0,
+          "final_price": 0.34,
+          "is_adjustment": false
+        },
+        {
+          "name": "BulkaCalorocz80g         C",
+          "price": 1.19,
+          "quantity": 1.0,
+          "original_price": 1.19,
+          "discount_total": 0.0,
+          "final_price": 1.19,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pieczark 500g opa        C",
+          "price": 7.99,
+          "quantity": 1.0,
+          "original_price": 7.99,
+          "discount_total": 0.0,
+          "final_price": 7.99,
+          "is_adjustment": false
+        },
+        {
+          "name": "KotletDeVolaille400g     C",
+          "price": 10.99,
+          "quantity": 1.0,
+          "original_price": 10.99,
+          "discount_total": 0.0,
+          "final_price": 10.99,
+          "is_adjustment": false
+        },
+        {
+          "name": "OgórekSzkLuz             C",
+          "price": 3.9957471264367816,
+          "quantity": 0.348,
+          "original_price": 7.99,
+          "discount_total": -1.39,
+          "final_price": 3.9957471264367816,
+          "is_adjustment": false
+        },
+        {
+          "name": "PestoŚwiezBazy120g       B",
+          "price": 6.49,
+          "quantity": 1.0,
+          "original_price": 6.49,
+          "discount_total": 0.0,
+          "final_price": 6.49,
+          "is_adjustment": false
+        },
+        {
+          "name": "PolbagPelnoziarn100g     C",
+          "price": 1.29,
+          "quantity": 4.0,
+          "original_price": 1.49,
+          "discount_total": -0.8,
+          "final_price": 1.29,
+          "is_adjustment": false
+        },
+        {
+          "name": "Papier Queen 10r         A",
+          "price": 13.489999999999998,
+          "quantity": 2.0,
+          "original_price": 17.99,
+          "discount_total": -9.0,
+          "final_price": 13.489999999999998,
+          "is_adjustment": false
+        },
+        {
+          "name": "ChłodnikZBura.VF250g     C",
+          "price": 3.5100000000000007,
+          "quantity": 2.0,
+          "original_price": 4.69,
+          "discount_total": -2.36,
+          "final_price": 3.5100000000000007,
+          "is_adjustment": false
+        },
+        {
+          "name": "Polęd Drobiowa250g       C",
+          "price": 6.66,
+          "quantity": 3.0,
+          "original_price": 9.99,
+          "discount_total": -9.99,
+          "final_price": 6.66,
+          "is_adjustment": false
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      }
+    },
+    "sum_analysis": {
+      "items_sum": 101.73671999999999,
+      "adjustment_sum": 0.0,
+      "discount_sum": -41.54,
+      "items_plus_adjustments": 101.73671999999999,
+      "receipt_total": 101.74,
+      "delta": -0.0,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "Torba T-SHIRT            A",
+        "category": null,
+        "unit_price": 0.79,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 0.79,
+        "is_adjustment": false
+      },
+      {
+        "name": "PomidorPaprycz500g       C",
+        "category": null,
+        "unit_price": 14.99,
+        "quantity": 2.0,
+        "discount": -18.0,
+        "total_after_discount": 11.98,
+        "is_adjustment": false
+      },
+      {
+        "name": "CukierkiKrówkaMixLuz     A",
+        "category": null,
+        "unit_price": 19.9,
+        "quantity": 0.038,
+        "discount": 0.0,
+        "total_after_discount": 0.76,
+        "is_adjustment": false
+      },
+      {
+        "name": "BułkaKajzerka55g         C",
+        "category": null,
+        "unit_price": 0.34,
+        "quantity": 3.0,
+        "discount": 0.0,
+        "total_after_discount": 1.02,
+        "is_adjustment": false
+      },
+      {
+        "name": "BulkaCalorocz80g         C",
+        "category": null,
+        "unit_price": 1.19,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 1.19,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pieczark 500g opa        C",
+        "category": null,
+        "unit_price": 7.99,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 7.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "KotletDeVolaille400g     C",
+        "category": null,
+        "unit_price": 10.99,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 10.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "OgórekSzkLuz             C",
+        "category": null,
+        "unit_price": 7.99,
+        "quantity": 0.348,
+        "discount": -1.39,
+        "total_after_discount": 1.39,
+        "is_adjustment": false
+      },
+      {
+        "name": "PestoŚwiezBazy120g       B",
+        "category": null,
+        "unit_price": 6.49,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 6.49,
+        "is_adjustment": false
+      },
+      {
+        "name": "PolbagPelnoziarn100g     C",
+        "category": null,
+        "unit_price": 1.49,
+        "quantity": 4.0,
+        "discount": -0.8,
+        "total_after_discount": 5.16,
+        "is_adjustment": false
+      },
+      {
+        "name": "Papier Queen 10r         A",
+        "category": null,
+        "unit_price": 17.99,
+        "quantity": 2.0,
+        "discount": -9.0,
+        "total_after_discount": 26.98,
+        "is_adjustment": false
+      },
+      {
+        "name": "ChłodnikZBura.VF250g     C",
+        "category": null,
+        "unit_price": 4.69,
+        "quantity": 2.0,
+        "discount": -2.36,
+        "total_after_discount": 7.02,
+        "is_adjustment": false
+      },
+      {
+        "name": "Polęd Drobiowa250g       C",
+        "category": null,
+        "unit_price": 9.99,
+        "quantity": 3.0,
+        "discount": -9.99,
+        "total_after_discount": 19.98,
+        "is_adjustment": false
+      }
+    ],
+    "stats": {
+      "items_count": 13,
+      "adjustments_count": 0,
+      "has_discounts": true,
+      "merchant_name": "JERONIMO MARTINS POLSKA S.A.",
+      "date": "2026-06-13",
+      "total_amount": 101.74,
+      "parser_used": "eparagon_json_adapter"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  },
+  {
+    "label": "Żabka eParagon (PDF)",
+    "store": "Żabka",
+    "format": "PDF",
+    "filename": "Żabka eParagon 14.06.2026.pdf",
+    "file_size_bytes": 16031,
+    "pipeline_log": {
+      "run_id": "258fc04e",
+      "started_at": "2026-06-15T10:39:41.932366+00:00",
+      "file_info": {
+        "filename": "Żabka eParagon 14.06.2026.pdf",
+        "size_bytes": 16031,
+        "size_human": "16 KB",
+        "sha256": "c384e7c97bf73637",
+        "magic_bytes": "25504446"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 0.0,
+          "input_summary": {
+            "filename": "Żabka eParagon 14.06.2026.pdf",
+            "size_bytes": 16031,
+            "magic_bytes_hex": "25504446"
+          },
+          "output_summary": {
+            "source": "pdf_text"
+          },
+          "route_chosen": "pdf_text",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 37.8,
+          "input_summary": {
+            "source": "pdf_text",
+            "size_bytes": 16031
+          },
+          "output_summary": {
+            "method": "pymupdf_text_layer",
+            "lines_count": 27,
+            "raw_text_length": 426
+          },
+          "route_chosen": "pdf_text_layer",
+          "error": null
+        },
+        {
+          "stage_name": "merchant_detection",
+          "status": "OK",
+          "duration_ms": 0.21,
+          "input_summary": {
+            "lines_count": 27,
+            "header_lines_checked": 27
+          },
+          "output_summary": {
+            "merchant": "zabka",
+            "has_deterministic_parser": false
+          },
+          "route_chosen": "merchant_zabka",
+          "error": null
+        },
+        {
+          "stage_name": "parsing",
+          "status": "OK",
+          "duration_ms": 1.73,
+          "input_summary": {
+            "merchant": "zabka",
+            "source": "pdf_text",
+            "lines_count": 27
+          },
+          "output_summary": {
+            "parser": "ZabkaReceiptParser",
+            "merchant": "Żabka",
+            "date": "2026-06-14",
+            "total": 13.98,
+            "items_count": 1
+          },
+          "route_chosen": "zabka_deterministic_parser",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 0.03,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 1
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 39.77
+    },
+    "result": {
+      "merchant_name": "Żabka",
+      "date": "2026-06-14",
+      "total_amount": 13.98,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "ZELKI HARIBO 175g-A",
+          "price": 6.99,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 8.99,
+          "discount_total": -4.0,
+          "final_price": null,
+          "is_adjustment": false
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      },
+      "_raw_ocr_text": "Sklep Żabka ZA528\nF.H.U Anna Anna Krzyworączka\nul. Kościelna 8\n44-200 Rybnik\nNIP 6422583688\nnr:23269\nPARAGON FISKALNY\nZELKI HARIBO 175g-A\n2szt. x8.99 17.98A\nOPUST ZELKI HARIBO 175g-A\n-4.00A\nSPRZEDAŻ OPODATKOWANA A\n13.98\nPTU A 23%\n2.61\nSUMA PTU\n2.61\nSUMA PLN\n13.98\nROZLICZENIE PŁATNOŚCI\nINNA Karta kred.\n13.98 PLN\n00040 #zA528-1 kasjer_7\n2026-06-14 12:10\n4EF109E303CAA88AA95C21B346E7E76BD9AA44C1\nEAO2402440714\nNr. sys. 21448\n\n\n",
+      "_reconstructed_lines": [
+        "Sklep Żabka ZA528",
+        "F.H.U Anna Anna Krzyworączka",
+        "ul. Kościelna 8",
+        "44-200 Rybnik",
+        "NIP 6422583688",
+        "nr:23269",
+        "PARAGON FISKALNY",
+        "ZELKI HARIBO 175g-A",
+        "2szt. x8.99 17.98A",
+        "OPUST ZELKI HARIBO 175g-A",
+        "-4.00A",
+        "SPRZEDAŻ OPODATKOWANA A",
+        "13.98",
+        "PTU A 23%",
+        "2.61",
+        "SUMA PTU",
+        "2.61",
+        "SUMA PLN",
+        "13.98",
+        "ROZLICZENIE PŁATNOŚCI",
+        "INNA Karta kred.",
+        "13.98 PLN",
+        "00040 #zA528-1 kasjer_7",
+        "2026-06-14 12:10",
+        "4EF109E303CAA88AA95C21B346E7E76BD9AA44C1",
+        "EAO2402440714",
+        "Nr. sys. 21448"
+      ]
+    },
+    "sum_analysis": {
+      "items_sum": 13.98,
+      "adjustment_sum": 0.0,
+      "discount_sum": -4.0,
+      "items_plus_adjustments": 13.98,
+      "receipt_total": 13.98,
+      "delta": 0.0,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "ZELKI HARIBO 175g-A",
+        "category": null,
+        "unit_price": 8.99,
+        "quantity": 2.0,
+        "discount": -4.0,
+        "total_after_discount": 13.98,
+        "is_adjustment": false
+      }
+    ],
+    "stats": {
+      "items_count": 1,
+      "adjustments_count": 0,
+      "has_discounts": true,
+      "merchant_name": "Żabka",
+      "date": "2026-06-14",
+      "total_amount": 13.98,
+      "parser_used": "zabka_deterministic_parser"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  },
+  {
+    "label": "Biedronka eParagon (PDF)",
+    "store": "Biedronka",
+    "format": "PDF",
+    "filename": "receipt 3.pdf",
+    "file_size_bytes": 144319,
+    "pipeline_log": {
+      "run_id": "24ca739d",
+      "started_at": "2026-06-15T10:39:41.972673+00:00",
+      "file_info": {
+        "filename": "receipt 3.pdf",
+        "size_bytes": 144319,
+        "size_human": "141 KB",
+        "sha256": "421f76ab97d0ce2f",
+        "magic_bytes": "25504446"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 0.0,
+          "input_summary": {
+            "filename": "receipt 3.pdf",
+            "size_bytes": 144319,
+            "magic_bytes_hex": "25504446"
+          },
+          "output_summary": {
+            "source": "pdf_text"
+          },
+          "route_chosen": "pdf_text",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 783.25,
+          "input_summary": {
+            "source": "pdf_text",
+            "size_bytes": 144319
+          },
+          "output_summary": {
+            "method": "pdf_render_then_ocr",
+            "ocr_words_count": 214,
+            "lines_count": 61,
+            "raw_text_length": 1334
+          },
+          "route_chosen": "pdf_render_then_ocr",
+          "error": null
+        },
+        {
+          "stage_name": "merchant_detection",
+          "status": "OK",
+          "duration_ms": 0.09,
+          "input_summary": {
+            "lines_count": 61,
+            "header_lines_checked": 30
+          },
+          "output_summary": {
+            "merchant": "biedronka",
+            "has_deterministic_parser": false
+          },
+          "route_chosen": "merchant_biedronka",
+          "error": null
+        },
+        {
+          "stage_name": "parsing",
+          "status": "OK",
+          "duration_ms": 2.62,
+          "input_summary": {
+            "merchant": "biedronka",
+            "source": "pdf_text",
+            "lines_count": 61
+          },
+          "output_summary": {
+            "parser": "BiedronkaReceiptParser",
+            "merchant": "Biedronka",
+            "date": "",
+            "total": 101.74,
+            "items_count": 13
+          },
+          "route_chosen": "biedronka_deterministic_parser",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 0.04,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 13
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 786.0
+    },
+    "result": {
+      "merchant_name": "Biedronka",
+      "date": "",
+      "total_amount": 101.74,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "Torba T - SHIRT",
+          "price": 0.79,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 0.79,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "PomidorPaprycz500g",
+          "price": 5.99,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 14.99,
+          "discount_total": -18.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "CukierkiKrówkaMixLuz",
+          "price": 19.9,
+          "quantity": 0.038,
+          "category": null,
+          "original_price": 19.9,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "BułkaKajzerka55g",
+          "price": 0.34,
+          "quantity": 3.0,
+          "category": null,
+          "original_price": 0.34,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "BulkaCalorocz80g",
+          "price": 1.19,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.19,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pieczark 500g opa",
+          "price": 7.99,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 7.99,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "KotletDeVolaille400g",
+          "price": 10.99,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 10.99,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "OgórekSzkLuz",
+          "price": 3.9957471264367816,
+          "quantity": 0.348,
+          "category": null,
+          "original_price": 7.99,
+          "discount_total": -1.39,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "PestoŚwiezBazy120g",
+          "price": 6.49,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.49,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "Polbag Pelnoziarn100g",
+          "price": 1.29,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 1.49,
+          "discount_total": -0.8,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "Papier Queen 10r",
+          "price": 13.49,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 17.99,
+          "discount_total": -9.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "ChłodnikZBura.VF250g",
+          "price": 3.51,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 4.69,
+          "discount_total": -2.36,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "Polęd Drobiowa250g",
+          "price": 6.66,
+          "quantity": 3.0,
+          "category": null,
+          "original_price": 9.99,
+          "discount_total": -9.99,
+          "final_price": null,
+          "is_adjustment": false
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      },
+      "_raw_ocr_text": "Biedronka\nCodziennie niskie ceny\nBIEDRONKA \"CODZIENNIE NISKIE CENY\" 6279\n40-600 KATOWICE UL. UL. KOŚCIUSZKI 229\nJERONIMO MARTINS POLSKA S.A.\n62-025 KOSTRZYN UL.ŹNIWNA 5\nNIP 7791011327\nPARAGON FISKALNY\nnr: 262307\nNazwa\nTorba T-SHIRT\nPTU\nIlość Cena Wartość\nA\n1x 0,79\n0,79\nPomidorPaprycz500g\nOpust\nCukierkiKrówkaMixLuz\nBułkaKajzerka55g\nBulkaCalorocz80g\nPieczark 500g opa\nKotletDeVolaille400g\nOgórekSzkLuz\nOpust\nPestoŚwiezBazy120g\nPolbag Pelnoziarn100g\nOpust\nс\n2x 14,99\n29,98\n-18,00\n11,98\n100000\nA 0,038 x 19,90\n0,76\n3x 0,34\n1,02\nс\n1x\n1,19\n1,19\nс\n1x\n7,99\n7,99\nс\n1x 10,99\n10,99\nC 0,348x\n7,99\n2,78\n-1,39\n1,39\nBC\n艾文\n1x\n6,49\n6,49\n4x\n1,49\n5,96\n-0,80\n5,16\nPapier Queen 10r\nOpust\nA\n2x 17,99\n35,98\n-9,00\n26,98\nChłodnikZBura.VF250g\nс\n2x\n4,69\n9,38\nOpust\n-2,36\n7,02\nPolęd Drobiowa250g\nC 3x 9,99\n29,97\nOpust\n-9,99\n19,98\nOPUSTY ŁĄCZNIE:\n-41,54\nSprzedaż opodatkowana A\n28,53\nSprzedaż opodatkowana B\n6,49\nSprzedaż opodatkowana C\n66,72\nPTU A 23%\n5,33\nPTU B 8%\n0,48\nPTU C 5%\nSuma PTU\n3,18\n8,99\nSuma PLN\n101,74\nKarta płatnicza\n101,74\nNumer transakcji\n8048\nNumer\nNumer kasy\n6279260613804803\n3\nNumer kasjera\nData\n24\n13/06/2026 18:28:48\n1F7211A90142A84505205AFA199F83BA2F76BE3C\nEEAZ2402506243\nUdzielono łącznie opustów\nWartość przed opustem:\nUdzielono łącznie rabatów:\nw tym:\nPromocje\n41,54\n143,28\n41,54\n41,54\n1000062798048235503537\nNumer karty:\n99519*****878",
+      "_reconstructed_lines": [
+        "Biedronka",
+        "Codziennie niskie ceny",
+        "BIEDRONKA \" CODZIENNIE NISKIE CENY \" 6279",
+        "40-600 KATOWICE UL . UL . KOŚCIUSZKI 229",
+        "JERONIMO MARTINS POLSKA S.A.",
+        "62-025 KOSTRZYN UL.ŹNIWNA 5",
+        "NIP 7791011327",
+        "nr : 262307",
+        "PARAGON FISKALNY",
+        "Nazwa PTU Ilość Cena Wartość",
+        "Torba T - SHIRT A 1x 0,79 0,79",
+        "PomidorPaprycz500g с 2x 14,99 29,98",
+        "Opust -18,00",
+        "11,98",
+        "CukierkiKrówkaMixLuz A 0,038 x 19,90 0,76",
+        "BułkaKajzerka55g 3x 0,34 1,02",
+        "BulkaCalorocz80g с 1x 1,19 1,19",
+        "100000",
+        "Pieczark 500g opa с 1x 7,99 7,99",
+        "KotletDeVolaille400g с 1x 10,99 10,99",
+        "OgórekSzkLuz C 0,348x 7,99 2,78",
+        "Opust -1,39",
+        "1,39",
+        "PestoŚwiezBazy120g 1x 6,49 6,49",
+        "BC 艾文",
+        "Polbag Pelnoziarn100g 4x 1,49 5,96",
+        "Opust -0,80",
+        "5,16",
+        "Papier Queen 10r A 2x 17,99 35,98",
+        "Opust -9,00",
+        "26,98",
+        "ChłodnikZBura.VF250g с 2x 4,69 9,38",
+        "Opust -2,36",
+        "7,02",
+        "Polęd Drobiowa250g C 3x 9,99 29,97",
+        "Opust -9,99",
+        "19,98",
+        "OPUSTY ŁĄCZNIE : -41,54",
+        "Sprzedaż opodatkowana A 28,53",
+        "Sprzedaż opodatkowana B 6,49",
+        "Sprzedaż opodatkowana C 66,72",
+        "PTU A 23 % 5,33",
+        "PTU B 8 % 0,48",
+        "PTU C 5 % 3,18",
+        "Suma PTU 8,99",
+        "Suma PLN 101,74",
+        "Karta płatnicza 101,74",
+        "Numer transakcji 8048",
+        "Numer 6279260613804803",
+        "Numer kasy 3",
+        "Numer kasjera 24",
+        "Data 13/06/2026 18:28:48",
+        "1F7211A90142A84505205AFA199F83BA2F76BE3C",
+        "EEAZ2402506243",
+        "Udzielono łącznie opustów 41,54",
+        "Wartość przed opustem : 143,28",
+        "Udzielono łącznie rabatów : 41,54",
+        "w tym :",
+        "Promocje 41,54",
+        "1000062798048235503537",
+        "Numer karty : 99519 ***** 878"
+      ]
+    },
+    "sum_analysis": {
+      "items_sum": 101.73672,
+      "adjustment_sum": 0.0,
+      "discount_sum": -41.54,
+      "items_plus_adjustments": 101.73672,
+      "receipt_total": 101.74,
+      "delta": -0.0,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "Torba T - SHIRT",
+        "category": null,
+        "unit_price": 0.79,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 0.79,
+        "is_adjustment": false
+      },
+      {
+        "name": "PomidorPaprycz500g",
+        "category": null,
+        "unit_price": 14.99,
+        "quantity": 2.0,
+        "discount": -18.0,
+        "total_after_discount": 11.98,
+        "is_adjustment": false
+      },
+      {
+        "name": "CukierkiKrówkaMixLuz",
+        "category": null,
+        "unit_price": 19.9,
+        "quantity": 0.038,
+        "discount": 0.0,
+        "total_after_discount": 0.76,
+        "is_adjustment": false
+      },
+      {
+        "name": "BułkaKajzerka55g",
+        "category": null,
+        "unit_price": 0.34,
+        "quantity": 3.0,
+        "discount": 0.0,
+        "total_after_discount": 1.02,
+        "is_adjustment": false
+      },
+      {
+        "name": "BulkaCalorocz80g",
+        "category": null,
+        "unit_price": 1.19,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 1.19,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pieczark 500g opa",
+        "category": null,
+        "unit_price": 7.99,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 7.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "KotletDeVolaille400g",
+        "category": null,
+        "unit_price": 10.99,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 10.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "OgórekSzkLuz",
+        "category": null,
+        "unit_price": 7.99,
+        "quantity": 0.348,
+        "discount": -1.39,
+        "total_after_discount": 1.39,
+        "is_adjustment": false
+      },
+      {
+        "name": "PestoŚwiezBazy120g",
+        "category": null,
+        "unit_price": 6.49,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 6.49,
+        "is_adjustment": false
+      },
+      {
+        "name": "Polbag Pelnoziarn100g",
+        "category": null,
+        "unit_price": 1.49,
+        "quantity": 4.0,
+        "discount": -0.8,
+        "total_after_discount": 5.16,
+        "is_adjustment": false
+      },
+      {
+        "name": "Papier Queen 10r",
+        "category": null,
+        "unit_price": 17.99,
+        "quantity": 2.0,
+        "discount": -9.0,
+        "total_after_discount": 26.98,
+        "is_adjustment": false
+      },
+      {
+        "name": "ChłodnikZBura.VF250g",
+        "category": null,
+        "unit_price": 4.69,
+        "quantity": 2.0,
+        "discount": -2.36,
+        "total_after_discount": 7.02,
+        "is_adjustment": false
+      },
+      {
+        "name": "Polęd Drobiowa250g",
+        "category": null,
+        "unit_price": 9.99,
+        "quantity": 3.0,
+        "discount": -9.99,
+        "total_after_discount": 19.98,
+        "is_adjustment": false
+      }
+    ],
+    "stats": {
+      "items_count": 13,
+      "adjustments_count": 0,
+      "has_discounts": true,
+      "merchant_name": "Biedronka",
+      "date": "",
+      "total_amount": 101.74,
+      "parser_used": "biedronka_deterministic_parser"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  },
+  {
+    "label": "Lidl paragon #1 (PNG)",
+    "store": "Lidl",
+    "format": "PNG (OCR required)",
+    "filename": "Obrazek PNG-4C1B-B70C-9A-0.png",
+    "file_size_bytes": 5358569,
+    "pipeline_log": {
+      "run_id": "e8191cf8",
+      "started_at": "2026-06-15T10:39:42.761532+00:00",
+      "file_info": {
+        "filename": "Obrazek PNG-4C1B-B70C-9A-0.png",
+        "size_bytes": 5358569,
+        "size_human": "5 MB",
+        "sha256": "0b6657c33e23b364",
+        "magic_bytes": "89504e47"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 18.17,
+          "input_summary": {
+            "filename": "Obrazek PNG-4C1B-B70C-9A-0.png",
+            "size_bytes": 5358569,
+            "magic_bytes_hex": "89504e47"
+          },
+          "output_summary": {
+            "source": "photo_image"
+          },
+          "route_chosen": "photo_image",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 3237.87,
+          "input_summary": {
+            "source": "photo_image",
+            "size_bytes": 5358569
+          },
+          "output_summary": {
+            "method": "google_vision_ocr",
+            "ocr_words_count": 918,
+            "lines_count": 256,
+            "raw_text_length": 4860
+          },
+          "route_chosen": "google_vision_ocr",
+          "error": null
+        },
+        {
+          "stage_name": "merchant_detection",
+          "status": "OK",
+          "duration_ms": 0.02,
+          "input_summary": {
+            "lines_count": 256,
+            "header_lines_checked": 30
+          },
+          "output_summary": {
+            "merchant": "lidl",
+            "has_deterministic_parser": true
+          },
+          "route_chosen": "merchant_lidl",
+          "error": null
+        },
+        {
+          "stage_name": "parsing",
+          "status": "OK",
+          "duration_ms": 0.71,
+          "input_summary": {
+            "merchant": "lidl",
+            "source": "photo_image",
+            "lines_count": 256
+          },
+          "output_summary": {
+            "parser": "LidlReceiptParser",
+            "merchant": "Lidl",
+            "date": "2026-04-18",
+            "total": 302.63,
+            "items_count": 55
+          },
+          "route_chosen": "lidl_deterministic_parser",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 0.13,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 55
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 3256.9
+    },
+    "result": {
+      "merchant_name": "Lidl",
+      "date": "2026-04-18",
+      "total_amount": 302.63,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "Masło Ekstra",
+          "price": 0.86,
+          "quantity": 3.0,
+          "category": null,
+          "original_price": 4.99,
+          "discount_total": -12.39,
+          "final_price": 0.86,
+          "is_adjustment": false
+        },
+        {
+          "name": "Polędwica sopockaXXL",
+          "price": 4.51,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 9.99,
+          "discount_total": -10.96,
+          "final_price": 4.51,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pure Boczek wędzony",
+          "price": 2.7,
+          "quantity": 3.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -9.87,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pieczarki 500g",
+          "price": 3.24,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 7.99,
+          "discount_total": -9.5,
+          "final_price": 3.24,
+          "is_adjustment": false
+        },
+        {
+          "name": "Lunchbox proteinowy",
+          "price": 5.41,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 11.99,
+          "discount_total": -6.58,
+          "final_price": 5.41,
+          "is_adjustment": false
+        },
+        {
+          "name": "Sushi Tokyo",
+          "price": 3.38,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 7.49,
+          "discount_total": -4.11,
+          "final_price": 3.38,
+          "is_adjustment": false
+        },
+        {
+          "name": "Sałata roszponka125g",
+          "price": 2.84,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.99,
+          "discount_total": -4.15,
+          "final_price": 2.84,
+          "is_adjustment": false
+        },
+        {
+          "name": "Szynka / Schab",
+          "price": 3.14,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.95,
+          "discount_total": -3.81,
+          "final_price": 3.14,
+          "is_adjustment": false
+        },
+        {
+          "name": "Szynka maślana",
+          "price": 2.7,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -3.29,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Rukola 125g",
+          "price": 2.43,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -3.56,
+          "final_price": 2.43,
+          "is_adjustment": false
+        },
+        {
+          "name": "Frankfurterki XXL",
+          "price": 14.45,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 22.99,
+          "discount_total": -8.54,
+          "final_price": 14.45,
+          "is_adjustment": false
+        },
+        {
+          "name": "Frusta Prosciutto",
+          "price": 3.16,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 6.99,
+          "discount_total": -7.66,
+          "final_price": 3.16,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mini Calzone",
+          "price": 2.715,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -6.55,
+          "final_price": 2.715,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pasztecik z pieczar .",
+          "price": 0.898,
+          "quantity": 5.0,
+          "category": null,
+          "original_price": 1.99,
+          "discount_total": -5.46,
+          "final_price": 0.898,
+          "is_adjustment": false
+        },
+        {
+          "name": "Cebularz",
+          "price": 1.035,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 2.29,
+          "discount_total": -5.02,
+          "final_price": 1.035,
+          "is_adjustment": false
+        },
+        {
+          "name": "Przekąska pieczark .",
+          "price": 1.94,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 4.29,
+          "discount_total": -4.7,
+          "final_price": 1.94,
+          "is_adjustment": false
+        },
+        {
+          "name": "Zapiekanka z pieczar",
+          "price": 1.895,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 4.19,
+          "discount_total": -4.59,
+          "final_price": 1.895,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pizzerka z kurczak .",
+          "price": 2.7,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -3.29,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pizzerinka 110g",
+          "price": 1.8,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.99,
+          "discount_total": -2.19,
+          "final_price": 1.8,
+          "is_adjustment": false
+        },
+        {
+          "name": "Ciastko francuskie",
+          "price": 1.26,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 2.79,
+          "discount_total": -1.53,
+          "final_price": 1.26,
+          "is_adjustment": false
+        },
+        {
+          "name": "Burek ze szpinakiem",
+          "price": 1.08,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 2.39,
+          "discount_total": -1.31,
+          "final_price": 1.08,
+          "is_adjustment": false
+        },
+        {
+          "name": "Przecier pomidor .",
+          "price": 4.83,
+          "quantity": 5.0,
+          "category": null,
+          "original_price": 6.69,
+          "discount_total": -9.3,
+          "final_price": 4.83,
+          "is_adjustment": false
+        },
+        {
+          "name": "Przekąska z serem",
+          "price": 0.6175,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 1.52,
+          "discount_total": -3.61,
+          "final_price": 0.6175,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka pszenna V",
+          "price": 0.34,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 0.83,
+          "discount_total": -1.96,
+          "final_price": 0.34,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka grahamka",
+          "price": 0.285,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 0.69,
+          "discount_total": -1.62,
+          "final_price": 0.285,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka poznańska XXL",
+          "price": 0.36,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 0.9,
+          "discount_total": -1.08,
+          "final_price": 0.36,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka rustykalna",
+          "price": 0.61,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.49,
+          "discount_total": -0.88,
+          "final_price": 0.61,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka z dynią",
+          "price": 0.61,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.49,
+          "discount_total": -0.88,
+          "final_price": 0.61,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka nacięta",
+          "price": 0.48,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.19,
+          "discount_total": -0.71,
+          "final_price": 0.48,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka ziem . pszen .",
+          "price": 0.46,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.14,
+          "discount_total": -0.68,
+          "final_price": 0.46,
+          "is_adjustment": false
+        },
+        {
+          "name": "ELSEVE Szampon 1",
+          "price": 19.87,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 21.99,
+          "discount_total": -2.12,
+          "final_price": 19.87,
+          "is_adjustment": false
+        },
+        {
+          "name": "Paluszki rybne XXL 2",
+          "price": 19.87,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 21.99,
+          "discount_total": -2.12,
+          "final_price": 19.87,
+          "is_adjustment": false
+        },
+        {
+          "name": "Lisner XXL filety",
+          "price": 16.26,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 17.99,
+          "discount_total": -1.73,
+          "final_price": 16.26,
+          "is_adjustment": false
+        },
+        {
+          "name": "Fasolka w sosie",
+          "price": 4.06,
+          "quantity": 4.0,
+          "category": null,
+          "original_price": 4.99,
+          "discount_total": -3.72,
+          "final_price": 4.06,
+          "is_adjustment": false
+        },
+        {
+          "name": "Karma d.kota puszka",
+          "price": 3.65,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 4.49,
+          "discount_total": -1.68,
+          "final_price": 3.65,
+          "is_adjustment": false
+        },
+        {
+          "name": "Twaróg klinek półtł .",
+          "price": 3.57,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 3.95,
+          "discount_total": -0.76,
+          "final_price": 3.57,
+          "is_adjustment": false
+        },
+        {
+          "name": "Koncentrat do nacz1l",
+          "price": 5.86,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.49,
+          "discount_total": -0.63,
+          "final_price": 5.86,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mozzarella light",
+          "price": 2.7,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 2.99,
+          "discount_total": -0.58,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Sałatka szwedzka",
+          "price": 5.41,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -0.58,
+          "final_price": 5.41,
+          "is_adjustment": false
+        },
+        {
+          "name": "Sałatka obiadowa",
+          "price": 5.41,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -0.58,
+          "final_price": 5.41,
+          "is_adjustment": false
+        },
+        {
+          "name": "Multiwitamina tabl .",
+          "price": 5.05,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.59,
+          "discount_total": -0.54,
+          "final_price": 5.05,
+          "is_adjustment": false
+        },
+        {
+          "name": "Jogurt natur . 400g",
+          "price": 1.62,
+          "quantity": 3.0,
+          "category": null,
+          "original_price": 1.79,
+          "discount_total": -0.51,
+          "final_price": 1.62,
+          "is_adjustment": false
+        },
+        {
+          "name": "FreewayColaZERO 21 .",
+          "price": 4.78,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.29,
+          "discount_total": -0.51,
+          "final_price": 4.78,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułki Hot - Dog , franc .",
+          "price": 4.69,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.19,
+          "discount_total": -0.5,
+          "final_price": 4.69,
+          "is_adjustment": false
+        },
+        {
+          "name": "Lubella Makaron Pióra",
+          "price": 4.06,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 4.49,
+          "discount_total": -0.43,
+          "final_price": 4.06,
+          "is_adjustment": false
+        },
+        {
+          "name": "Cytryny luz",
+          "price": 8.115,
+          "quantity": 0.48,
+          "category": null,
+          "original_price": 9.99,
+          "discount_total": -0.9,
+          "final_price": 8.115,
+          "is_adjustment": false
+        },
+        {
+          "name": "Śmietana 18 % 400g",
+          "price": 3.48,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.85,
+          "discount_total": -0.37,
+          "final_price": 3.48,
+          "is_adjustment": false
+        },
+        {
+          "name": "Buraczki zasmażane",
+          "price": 3.36,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.72,
+          "discount_total": -0.36,
+          "final_price": 3.36,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mleko 1,5 % b.laktozy",
+          "price": 3.15,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.49,
+          "discount_total": -0.34,
+          "final_price": 3.15,
+          "is_adjustment": false
+        },
+        {
+          "name": "Chleb tost . pełnozi.1",
+          "price": 2.7,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 2.99,
+          "discount_total": -0.29,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Ziemniaki jadalne PL",
+          "price": 0.8054848046309696,
+          "quantity": 2.764,
+          "category": null,
+          "original_price": 0.99,
+          "discount_total": -0.51,
+          "final_price": 0.8054848046309696,
+          "is_adjustment": false
+        },
+        {
+          "name": "Ogórki zielo . PLszt .",
+          "price": 1.62,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.99,
+          "discount_total": -0.37,
+          "final_price": 1.62,
+          "is_adjustment": false
+        },
+        {
+          "name": "Marchew luz",
+          "price": 2.8863963963963966,
+          "quantity": 0.444,
+          "category": null,
+          "original_price": 3.99,
+          "discount_total": -0.49,
+          "final_price": 2.8863963963963966,
+          "is_adjustment": false
+        },
+        {
+          "name": "L & M Link Blue",
+          "price": 24.99,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": null,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": false
+        },
+        {
+          "name": "Opakowania zwrotne suma",
+          "price": -3.7,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": null,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": true
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      },
+      "_raw_ocr_text": "LiDL\nAdres siedziby: Poznańska 48, Jankowice\n62-080 Tarnowo\nPodgórne nr rej: BDO 000002265 Lidl sp.\nz o. o. sp. k.\nul. Orzepowicka 29a, 44-217 Rybnik\n2026-04-18\nMasło Ekstra\n34.99 14.97 C\nLidl Plus kupon\nLidl Plus voucher\n-12,12\n-0,27\nPolędwica sopockaXXL\nRABAT 50%\nLidl Plus voucher\n29.99 19.98 C\n-10,00\n-0,96\nPure Boczek wędzony\n35.99 17.97 C\nRABAT 50%\n-9,00\nLidl Plus voucher\n-0,87\nPieczarki 500g\n27.99 15.98 C\nRABAT 50%\n-8,00\nKDR\n-0,80\nLidl Plus voucher\n-0,70\nLunchbox proteinowy\nRABAT 50%\nLidl Plus voucher\nSushi Tokyo\nRABAT 50%\nLidl Plus voucher\nSałata roszponka125g\nRABAT 50%\nKDR\nLidl Plus voucher\nSzynka/Schab\nRABAT 50%\nLidl Plus voucher\nSzynka maślana\nRABAT 50%\nLidl Plus voucher\nRukola 125g\nRABAT 50%\n111.99 11.99 C\n-6,00\n-0,58\n1 7.49 7.49 C\n-3,75\n-0,36\n16.99 6.99 C\n-3,50\n-0,35\n-0,30\n1 * 6.95 6.95 C\n-3,48\n-0,33\nKDR\n1 * 5.99 5.99 C\n-3,00\n-0,29\n15.99 5.99 C\n-3,00\n-0,30\n-0,26\nLidl Plus voucher\nFrankfurterki XXL\n30% taniej\nLidl Plus voucher\nFrusta Prosciutto\nNie marnuję\nLidl Plus voucher\nMini Calzone\nNie marnuję\nLidl Plus voucher\nPasztecik z pieczar.\nNie marnuję\n1 * 22.99 22.99 C\n-7,00\n-1,54\n26.99 13.98 C\n-6,99\n-0,67\n25.99 11.98 C\n-5,97\n-0,58\n51.99 9.95 C\nLidl Plus voucher\n-4,98\n-0,48\nCebularz\nNie marnuję\nLidl Plus voucher\nPrzekąska pieczark.\nNie marnuję\nLidl Plus voucher\n42.29 9.16 C\n-4,58\n-0,44\n24.29 8.58 C\n-4,29\n-0,41\nZapiekanka z pieczar\n24.19 8.38 C\nNie marnuję\n-4,19\n-0,40\nLidl Plus voucher\nPizzerka z kurczak.\nNie marnuję\nLidl Plus voucher\nPizzerinka 110g\nNie marnuję\nLidl Plus voucher\nCiastko francuskie\nNie marnuję\nLidl Plus voucher\nBurek ze szpinakiem\nNie marnuję\nLidl Plus voucher\nPrzecier pomidor.\nRabat grupowy\nLidl Plus voucher\nPrzekąska z serem\nNie marnuję\nKDR\nLidl Plus voucher\nBułka pszenna V\nNie marnuję\nKDR\nLidl Plus voucher\nBułka grahamka\nNie marnuję\nKDR\nLidl Plus voucher\nBułka poznańska XXL\nNie marnuję\nKDR\nLidl Plus voucher\nBułka rustykalna\nNie marnuję\nKDR\nLidl Plus voucher\nBułka z dynią\nNie marnuję\nKDR\nLidl Plus voucher\nBułka nacięta\nNie marnuję\nKDR\nLidl Plus voucher\nBułka ziem. pszen.\nNie marnuję\nKDR\nLidl Plus voucher\nELSEVE Szampon 1\nLidl Plus voucher\nPaluszki rybne XXL 2\nLidl Plus voucher\nLisner XXL filety\nLidl Plus voucher\nFasolka w sosie\nTaniej za 2\nLidl Plus voucher\nKarma d.kota puszka\nTaniej za 2\nLidl Plus voucher\nTwaróg klinek półtł.\nLidl Plus voucher\nKoncentrat do nacz1l\nLidl Plus voucher\nMozzarella light\nLidl Plus voucher\nSałatka szwedzka\nLidl Plus voucher\nSałatka obiadowa\nLidl Plus voucher\nMultiwitamina tabl.\nLidl Plus voucher\nJogurt natur. 400g\nLidl Plus voucher\nFreewayColaZERO 21.\nLidl Plus voucher\nBułki Hot-Dog, franc.\nLidl Plus voucher\nLubella Makaron Pióra\nLidl Plus voucher\nCytryny luz\nKDR\n1 * 5.99 5.99 C\n-3,00\n-0,29\n13.99 3.99 C\n-2,00\n-0,19\n12.79 2.79 C\n-1,40\n-0,13\n12.39 2.39 C\n-1,20\n-0,11\n56.69 33.45 C\n-6,70\n-2,60\n41.52 6.08 C\n-3,03\n-0,32\n-0,26\n40.83 3.32\nC\n-1,66\n-0,16\n-0,14\n40.69 2.76 C\n-1,38\n-0,12\n-0,12\n20.9 1.8 C\n-0,90\n-0,10\n-0,08\n1 * 1.49 1.49 C\n-0,75\n-0,07\n-0,06\n1 * 1.49 1.49 C\n-0,75\n-0,07\n-0,06\n1 1.19 1.19 C\n-0,60\n-0,06\n-0,05\n1 * 1.14 1.14 C\n-0,57\n-0,06\n-0,05\n121.99 21.99 A\n-2,12\n121.99 21.99 C\n-2,12\n1 * 17.99 17.99 C\n-1,73\n44.99 19.96 C\n-2,00\n-1,72\n24.49 8.98 B\n-0,90\n-0,78\n23.95 7.9 C\n-0,76\n1 * 6.49 6.49 A\n-0,63\n22.99 5.98 C\n-0,58\n1 * 5.99 5.99 C\n-0,58\n15.99 5.99 C\n-0,58\n15.59 5.59 B\n-0,54\n31.79 5.37 C\n-0,51\n15.29 5.29 A\n-0,51\n15.19 5.19 C\n-0,50\n14.49 4.49 C\n-0,43\n0,480kg x 9.99 4.8 C\nLidl Plus voucher\nŚmietana 18% 400g\nLidl Plus voucher\nBuraczki zasmażane\nLidl Plus voucher\nMleko 1,5% b.laktozy\nLidl Plus voucher\nChleb tost. pełnozi.1\nLidl Plus voucher\nZiemniaki jadalne PL\nKDR\n-0,48\n-0,42\n1 * 3.85 3.85 C\n-0,37\n1 * 3.72 3.72 C\n-0,36\n13.49 3.49 C\n-0,34\n12.99 2.99 C\n-0,29\n2,764kg x 0.99 2.74 C\nLidl Plus voucher\nOgórki zielo. PLszt.\nKDR\nLidl Plus voucher\nMarchew luz\n-0,27\n-0,24\n11.99 1.99 C\n-0,20\n-0,17\n0,444kg x 3.99 1.77 C\nLidl Plus kupon\nKDR\nLidl Plus voucher\nL&M Link Blue\nPTU A\nKwota A 23,00%\nPTU B\nKwota B 8,00%\nPTU C\nKwota C 5,00%\nSuma\nSuma PLN\n84 1613\n-0,19\n-0,16\n-0,14\n124.99 24.99 A\nnr: 103703\nOpakowania zwrotne wydania\nKaucja PET\n55,50\n10,38\n12,35\n0,91\n238,48\n11,36\n22,65\n306,33\n21:27\n1 0.5 0.5\nOpakowania zwrotne przyjęcia\nOpak bez kau\nZwrot kaucji\nOpakowania zwrotne suma\nSuma\nPłatność\n10.2-0.2\n14.0 -4.0\n-3,70\n302,63\nKarta płatnicza 302,63\nZ Lidl Plus zaoszczędzono\n42,31 zł\nAby zwrócić produkt, weź ze sobą oryginalne\nopakowanie. Na zwrot produktów przemysłowych\nmasz 30 dni od daty zakupu.\nKwota do zapłaty uwzględnia ewentualną kaucję za\nopakowania, niewyszczególnioną w cenie towaru.\nOceń nas i zdobądź szansę na wygraną w Loterii\nLidla! Ankieta i regulamin loterii dostępne na lidl.pl/\ntwoja-opinia\nDZIĘKUJEMY ZA ODWIEDZINY\nWykorzystane kupony\n30 zł rabatu*\n*na zakupy za min. 300 zł\n0,95 zł / 1 szt.\nMasło ekstra 82%\n11% taniej\nMarchew | luzem\nMiejsce zakupu\nRybnik, ul. Orzepowicka 29A\nul. Orzepowicka 29 a\n44-217 Rybnik\nSzczegóły sklepu >",
+      "_reconstructed_lines": [
+        "LiDL",
+        "Adres siedziby : Poznańska 48 , Jankowice",
+        "62-080 Tarnowo",
+        "Podgórne nr rej : BDO 000002265 Lidl sp .",
+        "z o . o . sp . k .",
+        "ul . Orzepowicka 29a , 44-217 Rybnik",
+        "2026-04-18",
+        "Masło Ekstra",
+        "34.99 14.97 C",
+        "Lidl Plus kupon -12,12",
+        "Lidl Plus voucher -0,27",
+        "Polędwica sopockaXXL",
+        "29.99 19.98 C",
+        "RABAT 50 % -10,00",
+        "Lidl Plus voucher -0,96",
+        "Pure Boczek wędzony",
+        "35.99 17.97 C",
+        "RABAT 50 % -9,00",
+        "Lidl Plus voucher -0,87",
+        "Pieczarki 500g",
+        "27.99 15.98 C",
+        "RABAT 50 % -8,00",
+        "KDR -0,80",
+        "Lidl Plus voucher -0,70",
+        "Lunchbox proteinowy",
+        "111.99 11.99 C",
+        "RABAT 50 % -6,00",
+        "Lidl Plus voucher -0,58",
+        "Sushi Tokyo",
+        "1 7.49 7.49 C",
+        "RABAT 50 % -3,75",
+        "Lidl Plus voucher -0,36",
+        "Sałata roszponka125g",
+        "16.99 6.99 C",
+        "RABAT 50 % -3,50",
+        "KDR -0,35",
+        "Lidl Plus voucher -0,30",
+        "Szynka / Schab",
+        "1 * 6.95 6.95 C",
+        "RABAT 50 % -3,48",
+        "Lidl Plus voucher -0,33",
+        "Szynka maślana",
+        "1 * 5.99 5.99 C",
+        "RABAT 50 % -3,00",
+        "Lidl Plus voucher -0,29",
+        "Rukola 125g",
+        "15.99 5.99 C",
+        "RABAT 50 % -3,00",
+        "KDR -0,30",
+        "Lidl Plus voucher -0,26",
+        "Frankfurterki XXL",
+        "1 * 22.99 22.99 C",
+        "30 % taniej -7,00",
+        "Lidl Plus voucher -1,54",
+        "Frusta Prosciutto",
+        "26.99 13.98 C",
+        "Nie marnuję -6,99",
+        "Lidl Plus voucher -0,67",
+        "Mini Calzone",
+        "25.99 11.98 C",
+        "Nie marnuję -5,97",
+        "Lidl Plus voucher -0,58",
+        "Pasztecik z pieczar .",
+        "51.99 9.95 C",
+        "Nie marnuję -4,98",
+        "Lidl Plus voucher -0,48",
+        "Cebularz",
+        "42.29 9.16 C",
+        "Nie marnuję -4,58",
+        "Lidl Plus voucher -0,44",
+        "Przekąska pieczark .",
+        "24.29 8.58 C",
+        "Nie marnuję -4,29",
+        "Lidl Plus voucher -0,41",
+        "Zapiekanka z pieczar",
+        "24.19 8.38 C",
+        "Nie marnuję -4,19",
+        "Lidl Plus voucher -0,40",
+        "Pizzerka z kurczak .",
+        "1 * 5.99 5.99 C",
+        "Nie marnuję -3,00",
+        "Lidl Plus voucher -0,29",
+        "Pizzerinka 110g",
+        "13.99 3.99 C",
+        "Nie marnuję -2,00",
+        "Lidl Plus voucher -0,19",
+        "Ciastko francuskie",
+        "12.79 2.79 C",
+        "Nie marnuję -1,40",
+        "Lidl Plus voucher -0,13",
+        "Burek ze szpinakiem",
+        "12.39 2.39 C",
+        "Nie marnuję -1,20",
+        "Lidl Plus voucher -0,11",
+        "Przecier pomidor .",
+        "56.69 33.45 C",
+        "Rabat grupowy -6,70",
+        "Lidl Plus voucher -2,60",
+        "Przekąska z serem",
+        "41.52 6.08 C",
+        "Nie marnuję -3,03",
+        "KDR -0,32",
+        "Lidl Plus voucher -0,26",
+        "Bułka pszenna V",
+        "40.83 3.32 C",
+        "Nie marnuję -1,66",
+        "KDR -0,16",
+        "Lidl Plus voucher -0,14",
+        "Bułka grahamka",
+        "40.69 2.76 C",
+        "Nie marnuję -1,38",
+        "KDR -0,12",
+        "Lidl Plus voucher -0,12",
+        "Bułka poznańska XXL",
+        "20.9 1.8 C",
+        "Nie marnuję -0,90",
+        "KDR -0,10",
+        "Lidl Plus voucher -0,08",
+        "Bułka rustykalna",
+        "1 * 1.49 1.49 C",
+        "Nie marnuję -0,75",
+        "KDR -0,07",
+        "Lidl Plus voucher -0,06",
+        "Bułka z dynią",
+        "1 * 1.49 1.49 C",
+        "Nie marnuję -0,75",
+        "KDR -0,07",
+        "Lidl Plus voucher -0,06",
+        "Bułka nacięta",
+        "1 1.19 1.19 C",
+        "Nie marnuję -0,60",
+        "KDR -0,06",
+        "Lidl Plus voucher -0,05",
+        "Bułka ziem . pszen .",
+        "1 * 1.14 1.14 C",
+        "Nie marnuję -0,57",
+        "KDR -0,06",
+        "Lidl Plus voucher -0,05",
+        "ELSEVE Szampon 1",
+        "121.99 21.99 A",
+        "Lidl Plus voucher -2,12",
+        "Paluszki rybne XXL 2",
+        "121.99 21.99 C",
+        "Lidl Plus voucher -2,12",
+        "Lisner XXL filety",
+        "1 * 17.99 17.99 C",
+        "Lidl Plus voucher -1,73",
+        "Fasolka w sosie",
+        "44.99 19.96 C",
+        "Taniej za 2 -2,00",
+        "Lidl Plus voucher -1,72",
+        "Karma d.kota puszka",
+        "24.49 8.98 B",
+        "Taniej za 2 -0,90",
+        "Lidl Plus voucher -0,78",
+        "Twaróg klinek półtł .",
+        "23.95 7.9 C",
+        "Lidl Plus voucher -0,76",
+        "Koncentrat do nacz1l",
+        "1 * 6.49 6.49 A",
+        "Lidl Plus voucher -0,63",
+        "Mozzarella light",
+        "22.99 5.98 C",
+        "Lidl Plus voucher -0,58",
+        "Sałatka szwedzka",
+        "1 * 5.99 5.99 C",
+        "Lidl Plus voucher -0,58",
+        "Sałatka obiadowa",
+        "15.99 5.99 C",
+        "Lidl Plus voucher -0,58",
+        "Multiwitamina tabl .",
+        "15.59 5.59 B",
+        "Lidl Plus voucher -0,54",
+        "Jogurt natur . 400g",
+        "31.79 5.37 C",
+        "Lidl Plus voucher -0,51",
+        "FreewayColaZERO 21 .",
+        "15.29 5.29 A",
+        "Lidl Plus voucher -0,51",
+        "Bułki Hot - Dog , franc .",
+        "15.19 5.19 C",
+        "Lidl Plus voucher -0,50",
+        "Lubella Makaron Pióra",
+        "14.49 4.49 C",
+        "Lidl Plus voucher -0,43",
+        "Cytryny luz",
+        "0,480kg x 9.99 4.8 C",
+        "KDR -0,48",
+        "Lidl Plus voucher -0,42",
+        "Śmietana 18 % 400g",
+        "1 * 3.85 3.85 C",
+        "Lidl Plus voucher -0,37",
+        "Buraczki zasmażane",
+        "1 * 3.72 3.72 C",
+        "Lidl Plus voucher -0,36",
+        "Mleko 1,5 % b.laktozy",
+        "13.49 3.49 C",
+        "Lidl Plus voucher -0,34",
+        "Chleb tost . pełnozi.1",
+        "12.99 2.99 C",
+        "Lidl Plus voucher -0,29",
+        "Ziemniaki jadalne PL",
+        "2,764kg x 0.99 2.74 C",
+        "KDR -0,27",
+        "Lidl Plus voucher -0,24",
+        "Ogórki zielo . PLszt .",
+        "11.99 1.99 C",
+        "KDR -0,20",
+        "Lidl Plus voucher -0,17",
+        "Marchew luz",
+        "0,444kg x 3.99 1.77 C",
+        "Lidl Plus kupon -0,19",
+        "KDR -0,16",
+        "Lidl Plus voucher -0,14",
+        "L & M Link Blue",
+        "124.99 24.99 A",
+        "PTU A 55,50",
+        "Kwota A 23,00 % 10,38",
+        "PTU B 12,35",
+        "Kwota B 8,00 % 0,91",
+        "PTU C 238,48",
+        "Kwota C 5,00 % 11,36",
+        "Suma 22,65",
+        "Suma PLN 306,33",
+        "84 1613 nr : 103703 21:27",
+        "Opakowania zwrotne wydania",
+        "Kaucja PET 1 0.5 0.5",
+        "Opakowania zwrotne przyjęcia",
+        "Opak bez kau 10.2-0.2",
+        "Zwrot kaucji 14.0 -4.0",
+        "Opakowania zwrotne suma -3,70",
+        "Suma 302,63",
+        "Płatność Karta płatnicza 302,63",
+        "Z Lidl Plus zaoszczędzono",
+        "42,31 zł",
+        "Aby zwrócić produkt , weź ze sobą oryginalne",
+        "opakowanie . Na zwrot produktów przemysłowych",
+        "masz 30 dni od daty zakupu .",
+        "Kwota do zapłaty uwzględnia ewentualną kaucję za",
+        "opakowania , niewyszczególnioną w cenie towaru .",
+        "Oceń nas i zdobądź szansę na wygraną w Loterii",
+        "Lidla ! Ankieta i regulamin loterii dostępne na lidl.pl/",
+        "twoja - opinia",
+        "DZIĘKUJEMY ZA ODWIEDZINY",
+        "Wykorzystane kupony",
+        "30 zł rabatu *",
+        "* na zakupy za min . 300 zł",
+        "0,95 zł / 1 szt .",
+        "Masło ekstra 82 %",
+        "11 % taniej",
+        "Marchew | luzem",
+        "Miejsce zakupu",
+        "Rybnik , ul . Orzepowicka 29A",
+        "ul . Orzepowicka 29 a",
+        "44-217 Rybnik",
+        "Szczegóły sklepu >"
+      ]
+    },
+    "sum_analysis": {
+      "items_sum": 306.32312,
+      "adjustment_sum": -3.7,
+      "discount_sum": -160.4,
+      "items_plus_adjustments": 302.62312,
+      "receipt_total": 302.63,
+      "delta": -0.01,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "Masło Ekstra",
+        "category": null,
+        "unit_price": 4.99,
+        "quantity": 3.0,
+        "discount": -12.39,
+        "total_after_discount": 2.58,
+        "is_adjustment": false
+      },
+      {
+        "name": "Polędwica sopockaXXL",
+        "category": null,
+        "unit_price": 9.99,
+        "quantity": 2.0,
+        "discount": -10.96,
+        "total_after_discount": 9.02,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pure Boczek wędzony",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 3.0,
+        "discount": -9.87,
+        "total_after_discount": 8.1,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pieczarki 500g",
+        "category": null,
+        "unit_price": 7.99,
+        "quantity": 2.0,
+        "discount": -9.5,
+        "total_after_discount": 6.48,
+        "is_adjustment": false
+      },
+      {
+        "name": "Lunchbox proteinowy",
+        "category": null,
+        "unit_price": 11.99,
+        "quantity": 1.0,
+        "discount": -6.58,
+        "total_after_discount": 5.41,
+        "is_adjustment": false
+      },
+      {
+        "name": "Sushi Tokyo",
+        "category": null,
+        "unit_price": 7.49,
+        "quantity": 1.0,
+        "discount": -4.11,
+        "total_after_discount": 3.38,
+        "is_adjustment": false
+      },
+      {
+        "name": "Sałata roszponka125g",
+        "category": null,
+        "unit_price": 6.99,
+        "quantity": 1.0,
+        "discount": -4.15,
+        "total_after_discount": 2.84,
+        "is_adjustment": false
+      },
+      {
+        "name": "Szynka / Schab",
+        "category": null,
+        "unit_price": 6.95,
+        "quantity": 1.0,
+        "discount": -3.81,
+        "total_after_discount": 3.14,
+        "is_adjustment": false
+      },
+      {
+        "name": "Szynka maślana",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -3.29,
+        "total_after_discount": 2.7,
+        "is_adjustment": false
+      },
+      {
+        "name": "Rukola 125g",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -3.56,
+        "total_after_discount": 2.43,
+        "is_adjustment": false
+      },
+      {
+        "name": "Frankfurterki XXL",
+        "category": null,
+        "unit_price": 22.99,
+        "quantity": 1.0,
+        "discount": -8.54,
+        "total_after_discount": 14.45,
+        "is_adjustment": false
+      },
+      {
+        "name": "Frusta Prosciutto",
+        "category": null,
+        "unit_price": 6.99,
+        "quantity": 2.0,
+        "discount": -7.66,
+        "total_after_discount": 6.32,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mini Calzone",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 2.0,
+        "discount": -6.55,
+        "total_after_discount": 5.43,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pasztecik z pieczar .",
+        "category": null,
+        "unit_price": 1.99,
+        "quantity": 5.0,
+        "discount": -5.46,
+        "total_after_discount": 4.49,
+        "is_adjustment": false
+      },
+      {
+        "name": "Cebularz",
+        "category": null,
+        "unit_price": 2.29,
+        "quantity": 4.0,
+        "discount": -5.02,
+        "total_after_discount": 4.14,
+        "is_adjustment": false
+      },
+      {
+        "name": "Przekąska pieczark .",
+        "category": null,
+        "unit_price": 4.29,
+        "quantity": 2.0,
+        "discount": -4.7,
+        "total_after_discount": 3.88,
+        "is_adjustment": false
+      },
+      {
+        "name": "Zapiekanka z pieczar",
+        "category": null,
+        "unit_price": 4.19,
+        "quantity": 2.0,
+        "discount": -4.59,
+        "total_after_discount": 3.79,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pizzerka z kurczak .",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -3.29,
+        "total_after_discount": 2.7,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pizzerinka 110g",
+        "category": null,
+        "unit_price": 3.99,
+        "quantity": 1.0,
+        "discount": -2.19,
+        "total_after_discount": 1.8,
+        "is_adjustment": false
+      },
+      {
+        "name": "Ciastko francuskie",
+        "category": null,
+        "unit_price": 2.79,
+        "quantity": 1.0,
+        "discount": -1.53,
+        "total_after_discount": 1.26,
+        "is_adjustment": false
+      },
+      {
+        "name": "Burek ze szpinakiem",
+        "category": null,
+        "unit_price": 2.39,
+        "quantity": 1.0,
+        "discount": -1.31,
+        "total_after_discount": 1.08,
+        "is_adjustment": false
+      },
+      {
+        "name": "Przecier pomidor .",
+        "category": null,
+        "unit_price": 6.69,
+        "quantity": 5.0,
+        "discount": -9.3,
+        "total_after_discount": 24.15,
+        "is_adjustment": false
+      },
+      {
+        "name": "Przekąska z serem",
+        "category": null,
+        "unit_price": 1.52,
+        "quantity": 4.0,
+        "discount": -3.61,
+        "total_after_discount": 2.47,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka pszenna V",
+        "category": null,
+        "unit_price": 0.83,
+        "quantity": 4.0,
+        "discount": -1.96,
+        "total_after_discount": 1.36,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka grahamka",
+        "category": null,
+        "unit_price": 0.69,
+        "quantity": 4.0,
+        "discount": -1.62,
+        "total_after_discount": 1.14,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka poznańska XXL",
+        "category": null,
+        "unit_price": 0.9,
+        "quantity": 2.0,
+        "discount": -1.08,
+        "total_after_discount": 0.72,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka rustykalna",
+        "category": null,
+        "unit_price": 1.49,
+        "quantity": 1.0,
+        "discount": -0.88,
+        "total_after_discount": 0.61,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka z dynią",
+        "category": null,
+        "unit_price": 1.49,
+        "quantity": 1.0,
+        "discount": -0.88,
+        "total_after_discount": 0.61,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka nacięta",
+        "category": null,
+        "unit_price": 1.19,
+        "quantity": 1.0,
+        "discount": -0.71,
+        "total_after_discount": 0.48,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka ziem . pszen .",
+        "category": null,
+        "unit_price": 1.14,
+        "quantity": 1.0,
+        "discount": -0.68,
+        "total_after_discount": 0.46,
+        "is_adjustment": false
+      },
+      {
+        "name": "ELSEVE Szampon 1",
+        "category": null,
+        "unit_price": 21.99,
+        "quantity": 1.0,
+        "discount": -2.12,
+        "total_after_discount": 19.87,
+        "is_adjustment": false
+      },
+      {
+        "name": "Paluszki rybne XXL 2",
+        "category": null,
+        "unit_price": 21.99,
+        "quantity": 1.0,
+        "discount": -2.12,
+        "total_after_discount": 19.87,
+        "is_adjustment": false
+      },
+      {
+        "name": "Lisner XXL filety",
+        "category": null,
+        "unit_price": 17.99,
+        "quantity": 1.0,
+        "discount": -1.73,
+        "total_after_discount": 16.26,
+        "is_adjustment": false
+      },
+      {
+        "name": "Fasolka w sosie",
+        "category": null,
+        "unit_price": 4.99,
+        "quantity": 4.0,
+        "discount": -3.72,
+        "total_after_discount": 16.24,
+        "is_adjustment": false
+      },
+      {
+        "name": "Karma d.kota puszka",
+        "category": null,
+        "unit_price": 4.49,
+        "quantity": 2.0,
+        "discount": -1.68,
+        "total_after_discount": 7.3,
+        "is_adjustment": false
+      },
+      {
+        "name": "Twaróg klinek półtł .",
+        "category": null,
+        "unit_price": 3.95,
+        "quantity": 2.0,
+        "discount": -0.76,
+        "total_after_discount": 7.14,
+        "is_adjustment": false
+      },
+      {
+        "name": "Koncentrat do nacz1l",
+        "category": null,
+        "unit_price": 6.49,
+        "quantity": 1.0,
+        "discount": -0.63,
+        "total_after_discount": 5.86,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mozzarella light",
+        "category": null,
+        "unit_price": 2.99,
+        "quantity": 2.0,
+        "discount": -0.58,
+        "total_after_discount": 5.4,
+        "is_adjustment": false
+      },
+      {
+        "name": "Sałatka szwedzka",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -0.58,
+        "total_after_discount": 5.41,
+        "is_adjustment": false
+      },
+      {
+        "name": "Sałatka obiadowa",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -0.58,
+        "total_after_discount": 5.41,
+        "is_adjustment": false
+      },
+      {
+        "name": "Multiwitamina tabl .",
+        "category": null,
+        "unit_price": 5.59,
+        "quantity": 1.0,
+        "discount": -0.54,
+        "total_after_discount": 5.05,
+        "is_adjustment": false
+      },
+      {
+        "name": "Jogurt natur . 400g",
+        "category": null,
+        "unit_price": 1.79,
+        "quantity": 3.0,
+        "discount": -0.51,
+        "total_after_discount": 4.86,
+        "is_adjustment": false
+      },
+      {
+        "name": "FreewayColaZERO 21 .",
+        "category": null,
+        "unit_price": 5.29,
+        "quantity": 1.0,
+        "discount": -0.51,
+        "total_after_discount": 4.78,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułki Hot - Dog , franc .",
+        "category": null,
+        "unit_price": 5.19,
+        "quantity": 1.0,
+        "discount": -0.5,
+        "total_after_discount": 4.69,
+        "is_adjustment": false
+      },
+      {
+        "name": "Lubella Makaron Pióra",
+        "category": null,
+        "unit_price": 4.49,
+        "quantity": 1.0,
+        "discount": -0.43,
+        "total_after_discount": 4.06,
+        "is_adjustment": false
+      },
+      {
+        "name": "Cytryny luz",
+        "category": null,
+        "unit_price": 9.99,
+        "quantity": 0.48,
+        "discount": -0.9,
+        "total_after_discount": 3.9,
+        "is_adjustment": false
+      },
+      {
+        "name": "Śmietana 18 % 400g",
+        "category": null,
+        "unit_price": 3.85,
+        "quantity": 1.0,
+        "discount": -0.37,
+        "total_after_discount": 3.48,
+        "is_adjustment": false
+      },
+      {
+        "name": "Buraczki zasmażane",
+        "category": null,
+        "unit_price": 3.72,
+        "quantity": 1.0,
+        "discount": -0.36,
+        "total_after_discount": 3.36,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mleko 1,5 % b.laktozy",
+        "category": null,
+        "unit_price": 3.49,
+        "quantity": 1.0,
+        "discount": -0.34,
+        "total_after_discount": 3.15,
+        "is_adjustment": false
+      },
+      {
+        "name": "Chleb tost . pełnozi.1",
+        "category": null,
+        "unit_price": 2.99,
+        "quantity": 1.0,
+        "discount": -0.29,
+        "total_after_discount": 2.7,
+        "is_adjustment": false
+      },
+      {
+        "name": "Ziemniaki jadalne PL",
+        "category": null,
+        "unit_price": 0.99,
+        "quantity": 2.764,
+        "discount": -0.51,
+        "total_after_discount": 2.23,
+        "is_adjustment": false
+      },
+      {
+        "name": "Ogórki zielo . PLszt .",
+        "category": null,
+        "unit_price": 1.99,
+        "quantity": 1.0,
+        "discount": -0.37,
+        "total_after_discount": 1.62,
+        "is_adjustment": false
+      },
+      {
+        "name": "Marchew luz",
+        "category": null,
+        "unit_price": 3.99,
+        "quantity": 0.444,
+        "discount": -0.49,
+        "total_after_discount": 1.28,
+        "is_adjustment": false
+      },
+      {
+        "name": "L & M Link Blue",
+        "category": null,
+        "unit_price": 24.99,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 24.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "Opakowania zwrotne suma",
+        "category": null,
+        "unit_price": -3.7,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": -3.7,
+        "is_adjustment": true
+      }
+    ],
+    "stats": {
+      "items_count": 54,
+      "adjustments_count": 1,
+      "has_discounts": true,
+      "merchant_name": "Lidl",
+      "date": "2026-04-18",
+      "total_amount": 302.63,
+      "parser_used": "lidl_deterministic_parser"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  },
+  {
+    "label": "Lidl paragon #2 (PNG)",
+    "store": "Lidl",
+    "format": "PNG (OCR required)",
+    "filename": "Obrazek PNG-280671829BB0-1.png",
+    "file_size_bytes": 2768543,
+    "pipeline_log": {
+      "run_id": "94c9ad61",
+      "started_at": "2026-06-15T10:39:46.023941+00:00",
+      "file_info": {
+        "filename": "Obrazek PNG-280671829BB0-1.png",
+        "size_bytes": 2768543,
+        "size_human": "3 MB",
+        "sha256": "3e9fa86fe16cff57",
+        "magic_bytes": "89504e47"
+      },
+      "stages": [
+        {
+          "stage_name": "source_detection",
+          "status": "OK",
+          "duration_ms": 0.25,
+          "input_summary": {
+            "filename": "Obrazek PNG-280671829BB0-1.png",
+            "size_bytes": 2768543,
+            "magic_bytes_hex": "89504e47"
+          },
+          "output_summary": {
+            "source": "photo_image"
+          },
+          "route_chosen": "photo_image",
+          "error": null
+        },
+        {
+          "stage_name": "content_extraction",
+          "status": "OK",
+          "duration_ms": 1231.28,
+          "input_summary": {
+            "source": "photo_image",
+            "size_bytes": 2768543
+          },
+          "output_summary": {
+            "method": "google_vision_ocr",
+            "ocr_words_count": 506,
+            "lines_count": 129,
+            "raw_text_length": 2621
+          },
+          "route_chosen": "google_vision_ocr",
+          "error": null
+        },
+        {
+          "stage_name": "merchant_detection",
+          "status": "OK",
+          "duration_ms": 0.03,
+          "input_summary": {
+            "lines_count": 129,
+            "header_lines_checked": 30
+          },
+          "output_summary": {
+            "merchant": "lidl",
+            "has_deterministic_parser": true
+          },
+          "route_chosen": "merchant_lidl",
+          "error": null
+        },
+        {
+          "stage_name": "parsing",
+          "status": "OK",
+          "duration_ms": 0.39,
+          "input_summary": {
+            "merchant": "lidl",
+            "source": "photo_image",
+            "lines_count": 129
+          },
+          "output_summary": {
+            "parser": "LidlReceiptParser",
+            "merchant": "Lidl",
+            "date": "2026-06-10",
+            "total": 138.75,
+            "items_count": 26
+          },
+          "route_chosen": "lidl_deterministic_parser",
+          "error": null
+        },
+        {
+          "stage_name": "categorization",
+          "status": "NO_AI",
+          "duration_ms": 0.0,
+          "input_summary": {},
+          "output_summary": {
+            "reason": "--no-ai flag"
+          },
+          "route_chosen": null,
+          "error": null
+        },
+        {
+          "stage_name": "validation",
+          "status": "OK",
+          "duration_ms": 0.12,
+          "input_summary": {
+            "has_data": true,
+            "items_count": 26
+          },
+          "output_summary": {
+            "is_valid": true,
+            "confidence": 1.0,
+            "issues": [],
+            "message": null
+          },
+          "route_chosen": null,
+          "error": null
+        }
+      ],
+      "total_duration_ms": 1232.07
+    },
+    "result": {
+      "merchant_name": "Lidl",
+      "date": "2026-06-10",
+      "total_amount": 138.75,
+      "currency": "PLN",
+      "items": [
+        {
+          "name": "PPureŚląska SzynkaXXL",
+          "price": 14.61,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 29.99,
+          "discount_total": -15.38,
+          "final_price": 14.61,
+          "is_adjustment": false
+        },
+        {
+          "name": "Ser Edam Kuchmis.XXL",
+          "price": 16.23,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 29.89,
+          "discount_total": -13.66,
+          "final_price": 16.23,
+          "is_adjustment": false
+        },
+        {
+          "name": "Halibut wędz.na gor .",
+          "price": 38.283838383838386,
+          "quantity": 0.198,
+          "category": null,
+          "original_price": 84.9,
+          "discount_total": -9.23,
+          "final_price": 38.283838383838386,
+          "is_adjustment": false
+        },
+        {
+          "name": "Twaróg klinek",
+          "price": 2.7,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.99,
+          "discount_total": -3.29,
+          "final_price": 2.7,
+          "is_adjustment": false
+        },
+        {
+          "name": "Chleb na maślance",
+          "price": 3.89,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 4.79,
+          "discount_total": -1.8,
+          "final_price": 3.89,
+          "is_adjustment": false
+        },
+        {
+          "name": "Lody śmietankowe 11",
+          "price": 5.92,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 7.29,
+          "discount_total": -1.37,
+          "final_price": 5.92,
+          "is_adjustment": false
+        },
+        {
+          "name": "Brzoskwin . luz",
+          "price": 12.129175257731958,
+          "quantity": 0.388,
+          "category": null,
+          "original_price": 14.99,
+          "discount_total": -1.11,
+          "final_price": 12.129175257731958,
+          "is_adjustment": false
+        },
+        {
+          "name": "Pomidory mal . PL luz",
+          "price": 10.556137566137567,
+          "quantity": 0.378,
+          "category": null,
+          "original_price": 12.99,
+          "discount_total": -0.92,
+          "final_price": 10.556137566137567,
+          "is_adjustment": false
+        },
+        {
+          "name": "Bułka grahamka 80g",
+          "price": 0.56,
+          "quantity": 6.0,
+          "category": null,
+          "original_price": 0.79,
+          "discount_total": -1.38,
+          "final_price": 0.56,
+          "is_adjustment": false
+        },
+        {
+          "name": "Banany luz",
+          "price": 5.665799086757991,
+          "quantity": 0.438,
+          "category": null,
+          "original_price": 6.99,
+          "discount_total": -0.58,
+          "final_price": 5.665799086757991,
+          "is_adjustment": false
+        },
+        {
+          "name": "Jabłka Jonagold luz",
+          "price": 4.044054054054054,
+          "quantity": 0.518,
+          "category": null,
+          "original_price": 4.99,
+          "discount_total": -0.49,
+          "final_price": 4.044054054054054,
+          "is_adjustment": false
+        },
+        {
+          "name": "Jabłka Golden deli .",
+          "price": 4.048823529411765,
+          "quantity": 0.34,
+          "category": null,
+          "original_price": 4.99,
+          "discount_total": -0.32,
+          "final_price": 4.048823529411765,
+          "is_adjustment": false
+        },
+        {
+          "name": "Piank.do myc.i dem .",
+          "price": 9.01,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 9.99,
+          "discount_total": -0.98,
+          "final_price": 9.01,
+          "is_adjustment": false
+        },
+        {
+          "name": "Filet piecz . , kurczak",
+          "price": 8.38,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 9.29,
+          "discount_total": -0.91,
+          "final_price": 8.38,
+          "is_adjustment": false
+        },
+        {
+          "name": "Herbata Earl Grey",
+          "price": 6.76,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 7.49,
+          "discount_total": -0.73,
+          "final_price": 6.76,
+          "is_adjustment": false
+        },
+        {
+          "name": "Lekki Krem do twarzy",
+          "price": 6.31,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.99,
+          "discount_total": -0.68,
+          "final_price": 6.31,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mydło w płynie",
+          "price": 6.31,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 6.99,
+          "discount_total": -0.68,
+          "final_price": 6.31,
+          "is_adjustment": false
+        },
+        {
+          "name": "Włoszczyzna paski",
+          "price": 2.97,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 3.29,
+          "discount_total": -0.64,
+          "final_price": 2.97,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mozzarella 220g",
+          "price": 2.695,
+          "quantity": 2.0,
+          "category": null,
+          "original_price": 2.99,
+          "discount_total": -0.59,
+          "final_price": 2.695,
+          "is_adjustment": false
+        },
+        {
+          "name": "Mydło w płynie zapas",
+          "price": 4.95,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 5.49,
+          "discount_total": -0.54,
+          "final_price": 4.95,
+          "is_adjustment": false
+        },
+        {
+          "name": "Ketchup łagodny",
+          "price": 3.15,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.49,
+          "discount_total": -0.34,
+          "final_price": 3.15,
+          "is_adjustment": false
+        },
+        {
+          "name": "Hummus 160g",
+          "price": 3.15,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.49,
+          "discount_total": -0.34,
+          "final_price": 3.15,
+          "is_adjustment": false
+        },
+        {
+          "name": "Owolovo Musy ow . XXL",
+          "price": 3.11,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 3.45,
+          "discount_total": -0.34,
+          "final_price": 3.11,
+          "is_adjustment": false
+        },
+        {
+          "name": "Cukierki Dubaj Amor .",
+          "price": 44.9,
+          "quantity": 0.04,
+          "category": null,
+          "original_price": 49.9,
+          "discount_total": -0.2,
+          "final_price": 44.9,
+          "is_adjustment": false
+        },
+        {
+          "name": "Woda sportowy korek .",
+          "price": 1.16,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": 1.29,
+          "discount_total": -0.13,
+          "final_price": 1.16,
+          "is_adjustment": false
+        },
+        {
+          "name": "Opakowania zwrotne suma",
+          "price": 0.5,
+          "quantity": 1.0,
+          "category": null,
+          "original_price": null,
+          "discount_total": 0.0,
+          "final_price": null,
+          "is_adjustment": true
+        }
+      ]
+    },
+    "metadata": {
+      "_validation": {
+        "is_valid": true,
+        "issues": [],
+        "confidence": 1.0,
+        "message": null
+      },
+      "_raw_ocr_text": "LiDL\nAdres siedziby: Poznańska 48, Jankowice\n62-080 Tarnowo\nPodgórne nr rej: BDO 000002265 Lidl sp.\nZ o. o. sp. k.\nul. Orzepowicka 29a, 44-217 Rybnik\n2026-06-10\nPPureŚląska SzynkaXXL\n129.99 29.99 C\n40% taniej\n-12,00\nKDR\n-1,80\nLidl Plus voucher\n-1,58\nSer Edam Kuchmis.XXL\n129.89 29.89 C\n39% Taniej\nLidl Plus voucher\n-11,90\n-1,76\nHalibut wędz.na gor.\n0,198kg x 84.9 16.81 C\nRABAT 50%\n-8,41\nLidl Plus voucher\n-0,82\nTwaróg klinek\nRABAT 50%\nLidl Plus voucher\nChleb na maślance\n1 * 5.99 5.99 C\n-3,00\n-0,29\nKDR\nLidl Plus voucher\nLody śmietankowe 11\n24.79 9.58 C\n-0,96\n-0,84\n1 7.29 7.29 C\nKDR\nLidl Plus voucher\n-0,73\n-0,64\nBrzoskwin. luz\n0,388kg x 14.99 5.82 C\nKDR\n-0,58\nLidl Plus voucher\n-0,53\nPomidory mal. PL luz\n0,378kg x 12.99 4.91 C\nKDR\n-0,49\nLidl Plus voucher\n-0,43\nBułka grahamka 80g\n60.79 4.74 C\nTaniej za 6\n-0,60\nKDR\n-0,42\nLidl Plus voucher\n-0,36\nBanany luz\n0,438kg x 6.99 3.06 C\nKDR\n-0,31\nLidl Plus voucher\n-0,27\nJabłka Jonagold luz\n0,518kg x 4.99 2.58 C\nKDR\n-0,26\nLidl Plus voucher\n-0,23\nJabłka Golden deli.\nKDR\n-0,17\n-0,15\n0, 340kg x 4.99 1.7 C\nLidl Plus voucher\nPiank.do myc.i dem.\nLidl Plus voucher\nFilet piecz., kurczak\nLidl Plus voucher\nHerbata Earl Grey\nLidl Plus voucher\nLekki Krem do twarzy\nLidl Plus voucher\nMydło w płynie\nLidl Plus voucher\nWłoszczyzna paski\nLidl Plus voucher\nMozzarella 220g\nLidl Plus voucher\nMydło w płynie zapas\nLidl Plus voucher\nKetchup łagodny\nLidl Plus voucher\nHummus 160g\nLidl Plus voucher\nOwolovo Musy ow. XXL\nLidl Plus voucher\nCukierki Dubaj Amor.\n19.99 9.99 A\n-0,98\n19.29 9.29 C\n-0,91\n1 7.49 7.49 A\n-0,73\n1 * 6.99 6.99 A\n-0,68\n16.99 6.99 A\n-0,68\n23.29 6.58 C\n-0,64\n22.99 5.98 C\n-0,59\n15.49 5.49 A\n-0,54\n13.49 3.49 B\n-0,34\n13.49 3.49 C\n-0,34\n13.45 3.45 C\n-0,34\n0,040kg x 49.9 2.0 A\n-0,20\nLidl Plus voucher\nWoda sportowy korek.\n1 * 1.29 1.29 A\nLidl Plus voucher\nPTU A\nKwota A 23,00%\nPTU B\nKwota B 8,00%\n-0,13\n36,30\n6,79\n3,15\n'\n0,23\nPTU C\nKwota C 5,00%\nSuma\nSuma PLN\nnr: 110706\n85 1613\nOpakowania zwrotne wydania\nKaucja PET\nOpakowania zwrotne suma\nSuma\nPłatność\n98,80\n4,70\n11,73\n138,25\n17:10\n1 * 0.5 0.5\n0,50\n138,75\nKarta płatnicza 138,75\nZ Lidl Plus zaoszczędzono\n15,00 zł\nAby zwrócić produkt, weź ze sobą oryginalne\nopakowanie. Na zwrot produktów przemysłowych\nmasz 30 dni od daty zakupu.\nKwota do zapłaty uwzględnia ewentualną kaucję za\nopakowania, niewyszczególnioną w cenie towaru.\nOceń nas i zdobądź szansę na wygraną w Loterii\nLidla! Ankieta i regulamin loterii dostępne na lidl.pl/\ntwoja-opinia\nDZIĘKUJEMY ZA ODWIEDZINY\nWykorzystane kupony\n15 zł rabatu*\n*na zakupy za min. 150 zł\nMiejsce zakupu\nRybnik, ul. Orzepowicka 29A\nul. Orzepowicka 29 a\n44-217 Rybnik\nSzczegóły sklepu >",
+      "_reconstructed_lines": [
+        "LiDL",
+        "Adres siedziby : Poznańska 48 , Jankowice",
+        "62-080 Tarnowo",
+        "Podgórne nr rej : BDO 000002265 Lidl sp .",
+        "Z o . o . sp . k .",
+        "ul . Orzepowicka 29a , 44-217 Rybnik",
+        "2026-06-10",
+        "PPureŚląska SzynkaXXL",
+        "129.99 29.99 C",
+        "40 % taniej -12,00",
+        "KDR -1,80",
+        "Lidl Plus voucher -1,58",
+        "Ser Edam Kuchmis.XXL",
+        "129.89 29.89 C",
+        "39 % Taniej -11,90",
+        "Lidl Plus voucher -1,76",
+        "Halibut wędz.na gor .",
+        "0,198kg x 84.9 16.81 C",
+        "RABAT 50 % -8,41",
+        "Lidl Plus voucher -0,82",
+        "Twaróg klinek",
+        "1 * 5.99 5.99 C",
+        "RABAT 50 % -3,00",
+        "Lidl Plus voucher -0,29",
+        "Chleb na maślance",
+        "24.79 9.58 C",
+        "KDR -0,96",
+        "Lidl Plus voucher -0,84",
+        "Lody śmietankowe 11",
+        "1 7.29 7.29 C",
+        "KDR -0,73",
+        "Lidl Plus voucher -0,64",
+        "Brzoskwin . luz",
+        "0,388kg x 14.99 5.82 C",
+        "KDR -0,58",
+        "Lidl Plus voucher -0,53",
+        "Pomidory mal . PL luz",
+        "0,378kg x 12.99 4.91 C",
+        "KDR -0,49",
+        "Lidl Plus voucher -0,43",
+        "Bułka grahamka 80g",
+        "60.79 4.74 C",
+        "Taniej za 6 -0,60",
+        "KDR -0,42",
+        "Lidl Plus voucher -0,36",
+        "Banany luz",
+        "0,438kg x 6.99 3.06 C",
+        "KDR -0,31",
+        "Lidl Plus voucher -0,27",
+        "Jabłka Jonagold luz",
+        "0,518kg x 4.99 2.58 C",
+        "KDR -0,26",
+        "Lidl Plus voucher -0,23",
+        "Jabłka Golden deli .",
+        "0 , 340kg x 4.99 1.7 C",
+        "KDR -0,17",
+        "Lidl Plus voucher -0,15",
+        "Piank.do myc.i dem .",
+        "19.99 9.99 A",
+        "Lidl Plus voucher -0,98",
+        "Filet piecz . , kurczak",
+        "19.29 9.29 C",
+        "Lidl Plus voucher -0,91",
+        "Herbata Earl Grey",
+        "1 7.49 7.49 A",
+        "Lidl Plus voucher -0,73",
+        "Lekki Krem do twarzy",
+        "1 * 6.99 6.99 A",
+        "Lidl Plus voucher -0,68",
+        "Mydło w płynie",
+        "16.99 6.99 A",
+        "Lidl Plus voucher -0,68",
+        "Włoszczyzna paski",
+        "23.29 6.58 C",
+        "Lidl Plus voucher -0,64",
+        "Mozzarella 220g",
+        "22.99 5.98 C",
+        "Lidl Plus voucher -0,59",
+        "Mydło w płynie zapas",
+        "15.49 5.49 A",
+        "Lidl Plus voucher -0,54",
+        "Ketchup łagodny",
+        "13.49 3.49 B",
+        "Lidl Plus voucher -0,34",
+        "Hummus 160g",
+        "13.49 3.49 C",
+        "Lidl Plus voucher -0,34",
+        "Owolovo Musy ow . XXL",
+        "13.45 3.45 C",
+        "Lidl Plus voucher -0,34",
+        "Cukierki Dubaj Amor .",
+        "0,040kg x 49.9 2.0 A",
+        "Lidl Plus voucher -0,20",
+        "Woda sportowy korek .",
+        "1 * 1.29 1.29 A",
+        "Lidl Plus voucher -0,13",
+        "PTU A 36,30",
+        "Kwota A 23,00 % 6,79",
+        "PTU B 3,15 '",
+        "Kwota B 8,00 % 0,23",
+        "PTU C 98,80",
+        "Kwota C 5,00 % 4,70",
+        "Suma 11,73",
+        "Suma PLN 138,25",
+        "85 1613 nr : 110706 17:10",
+        "Opakowania zwrotne wydania",
+        "Kaucja PET 1 * 0.5 0.5",
+        "Opakowania zwrotne suma 0,50",
+        "Suma 138,75",
+        "Płatność Karta płatnicza 138,75",
+        "Z Lidl Plus zaoszczędzono",
+        "15,00 zł",
+        "Aby zwrócić produkt , weź ze sobą oryginalne",
+        "opakowanie . Na zwrot produktów przemysłowych",
+        "masz 30 dni od daty zakupu .",
+        "Kwota do zapłaty uwzględnia ewentualną kaucję za",
+        "opakowania , niewyszczególnioną w cenie towaru .",
+        "Oceń nas i zdobądź szansę na wygraną w Loterii",
+        "Lidla ! Ankieta i regulamin loterii dostępne na lidl.pl/",
+        "twoja - opinia",
+        "DZIĘKUJEMY ZA ODWIEDZINY",
+        "Wykorzystane kupony",
+        "15 zł rabatu *",
+        "* na zakupy za min . 150 zł",
+        "Miejsce zakupu",
+        "Rybnik , ul . Orzepowicka 29A",
+        "ul . Orzepowicka 29 a",
+        "44-217 Rybnik",
+        "Szczegóły sklepu >"
+      ]
+    },
+    "sum_analysis": {
+      "items_sum": 138.24558,
+      "adjustment_sum": 0.5,
+      "discount_sum": -56.63,
+      "items_plus_adjustments": 138.74558,
+      "receipt_total": 138.75,
+      "delta": -0.0,
+      "is_matching": true
+    },
+    "normalized_items": [
+      {
+        "name": "PPureŚląska SzynkaXXL",
+        "category": null,
+        "unit_price": 29.99,
+        "quantity": 1.0,
+        "discount": -15.38,
+        "total_after_discount": 14.61,
+        "is_adjustment": false
+      },
+      {
+        "name": "Ser Edam Kuchmis.XXL",
+        "category": null,
+        "unit_price": 29.89,
+        "quantity": 1.0,
+        "discount": -13.66,
+        "total_after_discount": 16.23,
+        "is_adjustment": false
+      },
+      {
+        "name": "Halibut wędz.na gor .",
+        "category": null,
+        "unit_price": 84.9,
+        "quantity": 0.198,
+        "discount": -9.23,
+        "total_after_discount": 7.58,
+        "is_adjustment": false
+      },
+      {
+        "name": "Twaróg klinek",
+        "category": null,
+        "unit_price": 5.99,
+        "quantity": 1.0,
+        "discount": -3.29,
+        "total_after_discount": 2.7,
+        "is_adjustment": false
+      },
+      {
+        "name": "Chleb na maślance",
+        "category": null,
+        "unit_price": 4.79,
+        "quantity": 2.0,
+        "discount": -1.8,
+        "total_after_discount": 7.78,
+        "is_adjustment": false
+      },
+      {
+        "name": "Lody śmietankowe 11",
+        "category": null,
+        "unit_price": 7.29,
+        "quantity": 1.0,
+        "discount": -1.37,
+        "total_after_discount": 5.92,
+        "is_adjustment": false
+      },
+      {
+        "name": "Brzoskwin . luz",
+        "category": null,
+        "unit_price": 14.99,
+        "quantity": 0.388,
+        "discount": -1.11,
+        "total_after_discount": 4.71,
+        "is_adjustment": false
+      },
+      {
+        "name": "Pomidory mal . PL luz",
+        "category": null,
+        "unit_price": 12.99,
+        "quantity": 0.378,
+        "discount": -0.92,
+        "total_after_discount": 3.99,
+        "is_adjustment": false
+      },
+      {
+        "name": "Bułka grahamka 80g",
+        "category": null,
+        "unit_price": 0.79,
+        "quantity": 6.0,
+        "discount": -1.38,
+        "total_after_discount": 3.36,
+        "is_adjustment": false
+      },
+      {
+        "name": "Banany luz",
+        "category": null,
+        "unit_price": 6.99,
+        "quantity": 0.438,
+        "discount": -0.58,
+        "total_after_discount": 2.48,
+        "is_adjustment": false
+      },
+      {
+        "name": "Jabłka Jonagold luz",
+        "category": null,
+        "unit_price": 4.99,
+        "quantity": 0.518,
+        "discount": -0.49,
+        "total_after_discount": 2.09,
+        "is_adjustment": false
+      },
+      {
+        "name": "Jabłka Golden deli .",
+        "category": null,
+        "unit_price": 4.99,
+        "quantity": 0.34,
+        "discount": -0.32,
+        "total_after_discount": 1.38,
+        "is_adjustment": false
+      },
+      {
+        "name": "Piank.do myc.i dem .",
+        "category": null,
+        "unit_price": 9.99,
+        "quantity": 1.0,
+        "discount": -0.98,
+        "total_after_discount": 9.01,
+        "is_adjustment": false
+      },
+      {
+        "name": "Filet piecz . , kurczak",
+        "category": null,
+        "unit_price": 9.29,
+        "quantity": 1.0,
+        "discount": -0.91,
+        "total_after_discount": 8.38,
+        "is_adjustment": false
+      },
+      {
+        "name": "Herbata Earl Grey",
+        "category": null,
+        "unit_price": 7.49,
+        "quantity": 1.0,
+        "discount": -0.73,
+        "total_after_discount": 6.76,
+        "is_adjustment": false
+      },
+      {
+        "name": "Lekki Krem do twarzy",
+        "category": null,
+        "unit_price": 6.99,
+        "quantity": 1.0,
+        "discount": -0.68,
+        "total_after_discount": 6.31,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mydło w płynie",
+        "category": null,
+        "unit_price": 6.99,
+        "quantity": 1.0,
+        "discount": -0.68,
+        "total_after_discount": 6.31,
+        "is_adjustment": false
+      },
+      {
+        "name": "Włoszczyzna paski",
+        "category": null,
+        "unit_price": 3.29,
+        "quantity": 2.0,
+        "discount": -0.64,
+        "total_after_discount": 5.94,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mozzarella 220g",
+        "category": null,
+        "unit_price": 2.99,
+        "quantity": 2.0,
+        "discount": -0.59,
+        "total_after_discount": 5.39,
+        "is_adjustment": false
+      },
+      {
+        "name": "Mydło w płynie zapas",
+        "category": null,
+        "unit_price": 5.49,
+        "quantity": 1.0,
+        "discount": -0.54,
+        "total_after_discount": 4.95,
+        "is_adjustment": false
+      },
+      {
+        "name": "Ketchup łagodny",
+        "category": null,
+        "unit_price": 3.49,
+        "quantity": 1.0,
+        "discount": -0.34,
+        "total_after_discount": 3.15,
+        "is_adjustment": false
+      },
+      {
+        "name": "Hummus 160g",
+        "category": null,
+        "unit_price": 3.49,
+        "quantity": 1.0,
+        "discount": -0.34,
+        "total_after_discount": 3.15,
+        "is_adjustment": false
+      },
+      {
+        "name": "Owolovo Musy ow . XXL",
+        "category": null,
+        "unit_price": 3.45,
+        "quantity": 1.0,
+        "discount": -0.34,
+        "total_after_discount": 3.11,
+        "is_adjustment": false
+      },
+      {
+        "name": "Cukierki Dubaj Amor .",
+        "category": null,
+        "unit_price": 49.9,
+        "quantity": 0.04,
+        "discount": -0.2,
+        "total_after_discount": 1.8,
+        "is_adjustment": false
+      },
+      {
+        "name": "Woda sportowy korek .",
+        "category": null,
+        "unit_price": 1.29,
+        "quantity": 1.0,
+        "discount": -0.13,
+        "total_after_discount": 1.16,
+        "is_adjustment": false
+      },
+      {
+        "name": "Opakowania zwrotne suma",
+        "category": null,
+        "unit_price": 0.5,
+        "quantity": 1.0,
+        "discount": 0.0,
+        "total_after_discount": 0.5,
+        "is_adjustment": true
+      }
+    ],
+    "stats": {
+      "items_count": 25,
+      "adjustments_count": 1,
+      "has_discounts": true,
+      "merchant_name": "Lidl",
+      "date": "2026-06-10",
+      "total_amount": 138.75,
+      "parser_used": "lidl_deterministic_parser"
+    },
+    "validation": {
+      "is_valid": true,
+      "confidence": 1.0,
+      "issues": [],
+      "message": null
+    }
+  }
+]

@@ -40,6 +40,7 @@ const formSchema = z.object({
   currency: z.string().min(3, t("transactions.header_form.validation.currency_length")).max(3),
   type: z.enum(["expense", "income", "transfer"]).default("expense"),
   category_id: z.number().nullable().optional(),
+  account_id: z.number().nullable().optional(),
   tag_ids: z.array(z.number()).default([]),
   note: z.string().optional(),
 });
@@ -59,6 +60,11 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     queryFn: api.getCategories,
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
+  });
+
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
@@ -68,6 +74,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       currency: "PLN",
       type: "expense",
       category_id: null,
+      account_id: null,
       tag_ids: [],
       note: "",
     },
@@ -81,6 +88,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       currency: transaction.currency ?? "PLN",
       type: (transaction.type as "expense" | "income" | "transfer") ?? "expense",
       category_id: transaction.category_id ?? null,
+      account_id: transaction.account_id ?? null,
       tag_ids: transaction.tags?.map(t => t.id) || [],
       note: transaction.note ?? "",
     });
@@ -93,6 +101,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
         date: new Date(values.date).toISOString(),
         note: values.note || undefined,
         category_id: values.category_id || undefined,
+        account_id: values.account_id || undefined,
         type: values.type || undefined,
       }),
     onSuccess: () => {
@@ -298,6 +307,52 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                 <FormMessage />
               </FormItem>
             )}
+          />
+
+          <FormField
+            control={form.control}
+            name="account_id"
+            render={({ field }) => {
+              const currentAccount = accounts?.find(a => a.id === transaction.account_id);
+              return (
+                <FormItem>
+                  <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                    {t("transactions.meta_section.account_label")}
+                  </FormLabel>
+                  {isEditing ? (
+                    <FormControl>
+                      <Select
+                        value={field.value != null ? String(field.value) : "none"}
+                        onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("transactions.meta_section.account_placeholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">{t("transactions.meta_section.account_placeholder")}</SelectItem>
+                          {accounts?.map((acc) => (
+                            <SelectItem key={acc.id} value={String(acc.id)}>
+                              {acc.name} ({acc.currency})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <div className="pt-1">
+                      {currentAccount ? (
+                        <span className="text-sm font-medium">
+                          {currentAccount.name}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">-</span>
+                      )}
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
           />
 
           <FormField

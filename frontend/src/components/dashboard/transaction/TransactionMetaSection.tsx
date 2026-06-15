@@ -21,6 +21,7 @@ import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { TagPicker } from "../shared/TagPicker";
+import { useWatch } from "react-hook-form";
 
 interface TransactionMetaSectionProps {
   control: Control<TransactionFormInput>;
@@ -33,9 +34,72 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
     queryFn: api.getCategories,
   });
 
+  const { data: accounts } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
+  });
+
+  const transactionType = useWatch({ control, name: "type", defaultValue: "expense" });
+
   return (
     <SectionGrid>
-      {!hideCategory && (
+      <FormField
+        control={control}
+        name="account_id"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+              {t("transactions.meta_section.account_label")}
+            </FormLabel>
+            <Select onValueChange={field.onChange} value={field.value}>
+              <FormControl>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("transactions.meta_section.account_placeholder")} />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                {accounts?.map((acc) => (
+                  <SelectItem key={acc.id} value={acc.id.toString()}>
+                    {acc.name} ({acc.currency})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {transactionType === "transfer" && (
+        <FormField
+          control={control}
+          name="transfer_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                {t("transactions.meta_section.transfer_label")}
+              </FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("transactions.meta_section.transfer_placeholder")} />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {accounts?.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id.toString()}>
+                      {acc.name} ({acc.currency})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
+      {!hideCategory && transactionType !== "transfer" && (
         <FormField
           control={control}
           name="category_id"

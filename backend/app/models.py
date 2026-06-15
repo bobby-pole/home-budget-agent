@@ -67,6 +67,7 @@ class Budget(SQLModel, table=True):
     members: List["BudgetMember"] = Relationship(back_populates="budget")
     transactions: List["Transaction"] = Relationship(back_populates="budget")
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="budget")
+    accounts: List["Account"] = Relationship(back_populates="budget")
 
 
 # ─── BudgetMember ─────────────────────────────────────────────────────────────
@@ -79,6 +80,37 @@ class BudgetMember(SQLModel, table=True):
 
     budget: Optional[Budget] = Relationship(back_populates="members")
     user: Optional[User] = Relationship(back_populates="memberships")
+
+
+# ─── Account ──────────────────────────────────────────────────────────────────
+
+class AccountBase(SQLModel):
+    name: str
+    type: str = Field(default="checking")  # checking, savings, cash, credit, tracking_asset, tracking_liability
+    currency: str = Field(default="PLN")
+    initial_balance: float = Field(default=0.0)
+    current_balance: float = Field(default=0.0)
+    is_on_budget: bool = Field(default=True)
+    is_active: bool = Field(default=True)
+    category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+
+
+class Account(AccountBase, table=True):
+    __tablename__: str = "account"  # type: ignore
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
+
+    budget: Optional[Budget] = Relationship(back_populates="accounts")
+    transactions: List["Transaction"] = Relationship(
+        back_populates="account",
+        sa_relationship_kwargs={"foreign_keys": "[Transaction.account_id]"}
+    )
+    transfers_in: List["Transaction"] = Relationship(
+        back_populates="transfer_account",
+        sa_relationship_kwargs={"foreign_keys": "[Transaction.transfer_id]"}
+    )
+    category: Optional["Category"] = Relationship(back_populates="accounts")
 
 
 # ─── Category & Tag ───────────────────────────────────────────────────────────
@@ -103,6 +135,7 @@ class Category(CategoryBase, table=True):
     subcategories: List["Category"] = Relationship(back_populates="parent")
     transactions: List["Transaction"] = Relationship(back_populates="category")
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="category")
+    accounts: List["Account"] = Relationship(back_populates="category")
 
 
 class ProductCategoryCache(SQLModel, table=True):
@@ -148,6 +181,8 @@ class TransactionBase(SQLModel):
     is_manual: bool = Field(default=False)
     type: str = Field(default="expense")  # expense | income | transfer
     import_hash: Optional[str] = Field(default=None, index=True)
+    account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
+    transfer_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
 
 
 class Transaction(TransactionBase, table=True):
@@ -168,6 +203,14 @@ class Transaction(TransactionBase, table=True):
     uploader: Optional[User] = Relationship(back_populates="transactions")
     category: Optional["Category"] = Relationship(back_populates="transactions")
     tags: List["Tag"] = Relationship(back_populates="transactions", link_model=TransactionTagLink)
+    account: Optional[Account] = Relationship(
+        back_populates="transactions",
+        sa_relationship_kwargs={"foreign_keys": "[Transaction.account_id]"}
+    )
+    transfer_account: Optional[Account] = Relationship(
+        back_populates="transfers_in",
+        sa_relationship_kwargs={"foreign_keys": "[Transaction.transfer_id]"}
+    )
 
 
 # ─── ReceiptScan ──────────────────────────────────────────────────────────────
@@ -250,6 +293,24 @@ class BudgetAlert(SQLModel, table=True):
 
 # ─── API DTOs ────────────────────────────────────────────────────────────────
 
+class AccountRead(AccountBase):
+    id: int
+    budget_id: Optional[int] = None
+
+class AccountCreate(AccountBase):
+    pass
+
+class AccountUpdate(SQLModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    currency: Optional[str] = None
+    initial_balance: Optional[float] = None
+    current_balance: Optional[float] = None
+    is_on_budget: Optional[bool] = None
+    is_active: Optional[bool] = None
+    category_id: Optional[int] = None
+
+
 class EnvelopeAllocationRead(SQLModel):
     id: int
     budget_id: int
@@ -307,6 +368,8 @@ class TransactionUpdate(SQLModel):
     note: Optional[str] = None
     tag_ids: Optional[List[int]] = None
     type: Optional[str] = None
+    account_id: Optional[int] = None
+    transfer_id: Optional[int] = None
 
 
 class TransactionLineCreate(SQLModel):
@@ -330,6 +393,8 @@ class ManualTransactionCreate(SQLModel):
     tag_ids: List[int] = Field(default_factory=list)
     lines: List[TransactionLineCreate] = Field(default_factory=list)
     type: str = "expense"  # expense | income | transfer
+    account_id: Optional[int] = None
+    transfer_id: Optional[int] = None
 
 
 class TransactionLineUpdate(SQLModel):

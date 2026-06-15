@@ -4,14 +4,14 @@ import {
   Wallet,
   ArrowLeftRight,
   Sparkles,
+  Landmark,
 } from "lucide-react"
-import { Link, useLocation } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
 import { toast } from "sonner"
 import { api } from "@/lib/api"
-
 import { cn } from "@/lib/utils"
+import { Link, useLocation } from "react-router-dom"
 import {
   Sidebar,
   SidebarContent,
@@ -50,6 +50,11 @@ const mainNavItems = [
     icon: Sparkles,
     href: "/inbox",
   },
+  {
+    title: "Accounts",
+    icon: Landmark,
+    href: "/accounts",
+  },
 ]
 
 // Settings has been moved to user dropdown menu
@@ -61,6 +66,7 @@ export function AppSidebar() {
   const { state } = useSidebar()
   const isCollapsed = state === "collapsed"
   const queryClient = useQueryClient()
+
 
   const { data: statusData } = useQuery({
     queryKey: ["status"],
@@ -165,6 +171,7 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">
