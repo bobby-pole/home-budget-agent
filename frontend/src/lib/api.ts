@@ -12,7 +12,10 @@ import type {
   AppStatusRead,
   UserBudgetRead,
   ChangePasswordRequest,
-  UserRead
+  UserRead,
+  AccountRead,
+  AccountCreate,
+  AccountUpdate
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import axios from "axios";
@@ -152,6 +155,8 @@ export const api = {
     currency: string;
     date?: string;
     category_id?: number;
+    account_id?: number;
+    transfer_id?: number;
     note?: string;
     tag_ids?: number[];
     type?: string;
@@ -256,5 +261,27 @@ export const api = {
   updateBudget: async (id: number, data: { name: string }): Promise<UserBudgetRead> => {
     const res = await apiClient.patch(`/budgets/${id}`, data);
     return res.data;
+  },
+
+  // --- ACCOUNTS ---
+
+  getAccounts: async () => {
+    const response = await apiClient.get<AccountRead[]>("/accounts");
+    return response.data;
+  },
+
+  createAccount: async (data: AccountCreate) => {
+    const response = await apiClient.post<AccountRead>("/accounts", data);
+    return response.data;
+  },
+
+  updateAccount: async (id: number, data: AccountUpdate) => {
+    const response = await apiClient.patch<AccountRead>(`/accounts/${id}`, data);
+    return response.data;
+  },
+
+  deleteAccount: async (id: number) => {
+    const response = await apiClient.delete(`/accounts/${id}`);
+    return response.data;
   },
 };

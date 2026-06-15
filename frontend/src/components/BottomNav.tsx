@@ -3,8 +3,8 @@ import { Plus } from "lucide-react"
 import {
   LayoutDashboard,
   Wallet,
-  ArrowLeftRight,
   Sparkles,
+  MoreHorizontal,
 } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
@@ -33,9 +33,9 @@ const rightNavItems = [
     href: "/inbox",
   },
   {
-    title: "Trans",
-    icon: ArrowLeftRight,
-    href: "/transactions",
+    title: "More",
+    icon: MoreHorizontal,
+    href: "/more",
   },
 ]
 

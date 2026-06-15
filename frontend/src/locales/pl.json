@@ -169,7 +169,8 @@
       "remove_item": "Usuń pozycję",
       "validation": {
         "name_required": "Nazwa jest wymagana",
-        "merchant_required": "Nazwa sprzedawcy jest wymagana"
+        "merchant_required": "Nazwa sprzedawcy jest wymagana",
+        "account_required": "Wybór konta jest wymagany"
       }
     },
     "no_preview": "Podgląd niedostępny",
@@ -277,7 +278,11 @@
     },
     "meta_section": {
       "category_label": "Kategoria",
-      "category_placeholder": "Wybierz kategorię",
+      "category_placeholder": "Wybierz kategorię...",
+      "account_label": "Z konta",
+      "account_placeholder": "Wybierz konto...",
+      "transfer_label": "Na konto",
+      "transfer_placeholder": "Wybierz docelowe...",
       "note_label": "Notatka",
       "tags_label": "Tagi",
       "placeholder_note": "np. prezent dla mamy, rata 3/12..."
@@ -360,6 +365,14 @@
       }
     }
   },
+  "more": {
+    "title": "Więcej",
+    "navigation": "Nawigacja",
+    "no_accounts": "Brak kont"
+  },
+  "accounts": {
+    "title": "Konta"
+  },
   "settings": {
     "page": {
       "title": "Ustawienia",
@@ -367,7 +380,43 @@
       "tab_categories": "Kategorie",
       "tab_tags": "Tagi",
       "tab_budget": "Budżet",
-      "tab_language": "Język"
+      "tab_language": "Język",
+      "tab_accounts": "Konta"
+    },
+    "accounts": {
+      "section_title": "Twoje konta",
+      "add_button": "Dodaj konto",
+      "no_accounts": "Nie masz jeszcze dodanych kont.",
+      "delete_dialog_title": "Usunąć konto?",
+      "delete_dialog_description": "Czy na pewno chcesz usunąć to konto? Tej operacji nie można cofnąć.",
+      "delete_dialog_cancel": "Anuluj",
+      "delete_dialog_confirm": "Usuń",
+      "toast_created": "Konto dodane",
+      "toast_create_error": "Błąd dodawania konta",
+      "toast_saved": "Zapisano",
+      "toast_save_error": "Błąd podczas zapisu",
+      "toast_deleted": "Konto usunięte",
+      "toast_delete_error": "Błąd podczas usuwania konta",
+      "off_budget": "Poza budżetem",
+      "form": {
+        "name": "Nazwa konta",
+        "type": "Typ konta",
+        "currency": "Waluta",
+        "initial_balance": "Początkowe saldo",
+        "is_on_budget": "Dodaj do wspólnej puli (On-Budget)",
+        "is_on_budget_desc": "Środki na tym koncie będą sumować się do kwoty 'Do przydzielenia'.",
+        "types": {
+          "checking": "Konto Osobiste",
+          "savings": "Konto Oszczędnościowe",
+          "cash": "Gotówka",
+          "credit": "Karta Kredytowa",
+          "tracking_asset": "Inwestycje (Tracking)",
+          "tracking_liability": "Pożyczki (Tracking)"
+        },
+        "linked_envelope": "Powiązana koperta",
+        "linked_envelope_placeholder": "Wybierz kopertę",
+        "linked_envelope_none": "Brak (nie powiązuj)"
+      }
     },
     "categories": {
       "section_title": "Struktura kategorii",

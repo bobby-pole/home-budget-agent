@@ -71,6 +71,7 @@ const verificationSchema = z.object({
   date: z.string(),
   total_amount: z.number().min(0),
   currency: z.string(),
+  account_id: z.string().min(1, t("inbox.verification_card.validation.account_required")),
   lines: z.array(lineSchema),
   keep_image: z.boolean(),
 });
@@ -103,6 +104,11 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: api.getCategories,
+  });
+
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
   });
 
   // Effect to fetch image with Auth token
@@ -233,6 +239,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       date: transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
       total_amount: transaction.total_amount || 0,
       currency: transaction.currency || "PLN",
+      account_id: transaction.account_id ? transaction.account_id.toString() : "",
       lines: (transaction.lines || []).map(l => ({
         id: l.id,
         name: l.name,
@@ -280,6 +287,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
           date: values.date,
           total_amount: values.total_amount,
           currency: values.currency,
+          account_id: values.account_id ? parseInt(values.account_id) : undefined,
         },
         values.lines.map(l => {
           // For adjustments we keep the user-entered unit_price as-is (single line, qty=1).
@@ -594,6 +602,32 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="account_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        {t("transactions.meta_section.account_label")}
+                      </FormLabel>
+                      <FormControl>
+                        <select
+                          {...field}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <option value="" disabled>{t("transactions.meta_section.account_placeholder")}</option>
+                          {accounts.map(acc => (
+                            <option key={acc.id} value={acc.id.toString()}>
+                              {acc.name} ({acc.currency})
+                            </option>
+                          ))}
+                        </select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <ItemsSection

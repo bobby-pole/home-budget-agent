@@ -169,7 +169,8 @@
       "remove_item": "Remove item",
       "validation": {
         "name_required": "Name is required",
-        "merchant_required": "Merchant name is required"
+        "merchant_required": "Merchant name is required",
+        "account_required": "Account selection is required"
       }
     },
     "no_preview": "Preview unavailable",
@@ -277,7 +278,11 @@
     },
     "meta_section": {
       "category_label": "Category",
-      "category_placeholder": "Select category",
+      "category_placeholder": "Select category...",
+      "account_label": "From account",
+      "account_placeholder": "Select account...",
+      "transfer_label": "To account",
+      "transfer_placeholder": "Select destination...",
       "note_label": "Note",
       "tags_label": "Tags",
       "placeholder_note": "e.g. gift for mom, instalment 3/12..."
@@ -360,6 +365,14 @@
       }
     }
   },
+  "more": {
+    "title": "More",
+    "navigation": "Navigation",
+    "no_accounts": "No accounts"
+  },
+  "accounts": {
+    "title": "Accounts"
+  },
   "settings": {
     "page": {
       "title": "Settings",
@@ -367,7 +380,43 @@
       "tab_categories": "Categories",
       "tab_tags": "Tags",
       "tab_budget": "Budget",
-      "tab_language": "Language"
+      "tab_language": "Language",
+      "tab_accounts": "Accounts"
+    },
+    "accounts": {
+      "section_title": "Your accounts",
+      "add_button": "Add account",
+      "no_accounts": "You don't have any accounts yet.",
+      "delete_dialog_title": "Delete account?",
+      "delete_dialog_description": "Are you sure you want to delete this account? This cannot be undone.",
+      "delete_dialog_cancel": "Cancel",
+      "delete_dialog_confirm": "Delete",
+      "toast_created": "Account created",
+      "toast_create_error": "Error creating account",
+      "toast_saved": "Saved",
+      "toast_save_error": "Error saving",
+      "toast_deleted": "Account deleted",
+      "toast_delete_error": "Error deleting account",
+      "off_budget": "Off-Budget",
+      "form": {
+        "name": "Account Name",
+        "type": "Account Type",
+        "currency": "Currency",
+        "initial_balance": "Initial Balance",
+        "is_on_budget": "Include in budget (On-Budget)",
+        "is_on_budget_desc": "Funds in this account will be added to your 'Ready to Assign' pool.",
+        "types": {
+          "checking": "Checking Account",
+          "savings": "Savings Account",
+          "cash": "Cash",
+          "credit": "Credit Card",
+          "tracking_asset": "Investment (Tracking)",
+          "tracking_liability": "Loan (Tracking)"
+        },
+        "linked_envelope": "Linked Envelope",
+        "linked_envelope_placeholder": "Select an envelope",
+        "linked_envelope_none": "None (do not link)"
+      }
     },
     "categories": {
       "section_title": "Category structure",

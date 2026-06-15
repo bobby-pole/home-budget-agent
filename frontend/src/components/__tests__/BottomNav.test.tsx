@@ -14,7 +14,7 @@ describe("BottomNav", () => {
     expect(screen.getByText("Dash")).toBeInTheDocument();
     expect(screen.getByText("Budget")).toBeInTheDocument();
     expect(screen.getByText("Inbox")).toBeInTheDocument();
-    expect(screen.getByText("Trans")).toBeInTheDocument();
+    expect(screen.getByText("More")).toBeInTheDocument();
     // Settings has been moved to user dropdown menu
   });
 });

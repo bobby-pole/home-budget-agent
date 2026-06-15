@@ -57,6 +57,8 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         currency: "PLN",
         date: todayISO(),
         category_id: "",
+        account_id: "",
+        transfer_id: "",
         note: "",
         tag_ids: [],
       });
@@ -77,6 +79,8 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         currency: values.currency,
         date: values.date || undefined,
         category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
+        account_id: values.account_id ? parseInt(values.account_id) : undefined,
+        transfer_id: values.type === "transfer" && values.transfer_id ? parseInt(values.transfer_id) : undefined,
         note: values.note || undefined,
         tag_ids: values.tag_ids,
         type: values.type,
