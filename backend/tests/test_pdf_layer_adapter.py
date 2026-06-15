@@ -170,6 +170,124 @@ def test_eparagon_json_adapter_parse():
     assert item3["is_adjustment"] is True
 
 
+def test_eparagon_polish_decimal_quantity():
+    """Biedronka uses Polish comma format for weighed items: ilosc='0,038'."""
+    mock_jpk = {
+        "document": {
+            "podmiot1": {"nazwaPod": "BIEDRONKA"},
+            "paragon": {
+                "total": {"zaplZwrot": 10174},
+                "pozycja": [
+                    {
+                        "towar": {
+                            "nazwa": "CukierkiKrówkaMixLuz",
+                            "cena": 1990,
+                            "ilosc": "0,038",
+                            "brutto": 76,
+                        }
+                    },
+                    {
+                        "towar": {
+                            "nazwa": "OgórekSzkLuz",
+                            "cena": 799,
+                            "ilosc": "0,348",
+                            "brutto": 278,
+                            "rabat": {"wart": -139},
+                        }
+                    },
+                ],
+            },
+        }
+    }
+    json_bytes = json.dumps(mock_jpk).encode("utf-8")
+
+    parsed = EParagonJSONAdapter.parse(json_bytes)
+    assert len(parsed["items"]) == 2
+
+    # Weighed item with Polish decimal
+    item1 = parsed["items"][0]
+    assert item1["name"] == "CukierkiKrówkaMixLuz"
+    assert item1["quantity"] == pytest.approx(0.038, abs=0.001)
+    assert item1["original_price"] == pytest.approx(19.90, abs=0.01)
+    assert item1["discount_total"] == 0.0
+
+    # Weighed item with Polish decimal + inline rabat
+    item2 = parsed["items"][1]
+    assert item2["name"] == "OgórekSzkLuz"
+    assert item2["quantity"] == pytest.approx(0.348, abs=0.001)
+    assert item2["original_price"] == pytest.approx(7.99, abs=0.01)
+    assert item2["discount_total"] == pytest.approx(-1.39, abs=0.01)
+
+
+def test_eparagon_zabka_separate_rabat():
+    """Żabka puts rabat as separate pozycja entries, not inside towar."""
+    mock_jpk = {
+        "document": {
+            "podmiot1": {"nazwaPod": "F.H.U Anna"},
+            "paragon": {
+                "zakSprzed": "2026-06-14T10:10:19.000Z",
+                "total": {"zaplZwrot": 1398},
+                "podsum": {"waluta": "PLN"},
+                "pozycja": [
+                    {
+                        "towar": {
+                            "nazwa": "ZELKI HARIBO 175g-A",
+                            "cena": 899,
+                            "ilosc": "2",
+                            "brutto": 1798,
+                        }
+                    },
+                    {
+                        "rabat": {
+                            "nazwa": "ZELKI HARIBO 175g-A",
+                            "wart": -400,
+                        }
+                    },
+                ],
+            },
+        }
+    }
+    json_bytes = json.dumps(mock_jpk).encode("utf-8")
+
+    parsed = EParagonJSONAdapter.parse(json_bytes)
+    assert parsed["total_amount"] == pytest.approx(13.98, abs=0.01)
+
+    # Only 1 item (rabat applied to it, no ghost item)
+    assert len(parsed["items"]) == 1
+
+    item = parsed["items"][0]
+    assert item["name"] == "ZELKI HARIBO 175g-A"
+    assert item["quantity"] == 2.0
+    assert item["original_price"] == pytest.approx(8.99, abs=0.01)
+    assert item["discount_total"] == pytest.approx(-4.00, abs=0.01)
+    # Final price per unit: 8.99 + (-4.00 / 2) = 6.99
+    assert item["price"] == pytest.approx(6.99, abs=0.01)
+    assert item["is_adjustment"] is False
+
+    # items sum: 6.99 * 2 = 13.98 = total
+    items_sum = sum(i["price"] * i["quantity"] for i in parsed["items"])
+    assert items_sum == pytest.approx(parsed["total_amount"], abs=0.01)
+
+
+def test_parse_polish_float_helper():
+    """Test the _parse_polish_float helper directly."""
+    from app.ocr_pipeline import _parse_polish_float
+
+    # Polish comma format
+    assert _parse_polish_float("0,038") == pytest.approx(0.038, abs=0.001)
+    assert _parse_polish_float("0,348") == pytest.approx(0.348, abs=0.001)
+
+    # Standard dot format
+    assert _parse_polish_float("1.5") == pytest.approx(1.5, abs=0.01)
+
+    # Integer string
+    assert _parse_polish_float("2") == pytest.approx(2.0, abs=0.01)
+
+    # Numeric types
+    assert _parse_polish_float(799) == pytest.approx(799.0, abs=0.01)
+    assert _parse_polish_float(799, divisor=100.0) == pytest.approx(7.99, abs=0.01)
+
+
 # ── AIService E2E Integration Tests ─────────────────────────────────────────────
 
 @patch("app.services.AIService._categorize_parsed_items", lambda data, cats, user_id: data)

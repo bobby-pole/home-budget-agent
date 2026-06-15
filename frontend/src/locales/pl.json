@@ -4,7 +4,7 @@
     "running": "Przetwarzanie...",
     "ocr_ok": "Tekst odczytany",
     "parsing_ok": "Paragony sparsowane",
-    "categorization_ok": "Skategoryzowano",
+    "categorization_ok": "Zweryfikowano",
     "needs_review": "Wymaga weryfikacji",
     "failed": "Błąd przetwarzania",
     "processing": "Przetwarzanie...",
@@ -215,6 +215,11 @@
       "items_section": {
         "header": "Pozycje",
         "no_items": "Brak wykrytych pozycji."
+      },
+      "chart": {
+        "title": "Podsumowanie wydatków (wg kategorii)",
+        "uncategorized": "Bez kategorii",
+        "tooltip_amount": "Razem"
       }
     },
     "add_modal": {
@@ -292,6 +297,7 @@
       "toast_error": "Błąd aktualizacji pozycji",
       "discount_badge": "Rabat",
       "edit_item": "Edytuj pozycję",
+      "ai_category_tooltip": "Kategoria przypisana przez AI - wymaga weryfikacji",
       "validation": {
         "name_required": "Nazwa wymagana"
       }

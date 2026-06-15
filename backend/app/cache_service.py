@@ -77,10 +77,11 @@ def fuzzy_match_cache(db_session: Session, user_id: int, item_names: List[str], 
 
     return hits, misses
 
-def save_to_cache(db_session: Session, user_id: int, mappings: Dict[str, int]) -> None:
+def save_to_cache(db_session: Session, user_id: int, mappings: Dict[str, int], overwrite: bool = False) -> None:
     """
     Saves new product category mappings to the cache.
     Mappings should be original_name -> category_id.
+    If overwrite is True, updates existing mappings with the new category.
     """
     if not mappings:
         return
@@ -97,12 +98,22 @@ def save_to_cache(db_session: Session, user_id: int, mappings: Dict[str, int]) -
         )
     ).all()
     
-    existing_names = {entry.normalized_name for entry in existing_entries}
+    existing_entries_dict = {entry.normalized_name: entry for entry in existing_entries}
+    existing_names = set(existing_entries_dict.keys())
     
     new_entries = []
+    updated_entries = []
     for original_name, category_id in mappings.items():
         norm_name = normalize_name(original_name)
-        if not norm_name or norm_name in existing_names:
+        if not norm_name:
+            continue
+            
+        if norm_name in existing_names:
+            if overwrite:
+                entry = existing_entries_dict[norm_name]
+                if entry.category_id != category_id:
+                    entry.category_id = category_id
+                    updated_entries.append(entry)
             continue
             
         new_entries.append(
@@ -118,4 +129,8 @@ def save_to_cache(db_session: Session, user_id: int, mappings: Dict[str, int]) -
 
     if new_entries:
         db_session.add_all(new_entries)
+    if updated_entries:
+        db_session.add_all(updated_entries)
+        
+    if new_entries or updated_entries:
         db_session.commit()

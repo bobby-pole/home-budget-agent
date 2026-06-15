@@ -138,13 +138,25 @@ class PDFTextLayerAdapter:
 
 # ── E-Paragon JSON Adapter ─────────────────────────────────────────────────────
 
+
+def _parse_polish_float(value: str | int | float, divisor: float = 1.0) -> float:
+    """Parse a numeric value that may use Polish comma decimal format.
+
+    Handles: "0,038", "2", 799, 8.99, "0.348"
+    """
+    if isinstance(value, (int, float)):
+        return float(value) / divisor
+    # Polish e-paragons use comma as decimal separator in string quantities
+    return float(str(value).replace(",", ".")) / divisor
+
+
 class EParagonJSONAdapter:
     @staticmethod
     def parse(file_bytes: bytes) -> dict:
         import base64
-        
+
         raw_data = json.loads(file_bytes.decode("utf-8"))
-        
+
         # Decode JPK JWT payload if wrapped in official "data" key
         if isinstance(raw_data, dict) and "data" in raw_data and isinstance(raw_data["data"], str):
             try:
@@ -168,64 +180,92 @@ class EParagonJSONAdapter:
         # If 'doc' itself is wrapped in another level
         if isinstance(doc, dict) and ("dokument" in doc or "document" in doc):
             doc = doc.get("dokument") or doc.get("document")
-            
+
         if not isinstance(doc, dict):
             doc = {}
-            
+
         paragon = doc.get("paragon", {})
         podmiot = doc.get("podmiot1", {})
-        
+
         # 1. Merchant name
         merchant = podmiot.get("nazwaPod", "Unknown Merchant")
-        
+
         # 2. Purchase date
         purchase_date_str = paragon.get("zakSprzed") or doc.get("naglowek", {}).get("dataJPK", "")
         date_str = ""
         if purchase_date_str:
             date_str = purchase_date_str.split("T")[0]
-            
+
         # 3. Currency and totals
         podsum = paragon.get("podsum", {})
         currency = podsum.get("waluta", "PLN")
-        total_gross = float(paragon.get("total", {}).get("zaplZwrot", 0)) / 100.0
-        
-        # 4. Items
-        items = []
+        total_gross = _parse_polish_float(paragon.get("total", {}).get("zaplZwrot", 0), divisor=100.0)
+
+        # 4. Items — handle two e-paragon formats:
+        #    a) Biedronka: rabat is INLINE in towar → {"towar": {"nazwa":..., "rabat": {"wart": -150}}}
+        #    b) Żabka:     rabat is a SEPARATE pozycja entry → {"rabat": {"nazwa":..., "wart": -400}}
+        items: list[dict] = []
         positions = paragon.get("pozycja", [])
         for pos in positions:
-            towar = pos.get("towar", {})
-            name = towar.get("nazwa", "Unknown Item").strip()
-            
-            orig_unit_price = float(towar.get("cena", 0)) / 100.0
-            qty = float(towar.get("ilosc", "1"))
-            
-            discount_total = 0.0
-            rabat = towar.get("rabat", {})
-            if rabat:
-                discount_total = float(rabat.get("wart", 0)) / 100.0
-            
-            original_price = orig_unit_price
-            final_price = original_price + (discount_total / qty) if qty > 0 else original_price
-            
-            items.append({
-                "name": name,
-                "price": final_price,
-                "quantity": qty,
-                "original_price": original_price,
-                "discount_total": discount_total,
-                "final_price": final_price,
-                "is_adjustment": False
-            })
-            
+            # ── Handle towar (product) entries ─────────────────────────────
+            towar = pos.get("towar")
+            if towar and isinstance(towar, dict):
+                name = towar.get("nazwa", "Unknown Item").strip()
+
+                orig_unit_price = _parse_polish_float(towar.get("cena", 0), divisor=100.0)
+                qty = _parse_polish_float(towar.get("ilosc", "1"))
+
+                # Inline rabat (Biedronka format: rabat inside towar)
+                discount_total = 0.0
+                rabat = towar.get("rabat", {})
+                if rabat:
+                    discount_total = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
+
+                original_price = orig_unit_price
+                final_price = original_price + (discount_total / qty) if qty > 0 else original_price
+
+                items.append({
+                    "name": name,
+                    "price": final_price,
+                    "quantity": qty,
+                    "original_price": original_price,
+                    "discount_total": discount_total,
+                    "final_price": final_price,
+                    "is_adjustment": False,
+                })
+                continue
+
+            # ── Handle standalone rabat entries (Żabka format) ─────────────
+            # These are separate pozycja entries: {"rabat": {"nazwa": "...", "wart": -400, ...}}
+            # Apply the discount to the last non-adjustment item.
+            rabat = pos.get("rabat")
+            if rabat and isinstance(rabat, dict) and items:
+                discount_val = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
+                # Find last non-adjustment item to apply discount to
+                for prev_item in reversed(items):
+                    if not prev_item.get("is_adjustment", False):
+                        prev_item["discount_total"] += discount_val
+                        qty = prev_item["quantity"]
+                        prev_item["final_price"] = (
+                            prev_item["original_price"] + (prev_item["discount_total"] / qty)
+                            if qty > 0 else prev_item["original_price"]
+                        )
+                        prev_item["price"] = prev_item["final_price"]
+                        break
+                continue
+
+            # ── Skip unrecognized pozycja entries (defensive) ─────────────
+            # Don't create ghost items from entries we don't understand.
+
         # 5. Packaging / Deposits
         opak = paragon.get("opak", {})
         if opak:
             for op_item in opak.get("daneOpak", []):
                 name = op_item.get("nazwa", "Kaucja").strip()
-                cena = float(op_item.get("cena", 0)) / 100.0
+                cena = _parse_polish_float(op_item.get("cena", 0), divisor=100.0)
                 ilosc_raw = op_item.get("ilosc", 1000)
                 qty = float(ilosc_raw) / 1000.0 if ilosc_raw > 10 else float(ilosc_raw)
-                
+
                 items.append({
                     "name": name,
                     "price": cena,
@@ -233,15 +273,15 @@ class EParagonJSONAdapter:
                     "original_price": None,
                     "discount_total": 0.0,
                     "final_price": None,
-                    "is_adjustment": True
+                    "is_adjustment": True,
                 })
-                
+
         return {
             "merchant_name": merchant,
             "date": date_str,
             "total_amount": total_gross,
             "currency": currency,
-            "items": items
+            "items": items,
         }
 
 

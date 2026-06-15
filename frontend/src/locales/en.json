@@ -4,7 +4,7 @@
     "running": "Processing...",
     "ocr_ok": "Text extracted",
     "parsing_ok": "Parsed",
-    "categorization_ok": "Categorized",
+    "categorization_ok": "Verified",
     "needs_review": "Needs review",
     "failed": "Processing error",
     "processing": "Processing...",
@@ -215,6 +215,11 @@
       "items_section": {
         "header": "Items",
         "no_items": "No items detected."
+      },
+      "chart": {
+        "title": "Category Summary",
+        "uncategorized": "Uncategorized",
+        "tooltip_amount": "Total"
       }
     },
     "add_modal": {
@@ -292,6 +297,7 @@
       "toast_error": "Error updating item",
       "discount_badge": "Discount",
       "edit_item": "Edit item",
+      "ai_category_tooltip": "Category assigned by AI - requires verification",
       "validation": {
         "name_required": "Name is required"
       }

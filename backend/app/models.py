@@ -199,6 +199,7 @@ class TransactionLineBase(SQLModel):
     price: float
     quantity: float = Field(default=1.0)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    category_source: Optional[str] = Field(default=None)
     original_price: Optional[float] = Field(default=None)
     discount_total: float = Field(default=0.0)
     final_price: Optional[float] = Field(default=None)

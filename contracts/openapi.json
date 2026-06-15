@@ -271,6 +271,101 @@
             }
           }
         }
+      },
+      "patch": {
+        "summary": "Update Budget",
+        "operationId": "update_budget_api_budgets__budget_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "budget_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Budget Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserBudgetRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/budgets": {
+      "post": {
+        "summary": "Create Budget",
+        "operationId": "create_budget_api_budgets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BudgetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserBudgetRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/transactions/manual": {
@@ -2079,6 +2174,19 @@
         ],
         "title": "BudgetAlertRead"
       },
+      "BudgetCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "BudgetCreate"
+      },
       "BudgetMemberCreate": {
         "properties": {
           "email": {
@@ -2124,6 +2232,19 @@
           "role"
         ],
         "title": "BudgetMemberRead"
+      },
+      "BudgetUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "BudgetUpdate"
       },
       "CategoryBudgetSummaryItem": {
         "properties": {
@@ -2355,6 +2476,7 @@
           },
           "new_password": {
             "type": "string",
+            "minLength": 6,
             "title": "New Password"
           }
         },
@@ -2790,6 +2912,17 @@
             ],
             "title": "Category Id"
           },
+          "category_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Source"
+          },
           "original_price": {
             "anyOf": [
               {
@@ -2943,6 +3076,17 @@
               }
             ],
             "title": "Category Id"
+          },
+          "category_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Source"
           },
           "original_price": {
             "anyOf": [

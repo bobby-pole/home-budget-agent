@@ -529,12 +529,48 @@ def test_merged_qty_with_discount_applies_discount_per_unit():
 # ── Suma regex tolerance ──────────────────────────────────────────────────────
 
 def test_suma_bare_with_pln_suffix():
-    # _SUMA_BARE must tolerate "Suma X PLN" / "Suma X zł" variants from OCR.
     receipt = _parse([
         "2026-04-18",
-        "Chleb", "3.99 3.99 C",
-        "Suma PLN 3,99",
+        "Masło", "4.99 4.99 C",
+        "Suma PLN 4,99",
         "Opakowania zwrotne suma -1,00",
-        "Suma 2,99 PLN",
+        "Suma 3,99 PLN",  # Notice the PLN suffix
     ])
-    assert receipt.total_amount == Decimal("2.99")
+    assert receipt.total_amount == Decimal("3.99")
+
+
+def test_weight_price_line_with_ocr_spaces():
+    """OCR sometimes inserts spaces around commas in weights, e.g. '0 , 340kg'."""
+    receipt = _parse([
+        "2026-04-18",
+        "Jabłka Golden deli .",
+        "0 , 340kg x 4.99 1.7 C",
+        "Suma PLN 1,70",
+    ])
+    assert len(receipt.items) == 1
+    item = receipt.items[0]
+    assert item.name == "Jabłka Golden deli ."
+    assert item.quantity == Decimal("0.340")
+    assert item.price == Decimal("4.99")
+    assert receipt.total_amount == Decimal("1.70")
+
+
+def test_basket_adjustment_positive_deposit():
+    """Basket adjustments like bottle deposits can be positive."""
+    receipt = _parse([
+        "2026-04-18",
+        "Woda", "1.99 1.99 C",
+        "Suma PLN 1,99",
+        "Opakowania zwrotne suma 0,50",
+        "Suma 2,49",
+    ])
+    assert len(receipt.items) == 2
+    item1, item2 = receipt.items
+    assert item1.name == "Woda"
+    assert item1.price == Decimal("1.99")
+    
+    assert item2.name == "Opakowania zwrotne suma"
+    assert item2.price == Decimal("0.50")
+    assert item2.is_adjustment is True
+    
+    assert receipt.total_amount == Decimal("2.49")
