@@ -25,13 +25,6 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column('category_id', sa.Integer(), nullable=True))
         batch_op.create_foreign_key('fk_account_category_id', 'category', ['category_id'], ['id'])
 
-    with op.batch_alter_table('category', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_category_budget_id'))
-        batch_op.drop_constraint(batch_op.f('uq_category_name_budget'), type_='unique')
-
-    with op.batch_alter_table('transactionline', schema=None) as batch_op:
-        batch_op.drop_column('category_source')
-
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.create_foreign_key('fk_user_default_budget_id', 'budget', ['default_budget_id'], ['id'], ondelete='SET NULL')
 
@@ -44,12 +37,7 @@ def downgrade() -> None:
     with op.batch_alter_table('user', schema=None) as batch_op:
         batch_op.drop_constraint('fk_user_default_budget_id', type_='foreignkey')
 
-    with op.batch_alter_table('transactionline', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('category_source', sa.VARCHAR(), nullable=True))
-
-    with op.batch_alter_table('category', schema=None) as batch_op:
-        batch_op.create_unique_constraint(batch_op.f('uq_category_name_budget'), ['name', 'budget_id'])
-        batch_op.create_index(batch_op.f('ix_category_budget_id'), ['budget_id'], unique=False)
+    # Remove the incorrect additions in downgrade
 
     with op.batch_alter_table('account', schema=None) as batch_op:
         batch_op.drop_constraint('fk_account_category_id', type_='foreignkey')
