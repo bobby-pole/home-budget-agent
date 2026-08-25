@@ -123,7 +123,14 @@ export function AccountsTab() {
     if (!formData.name.trim()) return;
 
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: formData });
+      const details: AccountUpdate = {
+        name: formData.name,
+        type: formData.type,
+        currency: formData.currency,
+        is_on_budget: formData.is_on_budget,
+        category_id: formData.category_id,
+      };
+      updateMutation.mutate({ id: editingId, data: details });
     } else {
       createMutation.mutate(formData);
     }
@@ -210,6 +217,7 @@ export function AccountsTab() {
                     step="0.01"
                     value={formData.initial_balance}
                     onChange={(e) => setFormData({...formData, initial_balance: parseFloat(e.target.value) || 0})}
+                    disabled={editingId !== null}
                   />
                 </div>
 

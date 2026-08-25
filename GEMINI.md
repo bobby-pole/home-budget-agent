@@ -196,7 +196,7 @@ docker-compose -f docker-compose.prod.yml up --build -d
 
 ## Architecture
 
-**Dev**: FastAPI in Docker (port 8000) + Vite (port 5173). Vite proxies `/api` → `localhost:8000`.
+**Dev**: FastAPI in Docker (port 8001) + Vite (port 5173). Vite proxies `/api` → `localhost:8001`.
 **Prod**: single container (`Dockerfile.vps`), port 8080.
 
 ### Stack

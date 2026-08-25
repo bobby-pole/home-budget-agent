@@ -371,7 +371,15 @@
     "no_accounts": "No accounts"
   },
   "accounts": {
-    "title": "Accounts"
+    "title": "Accounts",
+    "reconcile_button": "Reconcile",
+    "reconcile_dialog_title": "Reconcile account balance",
+    "reconcile_dialog_description": "Enter the actual account balance. The app will automatically generate an adjustment transaction for the difference.",
+    "real_balance": "Real balance",
+    "reconcile_confirm": "Reconcile",
+    "reconcile_cancel": "Cancel",
+    "toast_reconciled": "Balance reconciled",
+    "toast_reconcile_error": "Error reconciling balance"
   },
   "settings": {
     "page": {

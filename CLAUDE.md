@@ -301,7 +301,7 @@ Invaluable during development, perfect for bug reports (user sends file, we run 
 
 ## Architecture (Implementation Detail)
 
-**Dev**: two services — FastAPI in Docker (port 8000) + Vite dev server (port 5173). Vite proxies `/api` to `localhost:8000`.
+**Dev**: two services — FastAPI in Docker (port 8001) + Vite dev server (port 5173). Vite proxies `/api` to `localhost:8001`.
 
 **Prod**: single container (`Dockerfile.vps`) — FastAPI serves React build as static files on port 8080.
 

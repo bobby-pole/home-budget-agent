@@ -4,9 +4,9 @@
   "packageManager": "pnpm@11.0.9",
   "scripts": {
     "prepare": "husky",
-    "generate:types": "python3 backend/scripts/export_openapi.py && cd frontend && pnpm generate:types",
+    "generate:types": "cd backend && uv run python scripts/export_openapi.py && cd ../frontend && pnpm generate:types",
     "dev:frontend": "cd frontend && pnpm dev",
-    "dev:backend": "cd backend && DATABASE_URL=sqlite:///../data/database.db uv run uvicorn app.main:app --reload --port 8000"
+    "dev:backend": "cd backend && DATABASE_URL=sqlite:///../data/database.db uv run uvicorn app.main:app --reload --port 8001"
   },
   "lint-staged": {
     "frontend/**/*.{ts,tsx}": [

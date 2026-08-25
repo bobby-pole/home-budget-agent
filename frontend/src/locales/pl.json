@@ -371,7 +371,15 @@
     "no_accounts": "Brak kont"
   },
   "accounts": {
-    "title": "Konta"
+    "title": "Konta",
+    "reconcile_button": "Wyrównaj saldo",
+    "reconcile_dialog_title": "Wyrównaj saldo konta",
+    "reconcile_dialog_description": "Podaj faktyczne saldo konta. Aplikacja automatycznie wygeneruje transakcję korygującą różnicę.",
+    "real_balance": "Rzeczywiste saldo",
+    "reconcile_confirm": "Wyrównaj",
+    "reconcile_cancel": "Anuluj",
+    "toast_reconciled": "Saldo wyrównane",
+    "toast_reconcile_error": "Błąd podczas wyrównywania salda"
   },
   "settings": {
     "page": {

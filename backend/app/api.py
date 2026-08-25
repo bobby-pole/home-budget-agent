@@ -15,7 +15,7 @@ import json
 from decimal import Decimal
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header
 from fastapi.responses import FileResponse
-from sqlmodel import Session, select, desc, col, delete
+from sqlmodel import Session, select, desc, col, delete, SQLModel
 from sqlalchemy import extract, func
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
@@ -83,6 +83,44 @@ def seed_default_categories(session: Session, budget_id: int):
         session.add(new_category)
     session.commit()
 
+def seed_default_account(session: Session, budget_id: int):
+    if session.exec(select(Account).where(Account.budget_id == budget_id)).first():
+        return
+    acc = Account(name="Cash", type="checking", currency="PLN", budget_id=budget_id)
+    session.add(acc)
+    session.commit()
+
+
+def ensure_budget_defaults(session: Session, budget_id: int):
+    """Seed each default independently so partially migrated budgets are repaired."""
+    if not session.exec(select(Category).where(Category.budget_id == budget_id)).first():
+        seed_default_categories(session, budget_id)
+    seed_default_account(session, budget_id)
+
+
+def validate_account_category(session: Session, budget_id: int, category_id: Optional[int]):
+    if category_id is None:
+        return
+    category = session.get(Category, category_id)
+    if not category or category.budget_id != budget_id:
+        raise HTTPException(status_code=422, detail="Category does not belong to the current budget")
+
+
+def validate_transaction_accounts(
+    session: Session,
+    budget_id: int,
+    account_id: Optional[int],
+    transfer_id: Optional[int],
+):
+    if account_id is not None and transfer_id == account_id:
+        raise HTTPException(status_code=422, detail="Transfer source and destination must differ")
+    for account_id_to_validate in (account_id, transfer_id):
+        if account_id_to_validate is None:
+            continue
+        account = session.get(Account, account_id_to_validate)
+        if not account or account.budget_id != budget_id or not account.is_active:
+            raise HTTPException(status_code=422, detail="Account does not belong to the current budget or is inactive")
+
 def get_current_budget(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_ops_session),
@@ -93,34 +131,31 @@ def get_current_budget(
             budget_id = int(x_budget_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid X-Budget-Id header")
-            
+
         membership = session.exec(
             select(BudgetMember).where(
                 BudgetMember.user_id == current_user.id,
                 BudgetMember.budget_id == budget_id
             )
         ).first()
-        
+
         if membership:
             budget = session.get(Budget, membership.budget_id)
             if budget:
-                if not session.exec(select(Category).where(Category.budget_id == budget.id)).first():
-                    if budget.id is not None:
-                        seed_default_categories(session, budget.id)
+                if budget.id is not None:
+                    ensure_budget_defaults(session, budget.id)
                 return budget
         raise HTTPException(status_code=403, detail="Access denied to the requested budget")
 
     membership = session.exec(
         select(BudgetMember).where(BudgetMember.user_id == current_user.id)
     ).first()
-    
+
     if membership:
         budget = session.get(Budget, membership.budget_id)
         if budget:
-            # Check if categories exist, if not, seed them (for users migrated before this fix)
-            if not session.exec(select(Category).where(Category.budget_id == budget.id)).first():
-                if budget.id is not None:
-                    seed_default_categories(session, budget.id)
+            if budget.id is not None:
+                ensure_budget_defaults(session, budget.id)
             return budget
 
     # Lazy migration: user existed before multi-tenancy — create a default budget on the fly
@@ -132,7 +167,7 @@ def get_current_budget(
         raise HTTPException(status_code=500, detail="Failed to create budget")
     session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
     session.commit()
-    seed_default_categories(session, new_budget.id)
+    ensure_budget_defaults(session, new_budget.id)
     return new_budget
 
 
@@ -140,7 +175,7 @@ def get_current_budget(
 
 @router.post("/auth/register", response_model=Token)
 def register(
-    user_data: UserCreate, 
+    user_data: UserCreate,
     session: Session = Depends(get_session),
     ops_session: Session = Depends(get_ops_session)
 ):
@@ -163,8 +198,8 @@ def register(
         raise HTTPException(status_code=500, detail="Failed to create budget")
     ops_session.add(BudgetMember(budget_id=new_budget.id, user_id=user.id, role="owner"))
     ops_session.commit()
-    
-    seed_default_categories(ops_session, new_budget.id)
+
+    ensure_budget_defaults(ops_session, new_budget.id)
 
     token = create_access_token({"sub": user.email})
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, default_budget_id=user.default_budget_id, created_at=user.created_at))
@@ -202,7 +237,7 @@ def update_me(
         if not membership:
             raise HTTPException(status_code=403, detail="Not a member of this budget")
         current_user.default_budget_id = data.default_budget_id
-    
+
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
@@ -217,7 +252,7 @@ def change_password(
 ):
     if not verify_password(data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid old password")
-    
+
     current_user.hashed_password = hash_password(data.new_password)
     session.add(current_user)
     session.commit()
@@ -234,7 +269,7 @@ def get_my_budgets(
         .join(Budget, col(BudgetMember.budget_id) == Budget.id)
         .where(BudgetMember.user_id == current_user.id)
     ).all()
-    
+
     return [
         UserBudgetRead(id=b.id or 0, name=b.name, role=m.role)
         for m, b in memberships
@@ -250,7 +285,7 @@ def delete_budget(
     budget = session.get(Budget, budget_id)
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-        
+
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can delete the budget")
 
@@ -258,21 +293,21 @@ def delete_budget(
     membered_budget_count = session.exec(select(func.count(col(BudgetMember.id))).where(BudgetMember.user_id == current_user.id)).one()
     if membered_budget_count <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete your only budget.")
-        
+
     session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
     session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
-    
+
     transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
     for t in transactions:
         session.exec(delete(TransactionLine).where(col(TransactionLine.transaction_id) == t.id))
         session.exec(delete(ReceiptScan).where(col(ReceiptScan.transaction_id) == t.id))
         session.exec(delete(TransactionTagLink).where(col(TransactionTagLink.transaction_id) == t.id))
         session.delete(t)
-        
+
     session.exec(delete(Tag).where(col(Tag.budget_id) == budget_id))
     session.exec(delete(Category).where(col(Category.budget_id) == budget_id))
     session.exec(delete(BudgetMember).where(col(BudgetMember.budget_id) == budget_id))
-    
+
     session.delete(budget)
     session.commit()
     return {"status": "ok"}
@@ -288,15 +323,15 @@ def create_budget(
     session.add(new_budget)
     session.commit()
     session.refresh(new_budget)
-    
+
     if new_budget.id is None:
         raise HTTPException(status_code=500, detail="Failed to create budget")
 
     session.add(BudgetMember(budget_id=new_budget.id, user_id=current_user.id, role="owner"))
     session.commit()
-    
-    seed_default_categories(session, new_budget.id)
-    
+
+    ensure_budget_defaults(session, new_budget.id)
+
     return UserBudgetRead(id=new_budget.id, name=new_budget.name, role="owner")
 
 
@@ -310,7 +345,7 @@ def update_budget(
     budget = session.get(Budget, budget_id)
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-        
+
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can edit the budget")
 
@@ -483,11 +518,11 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
 
     # 1. Gather all categories and their amount in this transaction
     category_amounts = {}
-    
+
     lines = session.exec(
         select(TransactionLine).where(TransactionLine.transaction_id == transaction.id)
     ).all()
-    
+
     if lines:
         for line in lines:
             if line.category_id is not None:
@@ -548,14 +583,14 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
         if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
             category = session.get(Category, cat_id)
             cat_name = category.name if category else "Nieznana"
-            
+
             other_members = session.exec(
                 select(BudgetMember.user_id).where(
                     BudgetMember.budget_id == transaction.budget_id,
                     BudgetMember.user_id != transaction.uploaded_by
                 )
             ).all()
-            
+
             for member_id in other_members:
                 if member_id is None:
                     continue
@@ -581,8 +616,9 @@ def create_manual_transaction(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
+    validate_transaction_accounts(session, current_budget.id, data.account_id, data.transfer_id)
     total = (
         sum(line.price * line.quantity for line in data.lines)
         if data.lines
@@ -641,7 +677,7 @@ def create_manual_transaction(
 
     session.commit()
     session.refresh(transaction)
-    
+
     return transaction
 
 
@@ -775,10 +811,10 @@ async def get_transactions(
         select(Transaction)
         .where(Transaction.budget_id == current_budget.id)
     )
-    
+
     if type:
         statement = statement.where(Transaction.type == type)
-        
+
     statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
     results = session.exec(statement).all()
     return results
@@ -833,7 +869,7 @@ async def mark_alert_read(
     alert = session.get(BudgetAlert, alert_id)
     if not alert or alert.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Alert not found")
-    
+
     alert.is_read = True
     session.add(alert)
     session.commit()
@@ -881,14 +917,14 @@ async def get_transaction_receipt(
     transaction = session.get(Transaction, transaction_id)
     if not transaction or transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=404, detail="Transaction or receipt not found")
-    
+
     scan = session.exec(
         select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
     ).first()
-    
+
     if not scan or not scan.image_path:
         raise HTTPException(status_code=404, detail="Receipt image record not found")
-    
+
     # Robustly resolve path
     full_path = scan.image_path
     if not full_path:
@@ -923,6 +959,8 @@ async def verify_transaction(
     current_budget: Budget = Depends(get_current_budget),
 ):
     """Verify and finalize an AI-scanned transaction. User confirms data and decides whether to keep the image."""
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
     db_transaction = session.get(Transaction, transaction_id)
     if not db_transaction or db_transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -937,6 +975,13 @@ async def verify_transaction(
     update_data = body.transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in update_data.items():
         setattr(db_transaction, key, value)
+
+    validate_transaction_accounts(
+        session,
+        current_budget.id,
+        db_transaction.account_id,
+        db_transaction.transfer_id,
+    )
 
     # Resolve category from account if not provided
     if not db_transaction.category_id and db_transaction.account_id:
@@ -968,9 +1013,9 @@ async def verify_transaction(
     scan.status = ScanStatus.CATEGORIZATION_OK
     session.add(db_transaction)
     session.add(scan)
-    
+
     _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
-    
+
     session.commit()
     session.refresh(db_transaction)
 
@@ -996,7 +1041,7 @@ async def update_transaction(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
     db_transaction = session.get(Transaction, transaction_id)
     if not db_transaction:
@@ -1011,6 +1056,13 @@ async def update_transaction(
     transaction_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in transaction_data.items():
         setattr(db_transaction, key, value)
+
+    validate_transaction_accounts(
+        session,
+        current_budget.id,
+        db_transaction.account_id,
+        db_transaction.transfer_id,
+    )
 
     if transaction_update.tag_ids is not None:
         tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
@@ -1046,7 +1098,7 @@ async def update_line(
         raise HTTPException(status_code=403, detail="Not authorized to modify this line")
 
     line_data = line_update.model_dump(exclude_unset=True)
-    
+
     category_changed = False
     new_category_id = None
     if "category_id" in line_data and line_data["category_id"] != db_line.category_id:
@@ -1113,7 +1165,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
     Refined to strictly separate Contractor, Title, and Amount.
     """
     transactions = []
-    
+
     # 1. Pattern starts with two dates (DD.MM.YYYY)
     # 2. Mid text is captured lazily
     # 3. Amount is strictly matched: optional minus, then 1-3 digits, then optional groups of 3 digits separated by space, then comma, then 2 digits.
@@ -1122,10 +1174,10 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
         r"(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})\s+(.*?)\s+(-?\d{1,3}(?:[\s\xa0]\d{3})*[.,]\d{2})\s+PLN",
         re.DOTALL | re.MULTILINE
     )
-    
+
     for match in pattern.finditer(text):
         date_str, posting_date, mid_text, amount_str = match.groups()
-        
+
         # Clean amount: "1 234,56" -> "1234.56"
         clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
         try:
@@ -1139,10 +1191,10 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
             iso_date = f"{d_parts[2]}-{d_parts[1]}-{d_parts[0]}"
         except IndexError:
             continue
-            
+
         # --- CLEANING MID_TEXT (Separating Contractor and Title) ---
         lines = [line.strip() for line in mid_text.split("\n") if line.strip()]
-        
+
         # Noise filters for technical bank data:
         noise_patterns = [
             r"^\d{8}-\d+.*",           # Technical IDs (10500031-...)
@@ -1153,7 +1205,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
             r"^Szczegóły / nr.*",      # Header leftovers
             r"^(TR\.KART|TR\.BLIK|PRZELEW|P\.BLIK|ST\.ZLEC)$", # Transaction types (Details column)
         ]
-        
+
         clean_lines = []
         for line in lines:
             # Check if line is purely technical noise
@@ -1162,7 +1214,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
                 # Remove static labels if they appear inline
                 line = re.sub(r"Nazwa i adres (odbiorcy|płatnika):\s*", "", line, flags=re.IGNORECASE)
                 clean_lines.append(line.strip())
-        
+
         if not clean_lines:
             merchant = "Przelew/Transakcja"
             title = mid_text.strip().replace("\n", " ")[:100]
@@ -1171,7 +1223,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
             merchant = clean_lines[0]
             # Rest is the Title/Description
             title = " ".join(clean_lines[1:]) if len(clean_lines) > 1 else merchant
-        
+
         transactions.append({
             "date": iso_date,
             "merchant": merchant[:100],
@@ -1179,7 +1231,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
             "amount": amount,
             "currency": "PLN"
         })
-        
+
     return transactions
 
 
@@ -1190,14 +1242,14 @@ def detect_transaction_type(merchant: str, title: str, amount: float, user_names
     merchant_upper = (merchant or "").upper()
     title_upper = (title or "").upper()
     combined_text = f"{merchant_upper} {title_upper}"
-    
+
     # 1. Reguły słów kluczowych dla transferów
     transfer_keywords = [
         "PRZELEW WEWNĘTRZNY", "PRZELEW WŁASNY", "PRZELEW NA TELEFON",
-        "PRZELEW NA KONTO", "ZASILENIE", "WPŁATA WŁASNA", "SPLIT", 
+        "PRZELEW NA KONTO", "ZASILENIE", "WPŁATA WŁASNA", "SPLIT",
         "ROZLICZENIE", "PRZELEW WEW", "PRZELEW WŁASNY"
     ]
-    
+
     # Dla BLIKa sprawdzamy, czy to nie jest płatność w sklepie
     if "PŁATNOŚĆ BLIK" not in combined_text and "ZAKUP" not in combined_text:
         if "BLIK" in combined_text and ("PRZELEW" in combined_text or "TELEFON" in combined_text):
@@ -1206,12 +1258,12 @@ def detect_transaction_type(merchant: str, title: str, amount: float, user_names
     for keyword in transfer_keywords:
         if keyword in combined_text:
             return "transfer"
-            
+
     # 2. Sprawdzanie obecności imienia i nazwiska z profilu
     for name in user_names:
         if name and name in combined_text:
             return "transfer"
-            
+
     # Domyślny fallback: jeśli nie jest to ewidentny transfer, to wydatek lub przychód
     return "expense" if amount < 0 else "income"
 
@@ -1225,10 +1277,10 @@ async def import_transactions(
 ):
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-        
+
     content = await file.read()
     filename = file.filename or ""
-    
+
     # Extract potential full name from user's email to detect personal transfers
     user_names = []
     local_part = current_user.email.split("@")[0]
@@ -1238,9 +1290,9 @@ async def import_transactions(
     if len(name_parts) >= 2:
         user_names.append(f"{name_parts[0]} {name_parts[1]}")
         user_names.append(f"{name_parts[1]} {name_parts[0]}")
-    
+
     rows_to_process = []
-    
+
     if filename.lower().endswith(".pdf"):
         # --- PDF Functional Parsing ---
         try:
@@ -1248,21 +1300,21 @@ async def import_transactions(
             full_text = ""
             for page in reader.pages:
                 full_text += page.extract_text() + "\n"
-            
+
             # Use regex-based parser (no AI here)
             extracted_rows = parse_ing_pdf_text(full_text)
-            
+
             for row in extracted_rows:
                 date_str = row["date"]
                 merchant = row["merchant"]
                 title = row["title"]
                 amount = row["amount"]
                 currency = row["currency"]
-                
+
                 # Unique hash for deduplication
                 raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
                 row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
-                
+
                 rows_to_process.append({
                     "date_str": date_str,
                     "amount": amount,
@@ -1274,7 +1326,7 @@ async def import_transactions(
         except Exception as e:
             print(f"❌ PDF Parse Error: {e}")
             raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
-            
+
     else:
         # --- CSV Parsing logic (ING fallback) ---
         text_content = ""
@@ -1284,19 +1336,19 @@ async def import_transactions(
                 break
             except UnicodeDecodeError:
                 continue
-                
+
         if not text_content:
             raise HTTPException(status_code=400, detail="Could not decode CSV file. Use UTF-8 or Windows-1250.")
-            
+
         f = io.StringIO(text_content)
         try:
             dialect = csv.Sniffer().sniff(text_content[:2000]) if len(text_content) > 10 else "excel"
         except Exception:
             dialect = "excel"
-            
+
         reader = csv.DictReader(f, dialect=dialect)
         headers = reader.fieldnames or []
-        
+
         ing_keys = {
             "date": ["Data transakcji", "Transaction date", "Data"],
             "merchant": ["Dane kontrahenta", "Contractor details", "Kontrahent"],
@@ -1304,7 +1356,7 @@ async def import_transactions(
             "amount": ["Kwota transakcji (waluta)", "Transaction amount", "Kwota"],
             "currency": ["Waluta", "Currency"]
         }
-        
+
         def find_key(headers, targets):
             for h in headers:
                 for t in targets:
@@ -1313,7 +1365,7 @@ async def import_transactions(
             return None
 
         mapped_keys = {k: find_key(headers, v) for k, v in ing_keys.items()}
-        
+
         if not mapped_keys["date"] or not mapped_keys["amount"]:
              raise HTTPException(status_code=400, detail=f"Required columns not found. Headers: {headers}")
 
@@ -1324,16 +1376,16 @@ async def import_transactions(
                 title = row.get(mapped_keys["title"], "")
                 amount_str = row.get(mapped_keys["amount"], "0")
                 currency = row.get(mapped_keys["currency"], "PLN")
-                
+
                 if not date_str or not amount_str:
                     continue
-                    
+
                 clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
                 amount = float(clean_amount)
-                
+
                 raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
                 row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
-                
+
                 rows_to_process.append({
                     "date_str": date_str,
                     "amount": amount,
@@ -1346,36 +1398,36 @@ async def import_transactions(
                 continue
 
     # --- Common processing (Deduplication, AI Categorization) ---
-    
+
     if not rows_to_process:
         return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
 
     hashes_to_check = [r["hash"] for r in rows_to_process]
-    
+
     existing_hashes = set(session.exec(
         select(Transaction.import_hash).where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.import_hash).in_(hashes_to_check)
         )
     ).all())
-    
+
     final_rows = [r for r in rows_to_process if r["hash"] not in existing_hashes]
     skipped_count = len(rows_to_process) - len(final_rows)
-    
+
     if not final_rows:
         return {"created": 0, "skipped": skipped_count, "failed": 0, "summary": f"All {len(rows_to_process)} transactions already imported."}
 
     # Prepare for AI Categorization (Batching with Local Cache)
     is_pdf = filename.lower().endswith(".pdf")
     unique_descriptions = list(set([f"{r['merchant']} {r['title']}".strip() for r in final_rows]))
-    
+
     db_categories = session.exec(select(Category).where((Category.budget_id == current_budget.id) | (Category.is_system))).all()
     cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
     cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
     id_to_cat_name = {c.id: c.name for c in db_categories}
-    
+
     ai_mapping = {}
-    
+
     if not is_pdf:
         # --- LOCAL CACHE: Check history for these descriptions ---
         # Fetch recent transactions with categories to learn from them
@@ -1384,19 +1436,19 @@ async def import_transactions(
             Transaction.category_id is not None
         ).order_by(desc(Transaction.date)).limit(500)
         history = session.exec(history_stmt).all()
-        
+
         # Map: "description" -> "category_name"
         local_mapping = {h[0].lower(): id_to_cat_name.get(h[1]) for h in history if h[1] in id_to_cat_name}
-        
+
         descriptions_to_query = []
-        
+
         for desc_text in unique_descriptions:
             cached_cat = local_mapping.get(desc_text.lower())
             if cached_cat:
                 ai_mapping[desc_text] = cached_cat
             else:
                 descriptions_to_query.append(desc_text)
-                
+
         # AI Batching ONLY for unknown descriptions
         if descriptions_to_query:
             print(f"🧠 Asking AI for {len(descriptions_to_query)} new descriptions...")
@@ -1407,7 +1459,7 @@ async def import_transactions(
             print("⚡ All descriptions found in local cache. Skipping AI.")
     else:
         print("📄 PDF import detected. Skipping auto-categorization as requested.")
-    
+
     # --- PRE-FETCH MANUAL CANDIDATES for Deduplication (Optimized) ---
     parsed_dates = []
     for r in final_rows:
@@ -1418,12 +1470,12 @@ async def import_transactions(
                 parsed_dates.append(datetime.strptime(r["date_str"], "%d.%m.%Y"))
         except ValueError:
             pass
-            
+
     manual_candidates = []
     if parsed_dates:
         min_date = min(parsed_dates) - timedelta(days=2)
         max_date = max(parsed_dates) + timedelta(days=2)
-        
+
         candidates_stmt = select(Transaction).where(
             Transaction.budget_id == current_budget.id,
             Transaction.is_manual,
@@ -1441,14 +1493,14 @@ async def import_transactions(
         else:
             cat_name = ai_mapping.get(desc_key, "Other")
             cat_id = cat_name_to_id.get(cat_name.lower())
-        
+
         t_type = detect_transaction_type(
             merchant=row_data["merchant"],
             title=row_data["title"],
             amount=row_data["amount"],
             user_names=user_names
         )
-        
+
         # Use pre-parsed date if available
         t_date = parsed_dates[i] if i < len(parsed_dates) else datetime.now(timezone.utc)
         t_amount = abs(row_data["amount"])
@@ -1458,21 +1510,21 @@ async def import_transactions(
         existing_duplicate = None
         d_start = t_date - timedelta(days=2)
         d_end = t_date + timedelta(days=2)
-        
+
         for cand in manual_candidates:
             # Match if same amount and within 2 days window
             if cand.total_amount == t_amount and cand.date and d_start <= cand.date <= d_end:
                 existing_duplicate = cand
                 manual_candidates.remove(cand) # Don't match the same receipt twice
                 break
-        
+
         if existing_duplicate:
             # Auto-Merge: Powiązanie paragonu z wpisem z banku
             existing_duplicate.import_hash = row_data["hash"]
             # Aktualizacja typu, o ile paragon był np. "expense", a skrypt wykrył "transfer"
             if existing_duplicate.type == "expense" and t_type == "transfer":
                 existing_duplicate.type = "transfer"
-            
+
             # Wzbogacenie notatki o dane z banku, żeby nie stracić oryginalnego tytułu przelewu
             bank_note = f"[Bank: {row_data['title']}]"
             if existing_duplicate.note:
@@ -1480,7 +1532,7 @@ async def import_transactions(
                     existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
             else:
                 existing_duplicate.note = bank_note
-                
+
             session.add(existing_duplicate)
             created_count += 1
             print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
@@ -1500,12 +1552,12 @@ async def import_transactions(
             )
             session.add(transaction)
             created_count += 1
-        
+
     session.commit()
     return {
-        "created": created_count, 
-        "skipped": skipped_count, 
-        "failed": 0, 
+        "created": created_count,
+        "skipped": skipped_count,
+        "failed": 0,
         "summary": {
             "code": "CSV_IMPORT_COMPLETE",
             "imported": created_count,
@@ -1519,7 +1571,7 @@ async def import_transactions(
 
 @router.get("/budget/{year}/{month}/limits", response_model=List[EnvelopeAllocation])
 def get_limits(
-    year: int, 
+    year: int,
     month: int,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
@@ -1533,9 +1585,9 @@ def get_limits(
 
 @router.put("/budget/{year}/{month}/limits/{category_id}", response_model=EnvelopeAllocation)
 def set_budget_limit(
-    year: int, 
-    month: int, 
-    category_id: int, 
+    year: int,
+    month: int,
+    category_id: int,
     limit_data: EnvelopeAllocationUpdate,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
@@ -1568,7 +1620,7 @@ def set_budget_limit(
             month=month,
             amount=limit_data.amount
         )
-    
+
     session.add(allocation)
     session.commit()
     session.refresh(allocation)
@@ -1576,8 +1628,8 @@ def set_budget_limit(
 
 @router.delete("/budget/{year}/{month}/limits/{category_id}", status_code=204)
 def delete_budget_limit(
-    year: int, 
-    month: int, 
+    year: int,
+    month: int,
     category_id: int,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
@@ -1643,7 +1695,7 @@ def get_summary(
         col(Transaction.category_id).is_not(None),
         ~col(Transaction.id).in_(select(TransactionLine.transaction_id).where(col(TransactionLine.transaction_id).is_not(None)))
     ).group_by(col(Transaction.category_id))
-    
+
     spent_no_lines = dict(session.exec(no_lines_stmt).all())
 
     lines_stmt = select(
@@ -1656,14 +1708,14 @@ def get_summary(
         extract('month', col(Transaction.date)) == month,
         col(TransactionLine.category_id).is_not(None)
     ).group_by(col(TransactionLine.category_id))
-    
+
     spent_with_lines = dict(session.exec(lines_stmt).all())
 
     spent_by_category = {}
     for cat_id, amt in spent_no_lines.items():
         if cat_id is not None:
             spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
-            
+
     for cat_id, amt in spent_with_lines.items():
         if cat_id is not None:
             spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
@@ -1675,15 +1727,15 @@ def get_summary(
     all_categories = session.exec(
         select(Category).where(Category.budget_id == current_budget.id)
     ).all()
-    
+
     allocations_by_cat = {a.category_id: Decimal(str(a.amount)) for a in allocations}
-    
+
     for cat in all_categories:
         if cat.id is None:
             continue
         planned = allocations_by_cat.get(cat.id, Decimal("0.00"))
         spent = spent_by_category.get(cat.id, Decimal("0.00"))
-        
+
         # Only include if there is planned or spent amount
         if planned > Decimal("0.00") or spent > Decimal("0.00"):
             categories_summary.append(CategoryBudgetSummaryItem(
@@ -1697,12 +1749,12 @@ def get_summary(
     net_cash_flow = total_income - total_spent
 
     return MonthlyBudgetSummary(
-        year=year, 
-        month=month, 
-        total_planned=total_planned, 
-        total_spent=total_spent, 
-        net_cash_flow=net_cash_flow, 
-        total_income=total_income, 
+        year=year,
+        month=month,
+        total_planned=total_planned,
+        total_spent=total_spent,
+        net_cash_flow=net_cash_flow,
+        total_income=total_income,
         categories=categories_summary
     )
 
@@ -1715,8 +1767,8 @@ async def invite_member(
     current_budget: Budget = Depends(get_current_budget),
 ):
     # Verify if current user is owner/editor of the budget
-    # We need to query from identity_engine to find the user by email, 
-    # but the membership is in operations_engine. 
+    # We need to query from identity_engine to find the user by email,
+    # but the membership is in operations_engine.
     # Actually User is in identity_engine, and BudgetMember is in operations_engine.
     # Our get_ops_session and get_session point to the same DB for now.
 
@@ -1724,7 +1776,7 @@ async def invite_member(
     from .database import identity_engine
     with Session(identity_engine) as auth_session:
         target_user = auth_session.exec(select(User).where(User.email == member_data.email)).first()
-    
+
     if not target_user:
         raise HTTPException(status_code=404, detail=f"User with email {member_data.email} found")
 
@@ -1735,7 +1787,7 @@ async def invite_member(
             BudgetMember.user_id == current_user.id
         )
     ).first()
-    
+
     if not membership or membership.role not in ["owner", "editor"]:
         raise HTTPException(status_code=403, detail="Only owners or editors can invite members")
 
@@ -1746,7 +1798,7 @@ async def invite_member(
             BudgetMember.user_id == target_user.id
         )
     ).first()
-    
+
     if existing:
         raise HTTPException(status_code=400, detail="User is already a member of this budget")
 
@@ -1921,46 +1973,11 @@ async def get_accounts(
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    statement = select(Account).where(Account.budget_id == current_budget.id)
+    statement = select(Account).where(
+        Account.budget_id == current_budget.id,
+        Account.is_active,
+    )
     accounts = session.exec(statement).all()
-
-    # Calculate balances dynamically
-    stmt_out = select(
-        Transaction.account_id,
-        Transaction.type,
-        func.sum(Transaction.total_amount).label('total')
-    ).where(
-        Transaction.budget_id == current_budget.id,
-        col(Transaction.account_id).is_not(None)
-    ).group_by(col(Transaction.account_id), col(Transaction.type))
-    res_out = session.exec(stmt_out).all()
-
-    stmt_in = select(
-        Transaction.transfer_id,
-        func.sum(Transaction.total_amount).label('total')
-    ).where(
-        Transaction.budget_id == current_budget.id,
-        Transaction.type == "transfer",
-        col(Transaction.transfer_id).is_not(None)
-    ).group_by(col(Transaction.transfer_id))
-    res_in = session.exec(stmt_in).all()
-
-    balances = {acc.id: acc.initial_balance or 0.0 for acc in accounts}
-
-    for acc_id, tx_type, total in res_out:
-        if acc_id in balances and total:
-            if tx_type == "income":
-                balances[acc_id] += total
-            elif tx_type in ("expense", "transfer"):
-                balances[acc_id] -= total
-
-    for acc_id, total in res_in:
-        if acc_id in balances and total:
-            balances[acc_id] += total
-
-    for acc in accounts:
-        acc.current_balance = round(balances[acc.id], 2)
-
     return accounts
 
 @router.post("/accounts", response_model=AccountRead)
@@ -1968,11 +1985,47 @@ async def create_account(
     account_data: AccountCreate,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
 ):
-    account = Account(**account_data.model_dump(), budget_id=current_budget.id)
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    validate_account_category(session, current_budget.id, account_data.category_id)
+    init_balance = account_data.initial_balance
+    account = Account(**account_data.model_dump(exclude={"initial_balance"}), budget_id=current_budget.id)
+    account.initial_balance = 0.0 # Prevent double counting
+    account.current_balance = init_balance
     session.add(account)
     session.commit()
     session.refresh(account)
+
+    if init_balance != 0:
+        tx_type = "income" if init_balance > 0 else "expense"
+        tx = Transaction(
+            merchant_name="Saldo początkowe",
+            total_amount=abs(init_balance),
+            currency=account.currency,
+            date=datetime.now(timezone.utc),
+            is_manual=True,
+            type=tx_type,
+            uploaded_by=current_user.id,
+            budget_id=current_budget.id,
+            account_id=account.id,
+            note="Auto-generated initial balance"
+        )
+        session.add(tx)
+        session.commit()
+        session.refresh(tx)
+        line = TransactionLine(
+            name="Saldo początkowe",
+            price=abs(init_balance),
+            quantity=1.0,
+            transaction_id=tx.id,
+            is_adjustment=True
+        )
+        session.add(line)
+        session.commit()
+        session.refresh(account)
+
     return account
 
 @router.patch("/accounts/{account_id}", response_model=AccountRead)
@@ -1982,6 +2035,8 @@ async def update_account(
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
 ):
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
     account = session.get(Account, account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -1989,6 +2044,7 @@ async def update_account(
         raise HTTPException(status_code=403, detail="Not authorized to modify this account")
 
     update_data = account_update.model_dump(exclude_unset=True)
+    validate_account_category(session, current_budget.id, update_data.get("category_id", account.category_id))
     for key, value in update_data.items():
         setattr(account, key, value)
 
@@ -2009,11 +2065,53 @@ async def delete_account(
     if account.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this account")
 
-    # Zabezpieczenie przed usunięciem konta z transakcjami
-    statement = select(Transaction).where((Transaction.account_id == account_id) | (Transaction.transfer_id == account_id))
-    if session.exec(statement).first():
-        raise HTTPException(status_code=400, detail="Cannot delete account with existing transactions")
-
-    session.delete(account)
+    account.is_active = False
+    session.add(account)
     session.commit()
     return None
+
+class AccountReconcileRequest(SQLModel):
+    real_balance: float
+
+@router.post("/accounts/{account_id}/reconcile", response_model=AccountRead)
+async def reconcile_account(
+    account_id: int,
+    data: AccountReconcileRequest,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    account = session.get(Account, account_id)
+    if not account or account.budget_id != current_budget.id:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    diff = data.real_balance - account.current_balance
+    if abs(diff) > 0.001:
+        tx_type = "income" if diff > 0 else "expense"
+        tx = Transaction(
+            merchant_name="Rekonsyliacja",
+            total_amount=abs(diff),
+            currency=account.currency,
+            date=datetime.now(timezone.utc),
+            is_manual=True,
+            type=tx_type,
+            uploaded_by=current_user.id,
+            budget_id=current_budget.id,
+            account_id=account.id,
+            note="System adjustment"
+        )
+        session.add(tx)
+        session.commit()
+        session.refresh(tx)
+        line = TransactionLine(
+            name="Wyrównanie salda",
+            price=abs(diff),
+            quantity=1.0,
+            transaction_id=tx.id,
+            is_adjustment=True
+        )
+        session.add(line)
+        session.commit()
+        session.refresh(account)
+
+    return account

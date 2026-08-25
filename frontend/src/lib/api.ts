@@ -284,4 +284,9 @@ export const api = {
     const response = await apiClient.delete(`/accounts/${id}`);
     return response.data;
   },
+
+  reconcileAccount: async (id: number, real_balance: number) => {
+    const response = await apiClient.post<AccountRead>(`/accounts/${id}/reconcile`, { real_balance });
+    return response.data;
+  },
 };
