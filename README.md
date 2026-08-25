@@ -69,3 +69,8 @@ This project supports a "Lean Build" workflow to minimize memory usage on server
 - `/data` - Persistent storage for the SQLite database.
 - `Dockerfile.vps` - Optimized production image for low-RAM environments.
 
+## License
+
+Smart Budget AI is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+
+You may clone, fork, modify, and run the project locally or self-host it as your own noncommercial personal budget agent. You may not use it to create, operate, distribute, support, or sell a competing commercial product or service, or otherwise use it commercially, without a separate written license from the copyright holder.

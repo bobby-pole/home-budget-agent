@@ -96,7 +96,9 @@ jobs:
               fi
               if [ "$i" -eq 12 ]; then
                 echo "Health check failed after 60s"
-                docker logs home-budget-agent-prod --tail 30
+                # Do not print application logs: they may contain user data.
+                docker inspect --format 'container={{.Name}} state={{.State.Status}} exit_code={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' home-budget-agent-prod || \
+                  echo "Container status is unavailable"
                 exit 1
               fi
               echo "Waiting for app... ($i/12)"

@@ -3,7 +3,7 @@ from unittest.mock import patch, mock_open
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from datetime import datetime, timezone
-from app.models import Transaction, TransactionLine, ReceiptScan, ScanStatus, User, Budget, BudgetMember, Category, Tag
+from app.models import Account, Transaction, TransactionLine, ReceiptScan, ScanStatus, User, Budget, BudgetMember, Category, Tag
 
 
 def test_health_check(client: TestClient):
@@ -213,6 +213,12 @@ def test_register_creates_default_budget(client: TestClient, session: Session):
     assert len(categories) == 15
     assert any(c.name == "Food" for c in categories)
     assert any(c.name == "Other" for c in categories)
+
+    accounts = session.exec(select(Account).where(Account.budget_id == budget.id)).all()
+    assert len(accounts) == 1
+    assert accounts[0].name == "Cash"
+    assert accounts[0].currency == "PLN"
+    assert accounts[0].type == "checking"
 
 # --- DEPENDENCY: get_current_budget ---
 
@@ -746,4 +752,3 @@ def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: 
     alert_details = json.loads(alerts[0].message)
     assert alert_details["type"] == "zeroed_envelope"
     assert alert_details["remaining"] == -10.0
-

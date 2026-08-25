@@ -2,7 +2,9 @@
 from enum import Enum
 from typing import List, Optional
 from datetime import datetime, timezone
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON
+import math
+from pydantic import ConfigDict, field_validator
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text
 from sqlmodel import Field, Relationship, SQLModel
 
 
@@ -84,15 +86,56 @@ class BudgetMember(SQLModel, table=True):
 
 # ─── Account ──────────────────────────────────────────────────────────────────
 
+ACCOUNT_TYPES = {
+    "checking",
+    "savings",
+    "cash",
+    "credit",
+    "tracking_asset",
+    "tracking_liability",
+}
+
+
 class AccountBase(SQLModel):
-    name: str
+    name: str = Field(min_length=1, max_length=120)
     type: str = Field(default="checking")  # checking, savings, cash, credit, tracking_asset, tracking_liability
-    currency: str = Field(default="PLN")
+    currency: str = Field(default="PLN", min_length=3, max_length=3)
     initial_balance: float = Field(default=0.0)
     current_balance: float = Field(default=0.0)
     is_on_budget: bool = Field(default=True)
     is_active: bool = Field(default=True)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Account name cannot be blank")
+        return value
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value not in ACCOUNT_TYPES:
+            raise ValueError(f"Unsupported account type: {value}")
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: str) -> str:
+        value = value.strip().upper()
+        if len(value) != 3 or not value.isalpha():
+            raise ValueError("Currency must be a three-letter ISO code")
+        return value
+
+    @field_validator("initial_balance", "current_balance")
+    @classmethod
+    def validate_balance(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("Balance must be finite")
+        return value
 
 
 class Account(AccountBase, table=True):
@@ -299,17 +342,53 @@ class AccountRead(AccountBase):
     budget_id: Optional[int] = None
 
 class AccountCreate(AccountBase):
-    pass
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("current_balance")
+    @classmethod
+    def validate_client_current_balance(cls, value: float) -> float:
+        if value != 0:
+            raise ValueError("current_balance is calculated from transactions")
+        return value
 
 class AccountUpdate(SQLModel):
-    name: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     type: Optional[str] = None
-    currency: Optional[str] = None
-    initial_balance: Optional[float] = None
-    current_balance: Optional[float] = None
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=3)
     is_on_budget: Optional[bool] = None
-    is_active: Optional[bool] = None
     category_id: Optional[int] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Account name cannot be blank")
+        return value
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip().lower()
+        if value not in ACCOUNT_TYPES:
+            raise ValueError(f"Unsupported account type: {value}")
+        return value
+
+    @field_validator("currency")
+    @classmethod
+    def validate_currency(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip().upper()
+        if len(value) != 3 or not value.isalpha():
+            raise ValueError("Currency must be a three-letter ISO code")
+        return value
 
 
 class EnvelopeAllocationRead(SQLModel):
@@ -529,3 +608,73 @@ class BudgetAlertRead(SQLModel):
 class AppStatusRead(SQLModel):
     inbox_items: List[TransactionRead]
     unread_alerts: List[BudgetAlertRead]
+
+# ─── SQLAlchemy Events ────────────────────────────────────────────────────────
+
+def _transaction_account_ids(transaction: Transaction) -> set[int]:
+    return {
+        account_id
+        for account_id in (transaction.account_id, transaction.transfer_id)
+        if account_id is not None
+    }
+
+
+@event.listens_for(Transaction, "before_update")
+def remember_previous_transaction_accounts(mapper, connection, target):
+    """Keep both sides of an account reassignment available after the flush."""
+    previous_values = connection.execute(
+        text('SELECT account_id, transfer_id FROM "transaction" WHERE id = :id'),
+        {"id": target.id},
+    ).one_or_none()
+    previous_ids = {
+        account_id
+        for account_id in (previous_values or ())
+        if account_id is not None
+    }
+    target.__dict__["_balance_recalc_previous_account_ids"] = previous_ids
+
+
+@event.listens_for(Transaction, "after_insert")
+@event.listens_for(Transaction, "after_update")
+@event.listens_for(Transaction, "after_delete")
+def transaction_changed_update_balance(mapper, connection, target):
+    account_ids = _transaction_account_ids(target)
+    account_ids.update(target.__dict__.pop("_balance_recalc_previous_account_ids", set()))
+    if not account_ids:
+        return
+
+    for acc_id in account_ids:
+        query_out = text("""
+            SELECT type, SUM(total_amount)
+            FROM "transaction"
+            WHERE account_id = :acc_id
+            GROUP BY type
+        """)
+        res_out = connection.execute(query_out, {"acc_id": acc_id}).fetchall()
+
+        query_in = text("""
+            SELECT SUM(total_amount)
+            FROM "transaction"
+            WHERE transfer_id = :acc_id AND type = 'transfer'
+        """)
+        res_in = connection.execute(query_in, {"acc_id": acc_id}).scalar() or 0.0
+
+        query_init = text("""
+            SELECT initial_balance FROM account WHERE id = :acc_id
+        """)
+        init_bal = connection.execute(query_init, {"acc_id": acc_id}).scalar() or 0.0
+
+        balance = init_bal
+        for tx_type, total in res_out:
+            if total:
+                if tx_type == "income":
+                    balance += total
+                elif tx_type in ("expense", "transfer"):
+                    balance -= total
+
+        balance += res_in
+
+        connection.execute(
+            text("UPDATE account SET current_balance = :bal WHERE id = :acc_id"),
+            {"bal": round(balance, 2), "acc_id": acc_id}
+        )
