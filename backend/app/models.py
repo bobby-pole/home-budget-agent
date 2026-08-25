@@ -3,9 +3,10 @@ from enum import Enum
 from typing import List, Optional
 from datetime import datetime, timezone
 import math
-from pydantic import ConfigDict, field_validator
+from pydantic import field_validator
 from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text
 from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel._compat import SQLModelConfig
 
 
 class ScanStatus(str, Enum):
@@ -342,7 +343,7 @@ class AccountRead(AccountBase):
     budget_id: Optional[int] = None
 
 class AccountCreate(AccountBase):
-    model_config = ConfigDict(extra="forbid")
+    model_config = SQLModelConfig(extra="forbid")
 
     @field_validator("current_balance")
     @classmethod
@@ -352,7 +353,7 @@ class AccountCreate(AccountBase):
         return value
 
 class AccountUpdate(SQLModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = SQLModelConfig(extra="forbid")
 
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     type: Optional[str] = None
