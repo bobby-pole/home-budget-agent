@@ -5,6 +5,7 @@ describe("transactionSchema (Zod)", () => {
   const validBase = {
     merchant_name: "Biedronka",
     currency: "PLN",
+    account_id: "1",
   };
 
   describe("merchant_name", () => {
@@ -15,6 +16,25 @@ describe("transactionSchema (Zod)", () => {
 
     it("rejects empty name", () => {
       const result = transactionSchema.safeParse({ ...validBase, merchant_name: "" });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("account_id", () => {
+    it("accepts a non-empty account_id", () => {
+      const result = transactionSchema.safeParse(validBase);
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects missing account_id", () => {
+      const withoutAccount: Partial<typeof validBase> = { ...validBase };
+      delete withoutAccount.account_id;
+      const result = transactionSchema.safeParse(withoutAccount);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects empty string account_id", () => {
+      const result = transactionSchema.safeParse({ ...validBase, account_id: "" });
       expect(result.success).toBe(false);
     });
   });

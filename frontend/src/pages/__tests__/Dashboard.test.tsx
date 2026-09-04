@@ -19,6 +19,10 @@ vi.mock("@/components/dashboard/RecentTransactionsList", () => ({
   RecentTransactionsList: () => <div data-testid="mock-recent-transactions">RecentTransactionsList</div>,
 }));
 
+vi.mock("@/components/dashboard/AccountsWidget", () => ({
+  AccountsWidget: () => <div data-testid="mock-accounts-widget">AccountsWidget</div>,
+}));
+
 vi.mock("@/components/dashboard/AddTransactionModal", () => ({
   AddTransactionModal: ({ open }: { open: boolean }) =>
     open ? <div data-testid="mock-add-transaction-modal">AddTransactionModal</div> : null,
@@ -37,6 +41,7 @@ vi.mock("@/lib/api", () => ({
     getTransactions: () => mockGetTransactions(),
     getBudgetSummary: () => mockGetBudgetSummary(),
     getCategories: vi.fn().mockResolvedValue([]),
+    getAccounts: vi.fn().mockResolvedValue([]),
     scanTransaction: vi.fn(),
   },
 }));
@@ -75,6 +80,7 @@ describe("Dashboard", () => {
       expect(screen.getByTestId("mock-pie-chart")).toBeInTheDocument();
       expect(screen.getByTestId("mock-top-envelopes")).toBeInTheDocument();
       expect(screen.getByTestId("mock-recent-transactions")).toBeInTheDocument();
+      expect(screen.getByTestId("mock-accounts-widget")).toBeInTheDocument();
     });
   });
 

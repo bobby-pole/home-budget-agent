@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Receipt, Upload, Loader2, FileText, Plus } from "lucide-react";
+import { Receipt, Upload, Loader2, FileText, Plus, Wallet, X } from "lucide-react";
 import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { toast } from "sonner";
 import { useRef } from "react";
@@ -16,16 +17,30 @@ export function TransactionsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
   const { setQuickEntryOpen, renderModals } = useTransactionActions();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const accountIdParam = searchParams.get("accountId");
+  const selectedAccountId = accountIdParam ? parseInt(accountIdParam) : null;
 
   const { data: transactions = [], isLoading, error } = useQuery({
     queryKey: ["transactions"],
     queryFn: api.getTransactions,
   });
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
+  });
+
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
     queryFn: api.getCategories,
   });
+
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const filteredTransactions = selectedAccountId
+    ? transactions.filter((t) => t.account_id === selectedAccountId)
+    : transactions;
 
   const importMutation = useMutation({
     mutationFn: api.importTransactions,
@@ -107,9 +122,34 @@ export function TransactionsPage() {
         </div>
       </div>
 
+      {selectedAccountId && selectedAccount && (
+        <div className="flex items-center justify-between p-3 bg-primary/10 rounded-xl text-primary text-sm font-medium border border-primary/20">
+          <div className="flex items-center gap-2">
+            <Wallet className="size-4" />
+            <span>
+              {t("dashboard.recent_transactions.filter_active_prefix")}{" "}
+              <strong>{selectedAccount.name}</strong>
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const next = new URLSearchParams(searchParams);
+              next.delete("accountId");
+              setSearchParams(next);
+            }}
+            className="h-7 px-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5 mr-1" />
+            {t("dashboard.recent_transactions.clear_filter")}
+          </Button>
+        </div>
+      )}
+
       <div className="grid gap-6">
         <TransactionsTable
-          transactions={transactions}
+          transactions={filteredTransactions}
           categories={categories}
           isLoading={isLoading}
           error={error}

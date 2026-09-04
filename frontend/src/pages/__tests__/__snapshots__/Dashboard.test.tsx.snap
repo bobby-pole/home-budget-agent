@@ -62,23 +62,40 @@ exports[`Dashboard > snapshot — loaded state 1`] = `
       BudgetSummaryCard
     </div>
     <div
-      class="grid grid-cols-1 lg:grid-cols-2 gap-8"
+      class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"
     >
       <div
-        data-testid="mock-pie-chart"
+        class="lg:col-span-2 space-y-8"
       >
-        SpendingPieChart
+        <div
+          class="grid grid-cols-1 md:grid-cols-2 gap-8"
+        >
+          <div
+            data-testid="mock-pie-chart"
+          >
+            SpendingPieChart
+          </div>
+          <div
+            data-testid="mock-top-envelopes"
+          >
+            TopEnvelopesCard
+          </div>
+        </div>
+        <div
+          data-testid="mock-recent-transactions"
+        >
+          RecentTransactionsList
+        </div>
       </div>
       <div
-        data-testid="mock-top-envelopes"
+        class="lg:col-span-1 space-y-8"
       >
-        TopEnvelopesCard
+        <div
+          data-testid="mock-accounts-widget"
+        >
+          AccountsWidget
+        </div>
       </div>
-    </div>
-    <div
-      data-testid="mock-recent-transactions"
-    >
-      RecentTransactionsList
     </div>
   </div>
 </div>
