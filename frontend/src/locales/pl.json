@@ -249,7 +249,10 @@
         "required": "Wymagane",
         "positive": "Musi być większe od 0",
         "no_items_amount": "Wymagane gdy brak pozycji",
-        "account_required": "Wybór konta jest wymagany"
+        "account_required": "Wybór konta jest wymagany",
+        "transfer_destination_required": "Wybór konta docelowego jest wymagany dla transferu",
+        "transfer_same_account": "Konto źródłowe i docelowe muszą być różne",
+        "transfer_tracking_category_required": "Kategoria jest wymagana przy transferze na konto śledzone"
       }
     },
     "header_form": {
@@ -258,6 +261,8 @@
       "field_amount": "Kwota",
       "field_currency": "Waluta",
       "field_type": "Typ",
+      "field_account": "Z konta",
+      "field_transfer": "Na konto",
       "field_category": "Kategoria",
       "field_tags": "Tagi",
       "field_note": "Notatka",

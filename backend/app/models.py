@@ -478,6 +478,16 @@ class ManualTransactionCreate(SQLModel):
     transfer_id: Optional[int] = None
 
 
+class TransferCreate(SQLModel):
+    source_account_id: int
+    destination_account_id: int
+    amount: float = Field(gt=0)
+    currency: str = Field(default="PLN", min_length=3, max_length=3)
+    date: Optional[datetime] = None
+    note: Optional[str] = None
+    category_id: Optional[int] = None
+
+
 class TransactionLineUpdate(SQLModel):
     name: Optional[str] = None
     price: Optional[float] = None

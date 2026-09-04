@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { t } from "@/lib/i18n";
@@ -41,6 +41,7 @@ const formSchema = z.object({
   type: z.enum(["expense", "income", "transfer"]).default("expense"),
   category_id: z.number().nullable().optional(),
   account_id: z.number().nullable().optional(),
+  transfer_id: z.number().nullable().optional(),
   tag_ids: z.array(z.number()).default([]),
   note: z.string().optional(),
 });
@@ -75,6 +76,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       type: "expense",
       category_id: null,
       account_id: null,
+      transfer_id: null,
       tag_ids: [],
       note: "",
     },
@@ -89,6 +91,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
       type: (transaction.type as "expense" | "income" | "transfer") ?? "expense",
       category_id: transaction.category_id ?? null,
       account_id: transaction.account_id ?? null,
+      transfer_id: transaction.transfer_id ?? null,
       tag_ids: transaction.tags?.map(t => t.id) || [],
       note: transaction.note ?? "",
     });
@@ -102,11 +105,13 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
         note: values.note || undefined,
         category_id: values.category_id || undefined,
         account_id: values.account_id || undefined,
+        transfer_id: values.type === "transfer" && values.transfer_id ? values.transfer_id : undefined,
         type: values.type || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success(t("transactions.header_form.toast_saved"));
       setIsEditing(false);
     },
@@ -128,6 +133,11 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
   };
 
   const currentDisplayCat = getDisplayCategory(transaction.category_id ?? null);
+  const watchedType = useWatch({ control: form.control, name: "type" });
+  const watchedTransferId = useWatch({ control: form.control, name: "transfer_id" });
+  const watchedAccountId = useWatch({ control: form.control, name: "account_id" });
+  const currentTransferAccount = accounts?.find((a) => a.id === (watchedTransferId ?? transaction.transfer_id));
+  const showCategoryField = watchedType !== "transfer" || Boolean(currentTransferAccount && !currentTransferAccount.is_on_budget);
 
   return (
     <Form {...form}>
@@ -261,53 +271,55 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
             )}
           />
 
-          <FormField
-            control={form.control}
-            name="category_id"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                  {t("transactions.header_form.field_category")}
-                </FormLabel>
-                {isEditing ? (
-                  <FormControl>
-                    <Select
-                      value={field.value != null ? String(field.value) : ""}
-                      onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={t("transactions.meta_section.category_placeholder")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories?.map((cat) => (
-                          <SelectItem key={cat.id} value={String(cat.id)}>
-                            <span className="flex items-center gap-2">
-                              <span>{cat.icon}</span>
-                              {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                ) : (
-                  <div className="pt-1">
-                    {currentDisplayCat ? (
-                      <span
-                        className="px-2 py-1 rounded text-xs uppercase tracking-wide font-medium flex items-center gap-1 w-fit text-white shadow-sm"
-                        style={{ backgroundColor: currentDisplayCat.color }}
+          {showCategoryField && (
+            <FormField
+              control={form.control}
+              name="category_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                    {t("transactions.header_form.field_category")}
+                  </FormLabel>
+                  {isEditing ? (
+                    <FormControl>
+                      <Select
+                        value={field.value != null ? String(field.value) : ""}
+                        onValueChange={(val) => field.onChange(val ? parseInt(val) : null)}
                       >
-                        <span>{currentDisplayCat.icon}</span> {currentDisplayCat.name}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground italic">{t("transactions.header_form.no_category")}</span>
-                    )}
-                  </div>
-                )}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                        <SelectTrigger>
+                          <SelectValue placeholder={t("transactions.meta_section.category_placeholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories?.map((cat) => (
+                            <SelectItem key={cat.id} value={String(cat.id)}>
+                              <span className="flex items-center gap-2">
+                                <span>{cat.icon}</span>
+                                {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                  ) : (
+                    <div className="pt-1">
+                      {currentDisplayCat ? (
+                        <span
+                          className="px-2 py-1 rounded text-xs uppercase tracking-wide font-medium flex items-center gap-1 w-fit text-white shadow-sm"
+                          style={{ backgroundColor: currentDisplayCat.color }}
+                        >
+                          <span>{currentDisplayCat.icon}</span> {currentDisplayCat.name}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">{t("transactions.header_form.no_category")}</span>
+                      )}
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}
@@ -317,7 +329,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
               return (
                 <FormItem>
                   <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
-                    {t("transactions.meta_section.account_label")}
+                    {t("transactions.header_form.field_account")}
                   </FormLabel>
                   {isEditing ? (
                     <FormControl>
@@ -354,6 +366,56 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
               );
             }}
           />
+
+          {watchedType === "transfer" && (
+            <FormField
+              control={form.control}
+              name="transfer_id"
+              render={({ field }) => {
+                const currentAccount = accounts?.find(a => a.id === (field.value ?? transaction.transfer_id));
+                return (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold uppercase text-muted-foreground">
+                      {t("transactions.header_form.field_transfer")}
+                    </FormLabel>
+                    {isEditing ? (
+                      <FormControl>
+                        <Select
+                          value={field.value != null ? String(field.value) : "none"}
+                          onValueChange={(val) => field.onChange(val === "none" ? null : parseInt(val))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={t("transactions.meta_section.transfer_placeholder")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">{t("transactions.meta_section.transfer_placeholder")}</SelectItem>
+                            {accounts
+                              ?.filter(acc => acc.id !== watchedAccountId)
+                              .map((acc) => (
+                                <SelectItem key={acc.id} value={String(acc.id)}>
+                                  {acc.name} ({acc.currency}){!acc.is_on_budget ? " • Tracking" : ""}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                    ) : (
+                      <div className="pt-1">
+                        {currentAccount ? (
+                          <span className="text-sm font-medium">
+                            {currentAccount.name}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground italic">-</span>
+                        )}
+                      </div>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
+            />
+          )}
 
           <FormField
             control={form.control}

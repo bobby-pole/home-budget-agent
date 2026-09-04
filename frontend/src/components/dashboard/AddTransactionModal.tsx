@@ -12,7 +12,7 @@ import {
 import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Loader2, Save } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { transactionSchema, type TransactionFormInput, type TransactionFormValues } from "./transaction/schema";
@@ -32,6 +32,11 @@ interface AddTransactionModalProps {
 export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalProps) {
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ManualItem[]>([]);
+
+  const { data: accounts } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
+  });
 
   const hasItems = items.length > 0;
   const computedTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -91,6 +96,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success(t("transactions.add_modal.toast_success"));
       onOpenChange(false);
     },
@@ -101,6 +107,15 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
     if (!hasItems && !values.total_amount) {
       form.setError("total_amount", { message: t("transactions.add_modal.validation.no_items_amount") });
       return;
+    }
+    if (values.type === "transfer" && values.transfer_id) {
+      const destAccount = accounts?.find((a) => a.id.toString() === values.transfer_id);
+      if (destAccount && !destAccount.is_on_budget && !values.category_id) {
+        form.setError("category_id", {
+          message: t("transactions.add_modal.validation.transfer_tracking_category_required"),
+        });
+        return;
+      }
     }
     mutation.mutate(values);
   };

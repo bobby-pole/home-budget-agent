@@ -37,6 +37,7 @@ interface TransactionsTableProps {
   categories?: CategoryRead[];
   isLoading?: boolean;
   error?: unknown;
+  selectedAccountId?: number | null;
 }
 
 export function TransactionsTable({
@@ -44,6 +45,7 @@ export function TransactionsTable({
   categories = [],
   isLoading,
   error,
+  selectedAccountId,
 }: TransactionsTableProps) {
   const queryClient = useQueryClient();
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
@@ -81,6 +83,7 @@ export function TransactionsTable({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success(t("transactions.table.deleted_toast"));
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {
@@ -150,9 +153,12 @@ export function TransactionsTable({
             ) : (
               <div className="divide-y divide-border/50">
                 {paginatedTransactions.map((transaction) => {
-                  const isIncome = transaction.type === "income";
-                  const isExpense = transaction.type === "expense";
                   const isTransfer = transaction.type === "transfer";
+                  const isTransferIn = isTransfer && Boolean(selectedAccountId && transaction.transfer_id === selectedAccountId);
+                  const isTransferOut = isTransfer && Boolean(selectedAccountId && transaction.account_id === selectedAccountId);
+                  const isIncome = transaction.type === "income" || isTransferIn;
+                  const isExpense = transaction.type === "expense" || isTransferOut;
+                  const isTransferNeutral = isTransfer && !selectedAccountId;
                   const category = categories.find((c) => c.id === transaction.category_id);
                   const categoryIcon = category?.icon;
                   const categoryName = category
@@ -241,10 +247,10 @@ export function TransactionsTable({
                       <div className="flex flex-col items-end gap-1 shrink-0">
                         <span className={cn(
                           "text-sm font-bold tabular-nums whitespace-nowrap",
-                          isIncome ? "text-emerald-600 dark:text-emerald-400" :
-                          isTransfer ? "text-blue-600 dark:text-blue-400" : "text-destructive"
+                          isTransferNeutral ? "text-blue-600 dark:text-blue-400" :
+                          isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                         )}>
-                          {isIncome ? "+" : isTransfer ? "" : "-"}
+                          {isIncome ? "+" : isTransferNeutral ? "" : "-"}
                           {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
                         </span>
                         <div className="flex items-center gap-0.5 -mr-1.5">
@@ -331,8 +337,12 @@ export function TransactionsTable({
                 </TableRow>
               ) : (
                 paginatedTransactions.map((transaction) => {
-                  const isIncome = transaction.type === "income";
-                  const isExpense = transaction.type === "expense";
+                  const isTransfer = transaction.type === "transfer";
+                  const isTransferIn = isTransfer && Boolean(selectedAccountId && transaction.transfer_id === selectedAccountId);
+                  const isTransferOut = isTransfer && Boolean(selectedAccountId && transaction.account_id === selectedAccountId);
+                  const isIncome = transaction.type === "income" || isTransferIn;
+                  const isExpense = transaction.type === "expense" || isTransferOut;
+                  const isTransferNeutral = isTransfer && !selectedAccountId;
                   const category = categories.find((c) => c.id === transaction.category_id);
                   const categoryIcon = category?.icon;
 
@@ -431,10 +441,10 @@ export function TransactionsTable({
                       </TableCell>
                       <TableCell className={cn(
                         "text-right font-semibold whitespace-nowrap",
-                        transaction.type === 'income' ? "text-emerald-600 dark:text-emerald-400" :
-                          transaction.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : ""
+                        isTransferNeutral ? "text-blue-600 dark:text-blue-400" :
+                        isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                       )}>
-                        {transaction.type === 'income' ? "+" : transaction.type === 'transfer' ? "" : "-"}
+                        {isIncome ? "+" : isTransferNeutral ? "" : "-"}
                         {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
                       </TableCell>
                       <TableCell className="text-right">

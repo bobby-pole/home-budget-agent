@@ -37,7 +37,7 @@ export function Dashboard() {
     isLoading: isTransactionsLoading,
   } = useQuery({
     queryKey: ["transactions"],
-    queryFn: api.getTransactions,
+    queryFn: () => api.getTransactions(),
     refetchInterval: 10000,
   });
 
@@ -98,7 +98,7 @@ export function Dashboard() {
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const filteredTransactions = selectedAccountId
-    ? transactions.filter((t) => t.account_id === selectedAccountId)
+    ? transactions.filter((t) => t.account_id === selectedAccountId || (t.type === "transfer" && t.transfer_id === selectedAccountId))
     : transactions;
 
   if (isTransactionsLoading || isBudgetLoading || isCategoriesLoading || isAccountsLoading) {
