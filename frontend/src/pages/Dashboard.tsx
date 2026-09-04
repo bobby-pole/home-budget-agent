@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
@@ -9,6 +10,7 @@ import { BudgetSummaryCard } from "@/components/dashboard/BudgetSummaryCard";
 import { SpendingPieChart } from "@/components/dashboard/SpendingPieChart";
 import { TopEnvelopesCard } from "@/components/dashboard/TopEnvelopesCard";
 import { RecentTransactionsList } from "@/components/dashboard/RecentTransactionsList";
+import { AccountsWidget } from "@/components/dashboard/AccountsWidget";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
@@ -22,6 +24,7 @@ export function Dashboard() {
   } = useTransactionActions();
 
   const isMobile = useIsMobile();
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
   const now = new Date();
   const curMonth = now.getMonth();
@@ -35,6 +38,12 @@ export function Dashboard() {
   } = useQuery({
     queryKey: ["transactions"],
     queryFn: api.getTransactions,
+    refetchInterval: 10000,
+  });
+
+  const { data: accounts = [], isLoading: isAccountsLoading } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
     refetchInterval: 10000,
   });
 
@@ -87,7 +96,12 @@ export function Dashboard() {
     .sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit))
     .slice(0, 3);
 
-  if (isTransactionsLoading || isBudgetLoading || isCategoriesLoading) {
+  const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
+  const filteredTransactions = selectedAccountId
+    ? transactions.filter((t) => t.account_id === selectedAccountId)
+    : transactions;
+
+  if (isTransactionsLoading || isBudgetLoading || isCategoriesLoading || isAccountsLoading) {
     return (
       <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -127,14 +141,36 @@ export function Dashboard() {
         onAddTransaction={() => setQuickEntryOpen(true)}
       />
 
-      {/* Row 2: Charts & Envelopes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <SpendingPieChart data={pieData} isLoading={isBudgetLoading} />
-        <TopEnvelopesCard envelopes={envelopes} isLoading={isBudgetLoading} />
-      </div>
+      {/* Main Grid: Left Column (Charts, Transactions) & Right Column (Accounts Sidebar) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Charts & Envelopes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <SpendingPieChart data={pieData} isLoading={isBudgetLoading} />
+            <TopEnvelopesCard envelopes={envelopes} isLoading={isBudgetLoading} />
+          </div>
 
-      {/* Row 3: Recent Transactions */}
-      <RecentTransactionsList transactions={transactions} categories={categories} isLoading={isTransactionsLoading} />
+          {/* Recent Transactions */}
+          <RecentTransactionsList
+            transactions={filteredTransactions}
+            categories={categories}
+            isLoading={isTransactionsLoading}
+            selectedAccountId={selectedAccountId}
+            selectedAccountName={selectedAccount?.name}
+            onClearAccountFilter={() => setSelectedAccountId(null)}
+          />
+        </div>
+
+        <div className="lg:col-span-1 space-y-8">
+          <AccountsWidget
+            accounts={accounts}
+            selectedAccountId={selectedAccountId}
+            onSelectAccount={(id) => setSelectedAccountId((prev) => (prev === id ? null : id))}
+            onClearFilter={() => setSelectedAccountId(null)}
+            isLoading={isAccountsLoading}
+          />
+        </div>
+      </div>
 
       {/* Modals & Drawers */}
       {renderModals()}

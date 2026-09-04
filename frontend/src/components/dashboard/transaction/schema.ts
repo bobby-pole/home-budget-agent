@@ -7,7 +7,7 @@ export const transactionSchema = z.object({
   currency: z.string().min(1),
   date: z.string().optional(),
   category_id: z.string().optional(),
-  account_id: z.string().optional(),
+  account_id: z.string().min(1, t("transactions.add_modal.validation.account_required")),
   transfer_id: z.string().optional(),
   note: z.string().optional(),
   tag_ids: z.array(z.number()).default([]),

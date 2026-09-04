@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Store, ArrowRight, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Store, ArrowRight, ArrowUpRight, ArrowDownRight, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { TransactionRead, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,9 @@ interface RecentTransactionsListProps {
   transactions: TransactionRead[];
   categories?: CategoryRead[];
   isLoading: boolean;
+  selectedAccountId?: number | null;
+  selectedAccountName?: string;
+  onClearAccountFilter?: () => void;
 }
 
 function formatRelativeDate(dateString: string | null | undefined): string {
@@ -35,7 +38,14 @@ function formatRelativeDate(dateString: string | null | undefined): string {
   return date.toLocaleDateString(getIntlLocale(), { day: "numeric", month: "short" });
 }
 
-export function RecentTransactionsList({ transactions, categories = [], isLoading }: RecentTransactionsListProps) {
+export function RecentTransactionsList({
+  transactions,
+  categories = [],
+  isLoading,
+  selectedAccountId,
+  selectedAccountName,
+  onClearAccountFilter,
+}: RecentTransactionsListProps) {
   const { user } = useAuth();
 
   if (isLoading) {
@@ -49,11 +59,29 @@ export function RecentTransactionsList({ transactions, categories = [], isLoadin
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-lg font-bold">{t("dashboard.recent_transactions.title")}</CardTitle>
         <Button variant="ghost" size="sm" asChild className="text-primary font-bold rounded-full">
-          <Link to="/transactions">
+          <Link to={selectedAccountId ? `/transactions?accountId=${selectedAccountId}` : "/transactions"}>
             {t("dashboard.recent_transactions.all_link")} <ArrowRight className="ml-1 size-4" />
           </Link>
         </Button>
       </CardHeader>
+      {selectedAccountId && selectedAccountName && (
+        <div className="flex items-center justify-between px-6 py-2 bg-primary/10 text-primary text-xs font-medium border-b border-border/40">
+          <span>
+            {t("dashboard.recent_transactions.filter_active_prefix")}{" "}
+            <strong>{selectedAccountName}</strong>
+          </span>
+          {onClearAccountFilter && (
+            <button
+              type="button"
+              onClick={onClearAccountFilter}
+              className="text-muted-foreground hover:text-foreground flex items-center gap-1 font-bold cursor-pointer"
+            >
+              <X className="size-3" />
+              {t("dashboard.recent_transactions.clear_filter")}
+            </button>
+          )}
+        </div>
+      )}
       <CardContent className="px-0">
         <div className="divide-y divide-border/50 px-6">
           {transactions.length > 0 ? (

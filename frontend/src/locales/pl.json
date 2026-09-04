@@ -105,7 +105,23 @@
       "no_transactions": "Brak niedawnych transakcji.",
       "type_income": "Przychód",
       "type_expense": "Wydatek",
-      "type_transfer": "Transfer"
+      "type_transfer": "Transfer",
+      "filter_active_prefix": "Filtrujesz wg:",
+      "clear_filter": "Wyczyść filtr"
+    },
+    "accounts_widget": {
+      "title": "Konta",
+      "net_worth": "Wartość netto",
+      "total_assets": "Aktywa",
+      "total_liabilities": "Zobowiązania",
+      "filter_active": "Filtr konta:",
+      "clear_filter": "Wyczyść",
+      "all_accounts": "Wszystkie",
+      "no_accounts": "Brak dodanych kont.",
+      "add_account": "Dodaj konto",
+      "manage_accounts": "Zarządzaj kontami",
+      "on_budget_group": "W budżecie",
+      "tracking_group": "Śledzone (poza budżetem)"
     },
     "kpi_card": {
       "usage": "Zużycie"
@@ -232,7 +248,8 @@
       "validation": {
         "required": "Wymagane",
         "positive": "Musi być większe od 0",
-        "no_items_amount": "Wymagane gdy brak pozycji"
+        "no_items_amount": "Wymagane gdy brak pozycji",
+        "account_required": "Wybór konta jest wymagany"
       }
     },
     "header_form": {

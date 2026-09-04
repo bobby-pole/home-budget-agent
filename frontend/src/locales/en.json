@@ -105,7 +105,23 @@
       "no_transactions": "No recent transactions.",
       "type_income": "Income",
       "type_expense": "Expense",
-      "type_transfer": "Transfer"
+      "type_transfer": "Transfer",
+      "filter_active_prefix": "Filtered by:",
+      "clear_filter": "Clear filter"
+    },
+    "accounts_widget": {
+      "title": "Accounts",
+      "net_worth": "Net Worth",
+      "total_assets": "Assets",
+      "total_liabilities": "Liabilities",
+      "filter_active": "Account filter:",
+      "clear_filter": "Clear",
+      "all_accounts": "All",
+      "no_accounts": "No accounts added yet.",
+      "add_account": "Add account",
+      "manage_accounts": "Manage accounts",
+      "on_budget_group": "On-Budget",
+      "tracking_group": "Tracking (Off-Budget)"
     },
     "kpi_card": {
       "usage": "Usage"
@@ -232,7 +248,8 @@
       "validation": {
         "required": "Required",
         "positive": "Must be greater than 0",
-        "no_items_amount": "Required when no items present"
+        "no_items_amount": "Required when no items present",
+        "account_required": "Account selection is required"
       }
     },
     "header_form": {
