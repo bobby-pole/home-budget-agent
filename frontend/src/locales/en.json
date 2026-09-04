@@ -389,6 +389,11 @@
   },
   "accounts": {
     "title": "Accounts",
+    "subtitle": "Manage your bank accounts, cash, and credit cards.",
+    "add_button": "Add account",
+    "edit_account": "Edit account",
+    "create_account": "New account",
+    "delete_button": "Delete account",
     "reconcile_button": "Reconcile",
     "reconcile_dialog_title": "Reconcile account balance",
     "reconcile_dialog_description": "Enter the actual account balance. The app will automatically generate an adjustment transaction for the difference.",
