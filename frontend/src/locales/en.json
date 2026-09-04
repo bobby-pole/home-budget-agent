@@ -249,7 +249,10 @@
         "required": "Required",
         "positive": "Must be greater than 0",
         "no_items_amount": "Required when no items present",
-        "account_required": "Account selection is required"
+        "account_required": "Account selection is required",
+        "transfer_destination_required": "Destination account is required for transfers",
+        "transfer_same_account": "Source and destination accounts must be different",
+        "transfer_tracking_category_required": "Category is required when transferring to a tracking account"
       }
     },
     "header_form": {
@@ -258,6 +261,8 @@
       "field_amount": "Amount",
       "field_currency": "Currency",
       "field_type": "Type",
+      "field_account": "From account",
+      "field_transfer": "To account",
       "field_category": "Category",
       "field_tags": "Tags",
       "field_note": "Note",

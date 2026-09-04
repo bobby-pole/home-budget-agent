@@ -93,4 +93,40 @@ describe("transactionSchema (Zod)", () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe("transfer type validation", () => {
+    it("rejects transfer without transfer_id", () => {
+      const result = transactionSchema.safeParse({
+        ...validBase,
+        type: "transfer",
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.path.includes("transfer_id"))).toBe(true);
+      }
+    });
+
+    it("rejects transfer where transfer_id is identical to account_id", () => {
+      const result = transactionSchema.safeParse({
+        ...validBase,
+        type: "transfer",
+        account_id: "1",
+        transfer_id: "1",
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues.some((i) => i.path.includes("transfer_id"))).toBe(true);
+      }
+    });
+
+    it("accepts valid transfer between two different accounts", () => {
+      const result = transactionSchema.safeParse({
+        ...validBase,
+        type: "transfer",
+        account_id: "1",
+        transfer_id: "2",
+      });
+      expect(result.success).toBe(true);
+    });
+  });
 });

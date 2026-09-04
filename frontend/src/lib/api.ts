@@ -78,8 +78,10 @@ export const api = {
     return response.data;
   },
 
-  getTransactions: async () => {
-    const response = await apiClient.get<Transaction[]>("/transactions");
+  getTransactions: async (params?: { type?: string; account_id?: number }) => {
+    const response = params
+      ? await apiClient.get<Transaction[]>("/transactions", { params })
+      : await apiClient.get<Transaction[]>("/transactions");
     return response.data;
   },
 
@@ -164,6 +166,23 @@ export const api = {
   }): Promise<Transaction> => {
     const response = await apiClient.post<Transaction>("/transactions/manual", data);
     return response.data;
+  },
+
+  createTransfer: async (data: {
+    source_account_id: number;
+    destination_account_id: number;
+    amount: number;
+    currency?: string;
+    date?: string;
+    note?: string;
+    category_id?: number;
+  }): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>("/transfers", data);
+    return response.data;
+  },
+
+  deleteTransfer: async (id: number): Promise<void> => {
+    await apiClient.delete(`/transfers/${id}`);
   },
 
   // --- BUDGET ---

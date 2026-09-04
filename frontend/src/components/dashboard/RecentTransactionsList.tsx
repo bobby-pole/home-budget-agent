@@ -86,8 +86,12 @@ export function RecentTransactionsList({
         <div className="divide-y divide-border/50 px-6">
           {transactions.length > 0 ? (
             transactions.slice(0, 5).map((tx) => {
-              const isIncome = tx.type === 'income';
-              const isExpense = tx.type === 'expense';
+              const isTransfer = tx.type === 'transfer';
+              const isTransferIn = isTransfer && Boolean(selectedAccountId && tx.transfer_id === selectedAccountId);
+              const isTransferOut = isTransfer && Boolean(selectedAccountId && tx.account_id === selectedAccountId);
+              const isIncome = tx.type === 'income' || isTransferIn;
+              const isExpense = tx.type === 'expense' || isTransferOut;
+              const isTransferNeutral = isTransfer && !selectedAccountId;
               
               const category = categories.find(c => c.id === tx.category_id);
               const categoryName = category
@@ -156,10 +160,10 @@ export function RecentTransactionsList({
                   <div className="text-right flex flex-col items-end shrink-0">
                     <span className={cn(
                       "text-sm md:text-base font-black tabular-nums whitespace-nowrap",
-                      isIncome ? "text-emerald-600 dark:text-emerald-400" :
-                      tx.type === 'transfer' ? "text-blue-600 dark:text-blue-400" : "text-destructive"
+                      isTransferNeutral ? "text-blue-600 dark:text-blue-400" :
+                      isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                     )}>
-                      {isIncome ? "+" : tx.type === 'transfer' ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString(getIntlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {isIncome ? "+" : isTransferNeutral ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString(getIntlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
                       {tx.currency ?? "PLN"}

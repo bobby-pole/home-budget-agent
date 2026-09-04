@@ -40,6 +40,12 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
   });
 
   const transactionType = useWatch({ control, name: "type", defaultValue: "expense" });
+  const sourceAccountId = useWatch({ control, name: "account_id" });
+  const transferAccountId = useWatch({ control, name: "transfer_id" });
+
+  const targetAccount = accounts?.find((a) => a.id.toString() === transferAccountId);
+  const isTrackingTransfer = transactionType === "transfer" && targetAccount && !targetAccount.is_on_budget;
+  const showCategory = !hideCategory && (transactionType !== "transfer" || isTrackingTransfer);
 
   return (
     <SectionGrid>
@@ -86,11 +92,13 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {accounts?.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id.toString()}>
-                      {acc.name} ({acc.currency})
-                    </SelectItem>
-                  ))}
+                  {accounts
+                    ?.filter((acc) => acc.id.toString() !== sourceAccountId)
+                    .map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id.toString()}>
+                        {acc.name} ({acc.currency}){!acc.is_on_budget ? " • Tracking" : ""}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -99,7 +107,7 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
         />
       )}
 
-      {!hideCategory && transactionType !== "transfer" && (
+      {showCategory && (
         <FormField
           control={control}
           name="category_id"

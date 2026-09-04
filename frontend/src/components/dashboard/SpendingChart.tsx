@@ -17,7 +17,7 @@ import { getIntlLocale } from "@/lib/dates";
 export function SpendingChart() {
   const { data: transactions, isLoading: isTransactionsLoading } = useQuery({
     queryKey: ["transactions"],
-    queryFn: api.getTransactions,
+    queryFn: () => api.getTransactions(),
   });
 
   const { data: categories, isLoading: isCategoriesLoading } = useQuery({

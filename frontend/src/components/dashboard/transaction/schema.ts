@@ -12,6 +12,22 @@ export const transactionSchema = z.object({
   note: z.string().optional(),
   tag_ids: z.array(z.number()).default([]),
   type: z.enum(["expense", "income", "transfer"]).default("expense"),
+}).superRefine((data, ctx) => {
+  if (data.type === "transfer") {
+    if (!data.transfer_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: t("transactions.add_modal.validation.transfer_destination_required"),
+        path: ["transfer_id"],
+      });
+    } else if (data.transfer_id === data.account_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: t("transactions.add_modal.validation.transfer_same_account"),
+        path: ["transfer_id"],
+      });
+    }
+  }
 });
 
 export type TransactionFormInput = z.input<typeof transactionSchema>;

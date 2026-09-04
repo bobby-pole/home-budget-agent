@@ -24,7 +24,7 @@ export function TransactionsPage() {
 
   const { data: transactions = [], isLoading, error } = useQuery({
     queryKey: ["transactions"],
-    queryFn: api.getTransactions,
+    queryFn: () => api.getTransactions(),
   });
 
   const { data: accounts = [] } = useQuery({
@@ -39,7 +39,7 @@ export function TransactionsPage() {
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const filteredTransactions = selectedAccountId
-    ? transactions.filter((t) => t.account_id === selectedAccountId)
+    ? transactions.filter((t) => t.account_id === selectedAccountId || (t.type === "transfer" && t.transfer_id === selectedAccountId))
     : transactions;
 
   const importMutation = useMutation({
@@ -153,6 +153,7 @@ export function TransactionsPage() {
           categories={categories}
           isLoading={isLoading}
           error={error}
+          selectedAccountId={selectedAccountId}
         />
       </div>
 

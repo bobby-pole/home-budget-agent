@@ -16,10 +16,11 @@ from decimal import Decimal
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete, SQLModel
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, or_, and_
+from sqlalchemy.orm import aliased
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
-    TransactionLineUpdate, ManualTransactionCreate,
+    TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
     ReceiptScan, ScanStatus, VerifyRequest,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     Account, AccountCreate, AccountUpdate, AccountRead,
@@ -363,7 +364,7 @@ def update_budget(
 
 # --- ASYNC OCR WORKER ---
 
-def _set_scan_status(scan_id: int, status: ScanStatus, error_message: str | None = None) -> None:
+def _set_scan_status(scan_id: int, status: ScanStatus, error_message: Optional[str] = None) -> None:
     with Session(operations_engine) as s:
         scan = s.get(ReceiptScan, scan_id)
         if scan:
@@ -632,6 +633,15 @@ def create_manual_transaction(
         if acc and acc.category_id:
             final_category_id = acc.category_id
 
+    if data.type == "transfer" and data.transfer_id is not None:
+        source_acc = session.get(Account, data.account_id) if data.account_id else None
+        dest_acc = session.get(Account, data.transfer_id)
+        if source_acc and dest_acc and source_acc.is_on_budget and not dest_acc.is_on_budget and not final_category_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Category is required for transfers to tracking accounts",
+            )
+
     transaction = Transaction(
         merchant_name=data.merchant_name,
         total_amount=total,
@@ -664,9 +674,9 @@ def create_manual_transaction(
                 category_id=line_data.category_id,
                 transaction_id=transaction.id,
             ))
-    else:
+    elif data.type != "transfer" or final_category_id is not None:
         session.add(TransactionLine(
-            name=data.note or "Manual entry",
+            name=data.note or ("Transfer" if data.type == "transfer" else "Manual entry"),
             price=data.total_amount,
             quantity=1.0,
             category_id=final_category_id,
@@ -679,6 +689,77 @@ def create_manual_transaction(
     session.refresh(transaction)
 
     return transaction
+
+
+# --- TRANSFERS ---
+
+@router.post("/transfers", response_model=TransactionRead)
+def create_transfer(
+    data: TransferCreate,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    validate_transaction_accounts(
+        session, current_budget.id, data.source_account_id, data.destination_account_id
+    )
+
+    source_acc = session.get(Account, data.source_account_id)
+    dest_acc = session.get(Account, data.destination_account_id)
+    if not source_acc or not dest_acc:
+        raise HTTPException(status_code=422, detail="Account not found")
+
+    if source_acc.is_on_budget and not dest_acc.is_on_budget and not data.category_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Category is required for transfers to tracking accounts",
+        )
+
+    if data.category_id:
+        category = session.get(Category, data.category_id)
+        if not category or category.budget_id != current_budget.id:
+            raise HTTPException(status_code=422, detail="Category not found in current budget")
+
+    merchant_name = f"Transfer: {source_acc.name} -> {dest_acc.name}"
+
+    transaction = Transaction(
+        merchant_name=merchant_name,
+        total_amount=round(data.amount, 2),
+        currency=data.currency,
+        date=data.date or datetime.now(timezone.utc),
+        category_id=data.category_id,
+        note=data.note,
+        type="transfer",
+        account_id=data.source_account_id,
+        transfer_id=data.destination_account_id,
+        is_manual=True,
+        budget_id=current_budget.id,
+        uploaded_by=current_user.id,
+    )
+    session.add(transaction)
+    session.commit()
+    session.refresh(transaction)
+    return transaction
+
+
+@router.delete("/transfers/{transfer_id}", status_code=204)
+def delete_transfer(
+    transfer_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    transaction = session.get(Transaction, transfer_id)
+    if not transaction or transaction.budget_id != current_budget.id or transaction.type != "transfer":
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    session.delete(transaction)
+    session.commit()
+    return None
 
 
 @router.post("/transactions/scan", response_model=TransactionRead)
@@ -801,6 +882,7 @@ async def get_transactions(
     limit: int = 50,
     offset: int = 0,
     type: Optional[str] = None,
+    account_id: Optional[int] = None,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
@@ -814,6 +896,14 @@ async def get_transactions(
 
     if type:
         statement = statement.where(Transaction.type == type)
+
+    if account_id is not None:
+        statement = statement.where(
+            or_(
+                col(Transaction.account_id) == account_id,
+                and_(col(Transaction.transfer_id) == account_id, col(Transaction.type) == "transfer"),
+            )
+        )
 
     statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
     results = session.exec(statement).all()
@@ -1063,6 +1153,15 @@ async def update_transaction(
         db_transaction.account_id,
         db_transaction.transfer_id,
     )
+
+    if db_transaction.type == "transfer" and db_transaction.transfer_id is not None:
+        source_acc = session.get(Account, db_transaction.account_id) if db_transaction.account_id else None
+        dest_acc = session.get(Account, db_transaction.transfer_id)
+        if source_acc and dest_acc and source_acc.is_on_budget and not dest_acc.is_on_budget and not db_transaction.category_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Category is required for transfers to tracking accounts",
+            )
 
     if transaction_update.tag_ids is not None:
         tags = session.exec(select(Tag).where(col(Tag.id).in_(transaction_update.tag_ids))).all()
@@ -1656,6 +1755,9 @@ def get_summary(
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
+    source_acc = aliased(Account)
+    dest_acc = aliased(Account)
+
     # 1. Calculate total income
     income_stmt = select(func.sum(Transaction.total_amount)).where(
         Transaction.budget_id == current_budget.id,
@@ -1663,7 +1765,24 @@ def get_summary(
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
-    total_income = session.scalar(income_stmt) or 0.0
+    regular_income = session.scalar(income_stmt) or 0.0
+
+    # Inflow from Tracking (Off-Budget) to On-Budget account
+    tracking_income_stmt = (
+        select(func.sum(Transaction.total_amount))
+        .join(source_acc, col(Transaction.account_id) == source_acc.id)
+        .join(dest_acc, col(Transaction.transfer_id) == dest_acc.id)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(Transaction.type) == "transfer",
+            extract('year', col(Transaction.date)) == year,
+            extract('month', col(Transaction.date)) == month,
+            col(source_acc.is_on_budget).is_(False),
+            col(dest_acc.is_on_budget).is_(True),
+        )
+    )
+    tracking_income = session.scalar(tracking_income_stmt) or 0.0
+    total_income = round(float(regular_income) + float(tracking_income), 2)
 
     # 2. Calculate total spent (from expenses)
     expense_stmt = select(func.sum(Transaction.total_amount)).where(
@@ -1672,7 +1791,24 @@ def get_summary(
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
-    total_spent = session.scalar(expense_stmt) or 0.0
+    regular_spent = session.scalar(expense_stmt) or 0.0
+
+    # Outflow from On-Budget to Tracking (Off-Budget) account
+    tracking_expense_stmt = (
+        select(func.sum(Transaction.total_amount))
+        .join(source_acc, col(Transaction.account_id) == source_acc.id)
+        .join(dest_acc, col(Transaction.transfer_id) == dest_acc.id)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(Transaction.type) == "transfer",
+            extract('year', col(Transaction.date)) == year,
+            extract('month', col(Transaction.date)) == month,
+            col(source_acc.is_on_budget).is_(True),
+            col(dest_acc.is_on_budget).is_(False),
+        )
+    )
+    tracking_spent = session.scalar(tracking_expense_stmt) or 0.0
+    total_spent = round(float(regular_spent) + float(tracking_spent), 2)
 
     # 3. Retrieve category allocations (planning)
     allocations_stmt = select(EnvelopeAllocation).where(
@@ -1711,12 +1847,37 @@ def get_summary(
 
     spent_with_lines = dict(session.exec(lines_stmt).all())
 
+    # Category breakdown for transfers to Tracking accounts
+    tracking_cat_stmt = (
+        select(
+            Transaction.category_id,
+            func.sum(Transaction.total_amount)
+        )
+        .join(source_acc, col(Transaction.account_id) == source_acc.id)
+        .join(dest_acc, col(Transaction.transfer_id) == dest_acc.id)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(Transaction.type) == "transfer",
+            extract('year', col(Transaction.date)) == year,
+            extract('month', col(Transaction.date)) == month,
+            col(source_acc.is_on_budget).is_(True),
+            col(dest_acc.is_on_budget).is_(False),
+            col(Transaction.category_id).is_not(None),
+        )
+        .group_by(col(Transaction.category_id))
+    )
+    spent_tracking_cat = dict(session.exec(tracking_cat_stmt).all())
+
     spent_by_category = {}
     for cat_id, amt in spent_no_lines.items():
         if cat_id is not None:
             spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
 
     for cat_id, amt in spent_with_lines.items():
+        if cat_id is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+
+    for cat_id, amt in spent_tracking_cat.items():
         if cat_id is not None:
             spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
 
