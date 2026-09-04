@@ -389,6 +389,11 @@
   },
   "accounts": {
     "title": "Konta",
+    "subtitle": "Zarządzaj swoimi kontami bankowymi, gotówką i kartami.",
+    "add_button": "Dodaj konto",
+    "edit_account": "Edytuj konto",
+    "create_account": "Nowe konto",
+    "delete_button": "Usuń konto",
     "reconcile_button": "Wyrównaj saldo",
     "reconcile_dialog_title": "Wyrównaj saldo konta",
     "reconcile_dialog_description": "Podaj faktyczne saldo konta. Aplikacja automatycznie wygeneruje transakcję korygującą różnicę.",
