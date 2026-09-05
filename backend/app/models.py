@@ -32,6 +32,12 @@ class ScanStatus(str, Enum):
         return cls.FAILED
 
 
+class TransactionStatus(str, Enum):
+    CLEARED = "cleared"
+    UNCLEARED = "uncleared"
+    PENDING = "pending"
+
+
 # ─── User ─────────────────────────────────────────────────────────────────────
 
 class User(SQLModel, table=True):
@@ -224,6 +230,10 @@ class TransactionBase(SQLModel):
     currency: str = Field(default="PLN")
     is_manual: bool = Field(default=False)
     type: str = Field(default="expense")  # expense | income | transfer
+    status: TransactionStatus = Field(
+        default=TransactionStatus.UNCLEARED,
+        sa_column=Column(String, index=True, nullable=False, server_default=TransactionStatus.UNCLEARED.value),
+    )
     import_hash: Optional[str] = Field(default=None, index=True)
     account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
     transfer_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
@@ -449,6 +459,7 @@ class TransactionUpdate(SQLModel):
     note: Optional[str] = None
     tag_ids: Optional[List[int]] = None
     type: Optional[str] = None
+    status: Optional[TransactionStatus] = None
     account_id: Optional[int] = None
     transfer_id: Optional[int] = None
 
@@ -474,6 +485,7 @@ class ManualTransactionCreate(SQLModel):
     tag_ids: List[int] = Field(default_factory=list)
     lines: List[TransactionLineCreate] = Field(default_factory=list)
     type: str = "expense"  # expense | income | transfer
+    status: TransactionStatus = TransactionStatus.UNCLEARED
     account_id: Optional[int] = None
     transfer_id: Optional[int] = None
 
@@ -486,6 +498,7 @@ class TransferCreate(SQLModel):
     date: Optional[datetime] = None
     note: Optional[str] = None
     category_id: Optional[int] = None
+    status: TransactionStatus = TransactionStatus.UNCLEARED
 
 
 class TransactionLineUpdate(SQLModel):

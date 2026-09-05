@@ -737,6 +737,22 @@
             }
           },
           {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TransactionStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
             "name": "x-budget-id",
             "in": "header",
             "required": false,
@@ -3272,6 +3288,10 @@
             "title": "Type",
             "default": "expense"
           },
+          "status": {
+            "$ref": "#/components/schemas/TransactionStatus",
+            "default": "uncleared"
+          },
           "account_id": {
             "anyOf": [
               {
@@ -3934,6 +3954,10 @@
             "title": "Type",
             "default": "expense"
           },
+          "status": {
+            "$ref": "#/components/schemas/TransactionStatus",
+            "default": "uncleared"
+          },
           "import_hash": {
             "anyOf": [
               {
@@ -4049,6 +4073,15 @@
         ],
         "title": "TransactionRead"
       },
+      "TransactionStatus": {
+        "type": "string",
+        "enum": [
+          "cleared",
+          "uncleared",
+          "pending"
+        ],
+        "title": "TransactionStatus"
+      },
       "TransactionUpdate": {
         "properties": {
           "merchant_name": {
@@ -4143,6 +4176,16 @@
             ],
             "title": "Type"
           },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransactionStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "account_id": {
             "anyOf": [
               {
@@ -4224,6 +4267,10 @@
               }
             ],
             "title": "Category Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TransactionStatus",
+            "default": "uncleared"
           }
         },
         "type": "object",

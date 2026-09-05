@@ -78,7 +78,7 @@ export const api = {
     return response.data;
   },
 
-  getTransactions: async (params?: { type?: string; account_id?: number }) => {
+  getTransactions: async (params?: { type?: string; account_id?: number; status?: string }) => {
     const response = params
       ? await apiClient.get<Transaction[]>("/transactions", { params })
       : await apiClient.get<Transaction[]>("/transactions");

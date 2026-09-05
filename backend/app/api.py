@@ -21,7 +21,7 @@ from sqlalchemy.orm import aliased
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
-    ReceiptScan, ScanStatus, VerifyRequest,
+    ReceiptScan, ScanStatus, TransactionStatus, VerifyRequest,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     Account, AccountCreate, AccountUpdate, AccountRead,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
@@ -649,6 +649,7 @@ def create_manual_transaction(
         date=data.date or datetime.now(timezone.utc),
         is_manual=True,
         type=data.type,
+        status=data.status,
         uploaded_by=current_user.id,
         budget_id=current_budget.id,
         category_id=final_category_id,
@@ -733,6 +734,7 @@ def create_transfer(
         category_id=data.category_id,
         note=data.note,
         type="transfer",
+        status=data.status,
         account_id=data.source_account_id,
         transfer_id=data.destination_account_id,
         is_manual=True,
@@ -883,6 +885,7 @@ async def get_transactions(
     offset: int = 0,
     type: Optional[str] = None,
     account_id: Optional[int] = None,
+    status: Optional[TransactionStatus] = None,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
@@ -904,6 +907,9 @@ async def get_transactions(
                 and_(col(Transaction.transfer_id) == account_id, col(Transaction.type) == "transfer"),
             )
         )
+
+    if status is not None:
+        statement = statement.where(col(Transaction.status) == status)
 
     statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
     results = session.exec(statement).all()
@@ -1632,6 +1638,7 @@ async def import_transactions(
             else:
                 existing_duplicate.note = bank_note
 
+            existing_duplicate.status = TransactionStatus.CLEARED
             session.add(existing_duplicate)
             created_count += 1
             print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
@@ -1643,6 +1650,7 @@ async def import_transactions(
                 date=t_date,
                 is_manual=False,
                 type=t_type,
+                status=TransactionStatus.CLEARED,
                 uploaded_by=current_user.id,
                 budget_id=current_budget.id,
                 category_id=cat_id,
@@ -2168,6 +2176,7 @@ async def create_account(
             date=datetime.now(timezone.utc),
             is_manual=True,
             type=tx_type,
+            status=TransactionStatus.CLEARED,
             uploaded_by=current_user.id,
             budget_id=current_budget.id,
             account_id=account.id,
@@ -2256,6 +2265,7 @@ async def reconcile_account(
             date=datetime.now(timezone.utc),
             is_manual=True,
             type=tx_type,
+            status=TransactionStatus.CLEARED,
             uploaded_by=current_user.id,
             budget_id=current_budget.id,
             account_id=account.id,
