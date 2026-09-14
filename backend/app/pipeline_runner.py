@@ -165,22 +165,22 @@ class PipelineRunner:
             "source": "eparagon",
             "size_bytes": len(file_bytes),
         }) as log:
-            # First, use the generic adapter to parse the JPK structure
-            data = EParagonJSONAdapter.parse(file_bytes)
-            merchant = data.get("merchant_name", "").lower()
+            parsed_receipt = EParagonJSONAdapter.parse(file_bytes)
+            merchant = parsed_receipt.merchant_name.lower()
             
             # If we have a specific parser for this merchant, route through it
             # This satisfies the requirement that the merchant parser handles both JSON and PDF
             if "biedronka" in merchant:
                 from .biedronka_parser import BiedronkaReceiptParser
                 log.route_chosen = "biedronka_json_parser"
-                data = BiedronkaReceiptParser().parse_json(file_bytes)
+                data = BiedronkaReceiptParser().parse_json(file_bytes).to_dict()
             elif "żabka" in merchant or "zabka" in merchant:
                 from .zabka_parser import ZabkaReceiptParser
                 log.route_chosen = "zabka_json_parser"
-                data = ZabkaReceiptParser().parse_json(file_bytes)
+                data = ZabkaReceiptParser().parse_json(file_bytes).to_dict()
             else:
                 log.route_chosen = "eparagon_json_adapter"
+                data = parsed_receipt.to_dict()
 
             items = data.get("items", [])
             log.output_summary = {
@@ -264,7 +264,7 @@ class PipelineRunner:
             merchant = detect_merchant(lines)
             log.output_summary = {
                 "merchant": merchant or "unknown",
-                "has_deterministic_parser": merchant in ("lidl",),
+                "has_deterministic_parser": merchant in ("lidl", "biedronka", "zabka"),
             }
             if merchant:
                 log.route_chosen = f"merchant_{merchant}"

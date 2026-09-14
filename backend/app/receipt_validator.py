@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 
 class ValidationIssue(str, Enum):
@@ -85,10 +85,22 @@ class ReceiptValidator:
             )
 
         # ── TOTAL_MISMATCH (soft — NEEDS_REVIEW, not FAILED) ──────────────────
-        items_sum = sum(
-            Decimal(str(i.get("price", 0))) * Decimal(str(i.get("quantity", 1)))
-            for i in items
-        )
+        def _line_total(item: Any) -> Decimal:
+            if isinstance(item, dict):
+                if "final_line_total" in item and item["final_line_total"] is not None:
+                    return Decimal(str(item["final_line_total"]))
+                price = Decimal(str(item.get("price", 0)))
+                qty = Decimal(str(item.get("quantity", 1)))
+                return price * qty
+
+            final_total = getattr(item, "final_line_total", None)
+            if final_total is not None:
+                return Decimal(str(final_total))
+            price = Decimal(str(getattr(item, "price", 0)))
+            qty = Decimal(str(getattr(item, "quantity", 1)))
+            return price * qty
+
+        items_sum = sum((_line_total(i) for i in items), Decimal("0"))
         delta = abs(items_sum - ocr_total)
 
         if delta > _TOLERANCE:

@@ -344,11 +344,16 @@ def test_pipeline_scanned_pdf_fallback_to_ocr(mock_structurize, mock_extract, mo
 # ── E2E Integration with User's Real Downloaded Files ────────────────────────────
 
 def _find_real_file(filename: str) -> str | None:
-    # 1. Check in relative data folder (works inside docker container)
+    # 1. Check in repo root data folder (relative to this test file)
+    test_dir = os.path.dirname(os.path.abspath(__file__))
+    repo_data = os.path.abspath(os.path.join(test_dir, "..", "..", "data", filename))
+    if os.path.exists(repo_data):
+        return repo_data
+    # 2. Check in relative data folder (works inside docker container)
     rel_path = os.path.join("data", filename)
     if os.path.exists(rel_path):
         return rel_path
-    # 2. Check in absolute downloads folder (works when run natively on host)
+    # 3. Check in absolute downloads folder (works when run natively on host)
     abs_path = os.path.join("/Users/robert/Downloads", filename)
     if os.path.exists(abs_path):
         return abs_path

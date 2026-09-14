@@ -3,54 +3,17 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from enum import Enum, auto
 from typing import Optional
 
 
-# ── Data types ─────────────────────────────────────────────────────────────────
+from .receipt_schema import CanonicalItem, CanonicalReceipt
+from .receipt_normalizer import normalize_receipt
 
-@dataclass
-class ParsedItem:
-    name: str
-    price: Decimal      # total amount paid; equals final_price when discounts are present
-    quantity: Decimal = Decimal("1")
-    category: Optional[str] = None
-    original_price: Optional[Decimal] = None   # price before discounts
-    discount_total: Decimal = Decimal("0")     # sum of all discounts (negative)
-    final_price: Optional[Decimal] = None      # original_price + discount_total (what was actually charged)
-    is_adjustment: bool = False                # True for basket-level discounts/refunds (e.g. kaucja)
-
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "price": float(self.price),
-            "quantity": float(self.quantity),
-            "category": self.category,
-            "original_price": float(self.original_price) if self.original_price is not None else None,
-            "discount_total": float(self.discount_total),
-            "final_price": float(self.final_price) if self.final_price is not None else None,
-            "is_adjustment": self.is_adjustment,
-        }
-
-
-@dataclass
-class ParsedReceipt:
-    merchant_name: str
-    date: str           # YYYY-MM-DD
-    total_amount: Decimal
-    currency: str
-    items: list[ParsedItem] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "merchant_name": self.merchant_name,
-            "date": self.date,
-            "total_amount": float(self.total_amount),
-            "currency": self.currency,
-            "items": [item.to_dict() for item in self.items],
-        }
+# Backward-compatible aliases
+ParsedItem = CanonicalItem
+ParsedReceipt = CanonicalReceipt
 
 
 # ── Base parser ────────────────────────────────────────────────────────────────
@@ -59,7 +22,7 @@ class BaseDeterministicParser(ABC):
     """Abstract base for merchant-specific deterministic parsers."""
 
     @abstractmethod
-    def parse(self, lines: list[str]) -> ParsedReceipt:
+    def parse(self, lines: list[str]) -> CanonicalReceipt:
         ...
 
 
@@ -188,9 +151,9 @@ class LidlReceiptParser(BaseDeterministicParser):
                 # so items sum equals final total. Skip everything else.
                 m = _BASKET_ADJUSTMENT_LINE.match(line)
                 if m:
-                    items.append(ParsedItem(
+                    items.append(CanonicalItem(
                         name=m.group(1).strip(),
-                        price=_parse_decimal(m.group(2)),
+                        unit_price=_parse_decimal(m.group(2)),
                         quantity=Decimal("1"),
                         is_adjustment=True,
                     ))
@@ -204,9 +167,9 @@ class LidlReceiptParser(BaseDeterministicParser):
                 # Check this very line for a basket adjustment too (defensive).
                 m = _BASKET_ADJUSTMENT_LINE.match(line)
                 if m:
-                    items.append(ParsedItem(
+                    items.append(CanonicalItem(
                         name=m.group(1).strip(),
-                        price=_parse_decimal(m.group(2)),
+                        unit_price=_parse_decimal(m.group(2)),
                         quantity=Decimal("1"),
                         is_adjustment=True,
                     ))
@@ -215,10 +178,10 @@ class LidlReceiptParser(BaseDeterministicParser):
             # Weight price: "0,488 kg x 9,99 4,88 C"
             m = _WEIGHT_PRICE_LINE.match(line)
             if m and pending_name:
-                items.append(ParsedItem(
+                items.append(CanonicalItem(
                     name=pending_name,
-                    price=_parse_decimal(m.group(2)),    # unit price (per kg)
-                    quantity=_parse_decimal(m.group(1)), # weight
+                    unit_price=_parse_decimal(m.group(2)),    # unit price (per kg)
+                    quantity=_parse_decimal(m.group(1)),     # weight
                 ))
                 pending_name = None
                 continue
@@ -237,17 +200,17 @@ class LidlReceiptParser(BaseDeterministicParser):
                     qty_candidate = _parse_decimal(m_split.group(1))
                     unit_candidate = _parse_decimal(m_split.group(2))
                     if qty_candidate > 0 and abs(qty_candidate * unit_candidate - line_total) < Decimal("0.01"):
-                        items.append(ParsedItem(
+                        items.append(CanonicalItem(
                             name=pending_name,
-                            price=unit_candidate,
+                            unit_price=unit_candidate,
                             quantity=qty_candidate,
                         ))
                         pending_name = None
                         continue
 
-                items.append(ParsedItem(
+                items.append(CanonicalItem(
                     name=pending_name,
-                    price=line_total,
+                    unit_price=line_total,
                     quantity=Decimal("1"),
                 ))
                 pending_name = None
@@ -256,10 +219,10 @@ class LidlReceiptParser(BaseDeterministicParser):
             # Quantity price: "3 * 4,99 14,97 C" or "1 7,49 7,49 C" (asterisk-less from OCR)
             m = _QTY_PRICE_LINE.match(line)
             if m and pending_name:
-                items.append(ParsedItem(
+                items.append(CanonicalItem(
                     name=pending_name,
-                    price=_parse_decimal(m.group(2)),    # unit price
-                    quantity=_parse_decimal(m.group(1)), # count
+                    unit_price=_parse_decimal(m.group(2)),    # unit price
+                    quantity=_parse_decimal(m.group(1)),     # count
                 ))
                 pending_name = None
                 continue
@@ -269,21 +232,16 @@ class LidlReceiptParser(BaseDeterministicParser):
             if m and items and not items[-1].is_adjustment:
                 discount_val = _parse_decimal(m.group(2))  # total discount (negative)
                 last = items[-1]
-                if last.original_price is None:
-                    last.original_price = last.price  # unit price at this point
-                # discount_total tracks the full receipt-line discount (for display badge)
+                # discount_total tracks the full receipt-line discount
                 last.discount_total += discount_val
-                # Update unit price: spread discount across quantity
-                qty = last.quantity if last.quantity > 0 else Decimal("1")
-                last.price = last.original_price + (last.discount_total / qty)
-                last.final_price = last.price
                 continue
+
             # Orphaned discount (no items yet, or last item is itself an adjustment) —
             # treat as a basket-level adjustment so it does not contaminate a product.
             if m:
-                items.append(ParsedItem(
+                items.append(CanonicalItem(
                     name=m.group(1).strip(),
-                    price=_parse_decimal(m.group(2)),
+                    unit_price=_parse_decimal(m.group(2)),
                     quantity=Decimal("1"),
                     is_adjustment=True,
                 ))
@@ -292,10 +250,11 @@ class LidlReceiptParser(BaseDeterministicParser):
             # Product name
             pending_name = line
 
-        return ParsedReceipt(
+        receipt = CanonicalReceipt(
             merchant_name="Lidl",
             date=date,
             total_amount=total_amount,
             currency="PLN",
             items=items,
         )
+        return normalize_receipt(receipt)
