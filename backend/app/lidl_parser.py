@@ -52,14 +52,14 @@ _WEIGHT_PRICE_LINE = re.compile(
     re.IGNORECASE,
 )
 
-# "RABAT 50 % -10,00" / "Lidl Plus voucher -0,27" / "Nie marnuję -4,58"
-_DISCOUNT_LINE = re.compile(r"^(.+?)\s+(-\d+[.,]\d+)\s*$")
+# "RABAT 50 % -10,00" / "Lidl Plus voucher -0,27" / "Nie marnuję -4,58" / "Nie marnuję −1,51"
+_DISCOUNT_LINE = re.compile(r"^(.+?)\s+([−\-\u2212]\d+[.,]\d+)\s*$")
 
 # Basket-level adjustments inside the SUMMARY section.
 # Matches both negative (refund) and positive (deposit charge) amounts:
 # "Opakowania zwrotne suma -3,70" or "Opakowania zwrotne suma 0,50"
 _BASKET_ADJUSTMENT_LINE = re.compile(
-    r"^(Opakowania zwrotne suma|Kaucja zwrotna|Łączny rabat[^-\d]*|Rabat koszyka[^-\d]*)\s+(-?\d+[.,]\d+)\s*$",
+    r"^(Opakowania zwrotne suma|Kaucja zwrotna|Łączny rabat[^-\d]*|Rabat koszyka[^-\d]*)\s+([−\-\u2212]?\d+[.,]\d+)\s*$",
     re.IGNORECASE,
 )
 
@@ -72,7 +72,7 @@ _SUMMARY_TRIGGER = re.compile(
 
 def _parse_decimal(s: str) -> Decimal:
     try:
-        return Decimal(s.replace(",", ".").replace(" ", ""))
+        return Decimal(s.replace("−", "-").replace(",", ".").replace(" ", ""))
     except InvalidOperation:
         return Decimal("0")
 

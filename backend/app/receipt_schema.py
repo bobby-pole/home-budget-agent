@@ -13,7 +13,7 @@ def to_decimal(value: Any, default: str = "0") -> Decimal:
     if value is None:
         return Decimal(default)
     try:
-        s = str(value).replace(",", ".").replace(" ", "").strip()
+        s = str(value).replace("−", "-").replace(",", ".").replace(" ", "").strip()
         if not s:
             return Decimal(default)
         return Decimal(s)

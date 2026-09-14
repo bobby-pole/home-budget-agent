@@ -389,7 +389,7 @@ def reconstruct_lines(words: list[OCRWord], y_tolerance: Optional[float] = None,
     if current_line:
         lines.append(sorted(current_line, key=lambda w: w.bounding_box.x_min))
 
-    return [" ".join(w.text for w in line) for line in lines]
+    return [" ".join(w.text for w in line).replace("−", "-") for line in lines]
 
 
 # ── Format Detector ────────────────────────────────────────────────────────────
@@ -399,9 +399,10 @@ _HEADER_LINES = 30
 
 MERCHANT_SIGNATURES: dict[str, list[str]] = {
     "lidl": [
+        r"\bLIDL\b",
         r"LIDL\s+sp\.?\s*z\s*o\.?\s*o\.",
         r"Lidl\s+Plus",
-        r"ul\.\s*Pozna[ńn]ska\s+48",
+        r"Pozna[ńn]ska\s+48",
     ],
     "biedronka": [
         r"Jeronimo\s+Martins",
@@ -409,6 +410,7 @@ MERCHANT_SIGNATURES: dict[str, list[str]] = {
     ],
     "kaufland": [
         r"Kaufland\s+Polska",
+        r"KAUFLAND",
     ],
     "auchan": [
         r"Auchan\s+Polska",

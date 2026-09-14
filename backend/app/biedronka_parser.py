@@ -29,13 +29,13 @@ _BIEDRONKA_SINGLE_ITEM_LINE = re.compile(
 
 # Multi-variant discounts in Biedronka
 _DISCOUNT_LINE = re.compile(
-    r"^(?:Rabat|Opust|Moja\s+Biedronka|Oszczędzasz(?:\s+z\s+kartą)?|Wielosztuka|Supercena)(?!\s+(?:łącznie|razem)).*?(-\d+[.,]\d+)",
+    r"^(?:Rabat|Opust|Moja\s+Biedronka|Oszczędzasz(?:\s+z\s+kartą)?|Wielosztuka|Supercena)(?!\s+(?:łącznie|razem)).*?([−\-\u2212]\d+[.,]\d+)",
     re.IGNORECASE,
 )
 
 # Bottle deposits / basket adjustments
 _ADJUSTMENT_LINE = re.compile(
-    r"^(?:kaucja\s+zwrotna|butelka\s+zwrotna|opakowania\s+zwrotne|kaucja)\s+(-?\d+[.,]\d+)",
+    r"^(?:kaucja\s+zwrotna|butelka\s+zwrotna|opakowania\s+zwrotne|kaucja)\s+([−\-\u2212]?\d+[.,]\d+)",
     re.IGNORECASE,
 )
 

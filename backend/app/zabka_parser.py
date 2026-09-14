@@ -25,17 +25,17 @@ _ZABKA_PRICE_LINE = re.compile(
 _ZABKA_SINGLE_PRICE_LINE = re.compile(r"^(\d+[.,]\d+)\s*([A-E])$", re.IGNORECASE)
 
 # Negative discount amount line: "-2,00 A" or "-1,50"
-_DISCOUNT_VAL_LINE = re.compile(r"^(-\d+[.,]\d+)\s*[A-E]?$")
+_DISCOUNT_VAL_LINE = re.compile(r"^([−\-\u2212]\d+[.,]\d+)\s*[A-E]?$")
 
 # Named discount line: "Wielosztuka -2,00" or "Rabat -1,50"
 _DISCOUNT_NAMED_LINE = re.compile(
-    r"^(?:Wielosztuka|Rabat|Opust|Żabka).*?(-\d+[.,]\d+)",
+    r"^(?:Wielosztuka|Rabat|Opust|Żabka).*?([−\-\u2212]\d+[.,]\d+)",
     re.IGNORECASE,
 )
 
 # Bottle deposit adjustment: "Kaucja -1,00" or "Butelka zwrotna 0,50"
 _ADJUSTMENT_LINE = re.compile(
-    r"^(?:kaucja|butelka|opakowanie).*?(-?\d+[.,]\d+)",
+    r"^(?:kaucja|butelka|opakowanie).*?([−\-\u2212]?\d+[.,]\d+)",
     re.IGNORECASE,
 )
 

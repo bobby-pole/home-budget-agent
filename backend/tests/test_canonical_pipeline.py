@@ -194,3 +194,32 @@ def test_receipt_validator_with_canonical_data():
     assert result.is_valid is True
     assert result.issues == []
     assert result.confidence == 1.0
+
+
+def test_unicode_minus_and_lidl_detection():
+    from app.ocr_pipeline import detect_merchant
+
+    # Test merchant detection with bare "LiDL" and multi-line address
+    header = [
+        "LiDL",
+        "Adres siedziby : Poznańska 48 , Jankowice",
+        "62-080 Tarnowo",
+        "Podgórne nr rej : BDO 000002265 Lidl sp .",
+    ]
+    assert detect_merchant(header) == "lidl"
+
+    # Test parser with Unicode minus sign (\u2212)
+    lines = [
+        "LiDL",
+        "2026-09-05",
+        "Przekąska z serem",
+        "2 1.52 3.04 C",
+        "Nie marnuję −1,51",  # Unicode minus sign
+        "Suma PLN 1,53",
+    ]
+    parser = LidlReceiptParser()
+    receipt = parser.parse(lines)
+    assert len(receipt.items) == 1
+    assert receipt.items[0].discount_total == Decimal("-1.51")
+    assert receipt.items[0].final_line_total == Decimal("1.53")
+    assert receipt.calculated_total == Decimal("1.53")
