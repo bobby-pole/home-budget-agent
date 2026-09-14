@@ -264,7 +264,7 @@ class PipelineRunner:
             merchant = detect_merchant(lines)
             log.output_summary = {
                 "merchant": merchant or "unknown",
-                "has_deterministic_parser": merchant in ("lidl", "biedronka", "zabka"),
+                "has_deterministic_parser": merchant in ("lidl", "biedronka", "zabka", "kaufland"),
             }
             if merchant:
                 log.route_chosen = f"merchant_{merchant}"
@@ -292,6 +292,8 @@ class PipelineRunner:
                 return self._parse_biedronka(lines, source, log)
             elif merchant == "zabka":
                 return self._parse_zabka(lines, source, log)
+            elif merchant == "kaufland":
+                return self._parse_kaufland(lines, source, log)
 
             # Camera photo with unknown merchant → AI structurizer
             if source == ReceiptSource.PHOTO_IMAGE:
@@ -373,7 +375,40 @@ class PipelineRunner:
                     "Falling back to AI structurizer."
                 )
                 log.route_chosen = "lidl_parser_failed_photo→ai_structurizer"
-                return self._parse_with_ai(lines, log, "Lidl parser failed validation on photo")
+        return data
+
+    def _parse_kaufland(
+        self, lines: list[str], source: ReceiptSource, log: Any
+    ) -> Optional[dict[str, Any]]:
+        from .kaufland_parser import KauflandReceiptParser
+
+        log.route_chosen = "kaufland_deterministic_parser"
+        parsed = KauflandReceiptParser().parse(lines)
+        data = parsed.to_dict()
+
+        items = data.get("items", [])
+        log.output_summary = {
+            "parser": "KauflandReceiptParser",
+            "merchant": data.get("merchant_name"),
+            "date": data.get("date"),
+            "total": data.get("total_amount"),
+            "items_count": len(items),
+        }
+        self.logger.detail_items(items)
+
+        # For camera photos, validate deterministic result — fall back to AI if bad
+        if source == ReceiptSource.PHOTO_IMAGE:
+            self.logger.detail("Photo source — validating deterministic result…")
+            val_result = self._run_validation(data)
+            validation = val_result.get("_validation", {}) if val_result else {}
+
+            if not validation.get("is_valid", True) or validation.get("issues"):
+                self.logger.detail(
+                    f"Deterministic validation failed ({validation.get('issues')}) "
+                    "— falling back to AI structurizer"
+                )
+                log.route_chosen = "kaufland_deterministic_fallback_to_ai"
+                return self._parse_with_ai(lines, log, "Kaufland parser failed validation on photo")
 
         return data
 
