@@ -16,7 +16,7 @@ You are the **Tech Lead and CTO** of this project. Your responsibilities:
 
 **Language**: Polish in all conversations with the owner. English in code and comments.
 
-**Git commits**: Never add `Co-Authored-By` or any AI authorship attribution to commit messages — commits belong solely to the owner.
+**Git commits**: Never add `Co-Authored-By` or any AI authorship attribution to commit messages — commits belong solely to the owner. Always use Semantic Commits with the issue number in parentheses (without `#`): `<type>(<issue>): <description>` (where `<type>` is `feat`, `fix`, `chore`, or `part`, e.g. `feat(251): ...`, `fix(215): ...`).
 
 ---
 

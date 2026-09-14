@@ -459,7 +459,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     data = response.json()
     assert data["merchant_name"] == "Verified Merchant"
     assert data["total_amount"] == 55.0
-    assert data["receipt_scan"]["status"] == ScanStatus.CATEGORIZATION_OK
+    assert data["receipt_scan"]["status"] == ScanStatus.DONE
     assert len(data["lines"]) == 1
     assert data["lines"][0]["name"] == "Verified Item"
 
@@ -474,8 +474,10 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
 def test_scan_status_legacy_values_map_correctly():
     """ScanStatus._missing_ must silently remap pre-migration string values."""
     assert ScanStatus("processing") == ScanStatus.RUNNING
-    assert ScanStatus("done") == ScanStatus.CATEGORIZATION_OK
+    assert ScanStatus("done") == ScanStatus.DONE
     assert ScanStatus("error") == ScanStatus.FAILED
+    assert ScanStatus("needs_review") == ScanStatus.NEEDS_REVIEW
+    assert ScanStatus("categorization_ok") == ScanStatus.CATEGORIZATION_OK
 
 
 def test_inbox_includes_legacy_needs_review(client: TestClient, session: Session):

@@ -7,6 +7,7 @@ export type ReceiptStatus =
   | "PARSING_OK"
   | "CATEGORIZATION_OK"
   | "NEEDS_REVIEW"
+  | "DONE"
   | "FAILED"
   | "processing"
   | "done"
@@ -22,6 +23,7 @@ export const STATUS_LABELS: Record<string, string> = {
   PARSING_OK: t("receipt_status.parsing_ok"),
   CATEGORIZATION_OK: t("receipt_status.categorization_ok"),
   NEEDS_REVIEW: t("receipt_status.needs_review"),
+  DONE: t("receipt_status.done"),
   FAILED: t("receipt_status.failed"),
   processing: t("receipt_status.processing"),
   done: t("receipt_status.done"),
@@ -35,7 +37,7 @@ export function getStatusLabel(status: string): string {
 
 export function getStatusVariant(status: string): StatusVariant {
   if (["QUEUED", "RUNNING", "OCR_OK", "PARSING_OK"].includes(status)) return "in-progress";
-  if (["CATEGORIZATION_OK", "done"].includes(status)) return "success";
+  if (["CATEGORIZATION_OK", "done", "DONE"].includes(status)) return "success";
   if (["NEEDS_REVIEW", "needs_review"].includes(status)) return "warning";
   if (["FAILED", "error"].includes(status)) return "error";
   return "in-progress";
