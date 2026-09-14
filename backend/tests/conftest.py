@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.database import get_session, get_ops_session
+import app.models as _models  # noqa: F401
 from app.models import User, Budget, BudgetMember
 from app.auth import get_current_user
 from app.api import get_current_budget

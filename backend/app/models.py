@@ -4,7 +4,7 @@ from typing import List, Optional
 from datetime import datetime, timezone
 import math
 from pydantic import field_validator
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text, Boolean
 from sqlmodel import Field, Relationship, SQLModel
 from sqlmodel._compat import SQLModelConfig
 
@@ -16,14 +16,17 @@ class ScanStatus(str, Enum):
     PARSING_OK = "PARSING_OK"
     CATEGORIZATION_OK = "CATEGORIZATION_OK"
     NEEDS_REVIEW = "NEEDS_REVIEW"
+    DONE = "DONE"
     FAILED = "FAILED"
 
     @classmethod
     def _missing_(cls, value: object) -> "ScanStatus":
         _legacy_map = {
             "processing": cls.RUNNING,
-            "done": cls.CATEGORIZATION_OK,
+            "done": cls.DONE,
             "error": cls.FAILED,
+            "needs_review": cls.NEEDS_REVIEW,
+            "categorization_ok": cls.CATEGORIZATION_OK,
         }
         if isinstance(value, str):
             mapped = _legacy_map.get(value.lower())
@@ -285,6 +288,10 @@ class ReceiptScan(SQLModel, table=True):
     validation_message: Optional[str] = Field(default=None)
     raw_ocr_text: Optional[str] = Field(default=None)
     reconstructed_lines: Optional[list[str]] = Field(default=None, sa_column=Column(JSON))
+    needs_review: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, index=True, nullable=False, server_default=text("0")),
+    )
 
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
 
@@ -426,6 +433,7 @@ class TransactionLineRead(TransactionLineBase):
 class ReceiptScanRead(SQLModel):
     id: int
     status: str
+    needs_review: bool = False
     image_path: Optional[str] = None
     content_hash: Optional[str] = None
     created_at: datetime

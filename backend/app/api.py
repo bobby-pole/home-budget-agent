@@ -13,7 +13,7 @@ from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import json
 from decimal import Decimal
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header, Query
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete, SQLModel
 from sqlalchemy import extract, func, or_, and_
@@ -364,13 +364,22 @@ def update_budget(
 
 # --- ASYNC OCR WORKER ---
 
-def _set_scan_status(scan_id: int, status: ScanStatus, error_message: Optional[str] = None) -> None:
+def _set_scan_status(
+    scan_id: int,
+    status: ScanStatus,
+    error_message: Optional[str] = None,
+    needs_review: Optional[bool] = None,
+) -> None:
     with Session(operations_engine) as s:
         scan = s.get(ReceiptScan, scan_id)
         if scan:
             scan.status = status
             if error_message is not None:
                 scan.error_message = error_message
+            if needs_review is not None:
+                scan.needs_review = needs_review
+            elif status == ScanStatus.FAILED:
+                scan.needs_review = True
             s.add(scan)
             s.commit()
 
@@ -427,10 +436,14 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         scan2.raw_ocr_text = data.get("_raw_ocr_text")
         scan2.reconstructed_lines = data.get("_reconstructed_lines")
 
-        if not val_is_valid:
-            logger.warning("Validation failed", extra={"scan_id": scan_id, "message": val_message})
+        raw_items = data.get("items") or []
+
+        # Empty receipt with failed validation is an unrecoverable failure
+        if not raw_items and not val_is_valid:
+            logger.warning("Validation failed on empty receipt", extra={"scan_id": scan_id, "message": val_message})
             scan2.status = ScanStatus.FAILED
-            scan2.validation_message = val_message
+            scan2.needs_review = True
+            scan2.validation_message = val_message or "RECEIPT_EMPTY"
             transaction.merchant_name = merchant
             transaction.total_amount = total
             transaction.currency = data.get("currency", "PLN")
@@ -438,7 +451,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             session.add(transaction)
             session.commit()
             logger.info(
-                "Parsing stage completed (failed validation)",
+                "Parsing stage completed (empty receipt failure)",
                 extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
             )
             return
@@ -452,8 +465,34 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         transaction.merchant_name = merchant
         transaction.total_amount = total
         transaction.currency = data.get("currency", "PLN")
-        scan2.status = ScanStatus.NEEDS_REVIEW
-        scan2.validation_message = val_message if val_issues else None
+
+        # Determine if needs_review should be set:
+        # 1. Sum mismatch or any validation issue
+        # 2. Line item confidence below threshold (0.85)
+        # 3. Overall validation confidence below threshold (0.85)
+        CONFIDENCE_THRESHOLD = 0.85
+        has_val_issues = bool(val_issues) or (not val_is_valid)
+        has_low_confidence_item = any(
+            item.get("confidence") is not None and float(item.get("confidence")) < CONFIDENCE_THRESHOLD
+            for item in raw_items
+        )
+        val_confidence = validation.get("confidence")
+        has_low_val_confidence = (
+            val_confidence is not None and float(val_confidence) < CONFIDENCE_THRESHOLD
+        )
+
+        requires_review = has_val_issues or has_low_confidence_item or has_low_val_confidence
+
+        if requires_review:
+            scan2.status = ScanStatus.NEEDS_REVIEW
+            scan2.needs_review = True
+            scan2.validation_message = val_message or (
+                "LOW_CONFIDENCE" if (has_low_confidence_item or has_low_val_confidence) else None
+            )
+        else:
+            scan2.status = ScanStatus.CATEGORIZATION_OK
+            scan2.needs_review = False
+            scan2.validation_message = None
 
         ai_date_str = data.get("date")
         if ai_date_str:
@@ -463,7 +502,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                 logger.warning("Could not parse AI date", extra={"scan_id": scan_id, "date": ai_date_str})
 
         cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
-        for item_raw in data.get("items", []):
+        for item_raw in raw_items:
             category_name = item_raw.get("category", "")
             cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
             cat_source = item_raw.get("category_source")
@@ -489,7 +528,10 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             "Categorization stage completed",
             extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
         )
-        logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
+        if scan2.needs_review:
+            logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
+        else:
+            logger.info("OCR job finished — CATEGORIZATION_OK", extra={"scan_id": scan_id, "transaction_id": transaction_id})
 
 
 async def _run_with_semaphore(scan_id: int, transaction_id: int, image_path: str) -> None:
@@ -866,6 +908,7 @@ async def retry_transaction(
 
     scan.status = ScanStatus.QUEUED
     scan.error_message = None
+    scan.needs_review = False
     session.add(scan)
     session.commit()
     session.refresh(transaction)
@@ -927,6 +970,7 @@ async def get_app_status(
         raise HTTPException(status_code=404, detail="Budget not found")
 
     inbox_statuses = [
+        ScanStatus.CATEGORIZATION_OK,
         ScanStatus.NEEDS_REVIEW,
         ScanStatus.FAILED,
         "needs_review",
@@ -974,28 +1018,34 @@ async def mark_alert_read(
 
 @router.get("/transactions/inbox", response_model=List[TransactionRead])
 async def get_inbox(
+    needs_review: Optional[bool] = Query(default=None, description="Filter by needs_review flag"),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    """Fetch all transactions that require user attention (NEEDS_REVIEW or FAILED)."""
+    """Fetch all transactions that require user attention (CATEGORIZATION_OK, NEEDS_REVIEW, or FAILED)."""
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
     inbox_statuses = [
+        ScanStatus.CATEGORIZATION_OK,
         ScanStatus.NEEDS_REVIEW,
         ScanStatus.FAILED,
         # legacy values stored before migration
         "needs_review",
         "error",
     ]
+    conditions = [
+        Transaction.budget_id == current_budget.id,
+        col(ReceiptScan.status).in_(inbox_statuses),
+    ]
+    if needs_review is not None:
+        conditions.append(col(ReceiptScan.needs_review) == needs_review)
+
     statement = (
         select(Transaction)
         .join(ReceiptScan)
-        .where(
-            Transaction.budget_id == current_budget.id,
-            col(ReceiptScan.status).in_(inbox_statuses),
-        )
+        .where(*conditions)
         .order_by(desc(Transaction.date))
     )
     results = session.exec(statement).all()
@@ -1106,7 +1156,8 @@ async def verify_transaction(
 
     # Persist user's keep_image decision and mark as done
     scan.keep_image = body.keep_image
-    scan.status = ScanStatus.CATEGORIZATION_OK
+    scan.status = ScanStatus.DONE
+    scan.needs_review = False
     session.add(db_transaction)
     session.add(scan)
 

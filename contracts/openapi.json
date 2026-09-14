@@ -894,7 +894,7 @@
     "/api/transactions/inbox": {
       "get": {
         "summary": "Get Inbox",
-        "description": "Fetch all transactions that require user attention (NEEDS_REVIEW or FAILED).",
+        "description": "Fetch all transactions that require user attention (CATEGORIZATION_OK, NEEDS_REVIEW, or FAILED).",
         "operationId": "get_inbox_api_transactions_inbox_get",
         "security": [
           {
@@ -902,6 +902,24 @@
           }
         ],
         "parameters": [
+          {
+            "name": "needs_review",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by needs_review flag",
+              "title": "Needs Review"
+            },
+            "description": "Filter by needs_review flag"
+          },
           {
             "name": "x-budget-id",
             "in": "header",
@@ -3377,6 +3395,11 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "needs_review": {
+            "type": "boolean",
+            "title": "Needs Review",
+            "default": false
           },
           "image_path": {
             "anyOf": [
