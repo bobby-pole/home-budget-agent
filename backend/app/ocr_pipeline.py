@@ -6,7 +6,10 @@ import os
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .receipt_schema import CanonicalReceipt
 
 
 class ReceiptSource(str, Enum):
@@ -152,7 +155,7 @@ def _parse_polish_float(value: str | int | float, divisor: float = 1.0) -> float
 
 class EParagonJSONAdapter:
     @staticmethod
-    def parse(file_bytes: bytes) -> dict:
+    def parse(file_bytes: bytes) -> CanonicalReceipt:
         import base64
 
         raw_data = json.loads(file_bytes.decode("utf-8"))
@@ -204,14 +207,16 @@ class EParagonJSONAdapter:
         # 4. Items — handle two e-paragon formats:
         #    a) Biedronka: rabat is INLINE in towar → {"towar": {"nazwa":..., "rabat": {"wart": -150}}}
         #    b) Żabka:     rabat is a SEPARATE pozycja entry → {"rabat": {"nazwa":..., "wart": -400}}
-        items: list[dict] = []
+        from .receipt_schema import CanonicalItem, CanonicalReceipt, to_decimal
+        from .receipt_normalizer import normalize_receipt
+
+        items: list[CanonicalItem] = []
         positions = paragon.get("pozycja", [])
         for pos in positions:
             # ── Handle towar (product) entries ─────────────────────────────
             towar = pos.get("towar")
             if towar and isinstance(towar, dict):
                 name = towar.get("nazwa", "Unknown Item").strip()
-
                 orig_unit_price = _parse_polish_float(towar.get("cena", 0), divisor=100.0)
                 qty = _parse_polish_float(towar.get("ilosc", "1"))
 
@@ -221,18 +226,14 @@ class EParagonJSONAdapter:
                 if rabat:
                     discount_total = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
 
-                original_price = orig_unit_price
-                final_price = original_price + (discount_total / qty) if qty > 0 else original_price
-
-                items.append({
-                    "name": name,
-                    "price": final_price,
-                    "quantity": qty,
-                    "original_price": original_price,
-                    "discount_total": discount_total,
-                    "final_price": final_price,
-                    "is_adjustment": False,
-                })
+                items.append(CanonicalItem(
+                    name=name,
+                    unit_price=to_decimal(orig_unit_price),
+                    quantity=to_decimal(qty),
+                    discount_total=to_decimal(discount_total),
+                    is_adjustment=False,
+                    original_price=to_decimal(orig_unit_price),
+                ))
                 continue
 
             # ── Handle standalone rabat entries (Żabka format) ─────────────
@@ -243,19 +244,10 @@ class EParagonJSONAdapter:
                 discount_val = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
                 # Find last non-adjustment item to apply discount to
                 for prev_item in reversed(items):
-                    if not prev_item.get("is_adjustment", False):
-                        prev_item["discount_total"] += discount_val
-                        qty = prev_item["quantity"]
-                        prev_item["final_price"] = (
-                            prev_item["original_price"] + (prev_item["discount_total"] / qty)
-                            if qty > 0 else prev_item["original_price"]
-                        )
-                        prev_item["price"] = prev_item["final_price"]
+                    if not prev_item.is_adjustment:
+                        prev_item.discount_total += to_decimal(discount_val)
                         break
                 continue
-
-            # ── Skip unrecognized pozycja entries (defensive) ─────────────
-            # Don't create ghost items from entries we don't understand.
 
         # 5. Packaging / Deposits
         opak = paragon.get("opak", {})
@@ -266,23 +258,21 @@ class EParagonJSONAdapter:
                 ilosc_raw = op_item.get("ilosc", 1000)
                 qty = float(ilosc_raw) / 1000.0 if ilosc_raw > 10 else float(ilosc_raw)
 
-                items.append({
-                    "name": name,
-                    "price": cena,
-                    "quantity": qty,
-                    "original_price": None,
-                    "discount_total": 0.0,
-                    "final_price": None,
-                    "is_adjustment": True,
-                })
+                items.append(CanonicalItem(
+                    name=name,
+                    unit_price=to_decimal(cena),
+                    quantity=to_decimal(qty),
+                    is_adjustment=True,
+                ))
 
-        return {
-            "merchant_name": merchant,
-            "date": date_str,
-            "total_amount": total_gross,
-            "currency": currency,
-            "items": items,
-        }
+        receipt = CanonicalReceipt(
+            merchant_name=merchant,
+            date=date_str,
+            total_amount=to_decimal(total_gross),
+            currency=currency,
+            items=items,
+        )
+        return normalize_receipt(receipt)
 
 
 # ── Google Vision OCR ──────────────────────────────────────────────────────────
@@ -399,7 +389,7 @@ def reconstruct_lines(words: list[OCRWord], y_tolerance: Optional[float] = None,
     if current_line:
         lines.append(sorted(current_line, key=lambda w: w.bounding_box.x_min))
 
-    return [" ".join(w.text for w in line) for line in lines]
+    return [" ".join(w.text for w in line).replace("−", "-") for line in lines]
 
 
 # ── Format Detector ────────────────────────────────────────────────────────────
@@ -409,9 +399,10 @@ _HEADER_LINES = 30
 
 MERCHANT_SIGNATURES: dict[str, list[str]] = {
     "lidl": [
+        r"\bLIDL\b",
         r"LIDL\s+sp\.?\s*z\s*o\.?\s*o\.",
         r"Lidl\s+Plus",
-        r"ul\.\s*Pozna[ńn]ska\s+48",
+        r"Pozna[ńn]ska\s+48",
     ],
     "biedronka": [
         r"Jeronimo\s+Martins",
@@ -419,6 +410,7 @@ MERCHANT_SIGNATURES: dict[str, list[str]] = {
     ],
     "kaufland": [
         r"Kaufland\s+Polska",
+        r"KAUFLAND",
     ],
     "auchan": [
         r"Auchan\s+Polska",

@@ -177,15 +177,16 @@ Return ONLY valid JSON with this structure:
     "total_amount": 123.45,
     "currency": "PLN",
     "items": [
-        {"name": "Product name", "price": 3.50, "quantity": 1}
+        {"name": "Product name", "unit_price": 3.50, "quantity": 1.0, "discount_total": 0.0}
     ]
 }
 
 Rules:
 - date: YYYY-MM-DD format. Use today if missing.
 - total_amount: the final sum paid (after discounts).
-- Each item price is the unit price. quantity defaults to 1.
-- Include discounts as negative-price items if visible."""
+- unit_price: regular unit price before discounts. (You may also supply "price").
+- quantity: quantity or weight (kg), defaults to 1.0.
+- discount_total: discount on this item as a negative or zero number (e.g. -1.50). If discounts appear as separate lines (e.g. 'Rabat', 'Opust'), they can also be included as separate negative items."""
 
         try:
             response = client.chat.completions.create(
@@ -197,7 +198,11 @@ Rules:
                 response_format={"type": "json_object"},
                 max_tokens=8000,
             )
-            return json.loads(response.choices[0].message.content or "{}")
+            raw_data = json.loads(response.choices[0].message.content or "{}")
+            if not raw_data:
+                return None
+            from .receipt_normalizer import normalize_receipt
+            return normalize_receipt(raw_data).to_dict()
         except Exception as e:
             print(f"❌ AI Structurize Error: {e}")
             return None
@@ -210,7 +215,7 @@ Rules:
         """
 
         system_prompt = """You are an expert receipt parser. Extract data from the receipt image into JSON.
-Return: merchant_name, date (YYYY-MM-DD), total_amount, currency, items (name/price/quantity).
+Return: merchant_name, date (YYYY-MM-DD), total_amount, currency, items (name/unit_price/quantity/discount_total).
 Return ONLY valid JSON."""
 
         try:
@@ -230,7 +235,11 @@ Return ONLY valid JSON."""
                 response_format={"type": "json_object"},
                 max_tokens=4000,
             )
-            return json.loads(response.choices[0].message.content or "{}")
+            raw_data = json.loads(response.choices[0].message.content or "{}")
+            if not raw_data:
+                return None
+            from .receipt_normalizer import normalize_receipt
+            return normalize_receipt(raw_data).to_dict()
         except Exception as e:
             print(f"❌ AI Vision Fallback Error: {e}")
             return None
