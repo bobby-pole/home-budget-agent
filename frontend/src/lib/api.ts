@@ -15,7 +15,12 @@ import type {
   UserRead,
   AccountRead,
   AccountCreate,
-  AccountUpdate
+  AccountUpdate,
+  ExternalReceiptConnectionRead,
+  ExternalReceiptConnectionCreate,
+  ExternalReceiptConnectionUpdate,
+  ConnectionSyncNowResponse,
+  ConnectionDisconnectResponse
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import axios from "axios";
@@ -306,6 +311,43 @@ export const api = {
 
   reconcileAccount: async (id: number, real_balance: number) => {
     const response = await apiClient.post<AccountRead>(`/accounts/${id}/reconcile`, { real_balance });
+    return response.data;
+  },
+
+  // --- CONNECTIONS ---
+
+  getConnections: async (): Promise<ExternalReceiptConnectionRead[]> => {
+    const response = await apiClient.get<ExternalReceiptConnectionRead[]>("/connections");
+    return response.data;
+  },
+
+  getConnection: async (id: number): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.get<ExternalReceiptConnectionRead>(`/connections/${id}`);
+    return response.data;
+  },
+
+  createOrUpdateConnection: async (data: ExternalReceiptConnectionCreate): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.post<ExternalReceiptConnectionRead>("/connections", data);
+    return response.data;
+  },
+
+  updateConnection: async (id: number, data: ExternalReceiptConnectionUpdate): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.patch<ExternalReceiptConnectionRead>(`/connections/${id}`, data);
+    return response.data;
+  },
+
+  syncNowConnection: async (id: number): Promise<ConnectionSyncNowResponse> => {
+    const response = await apiClient.post<ConnectionSyncNowResponse>(`/connections/${id}/sync-now`);
+    return response.data;
+  },
+
+  reconnectConnection: async (id: number): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.post<ExternalReceiptConnectionRead>(`/connections/${id}/reconnect`);
+    return response.data;
+  },
+
+  disconnectConnection: async (id: number): Promise<ConnectionDisconnectResponse> => {
+    const response = await apiClient.post<ConnectionDisconnectResponse>(`/connections/${id}/disconnect`);
     return response.data;
   },
 };
