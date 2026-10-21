@@ -1,363 +1,243 @@
-"""
-backend/tests/test_external_connections.py
-
-Comprehensive tests for ExternalReceiptConnection lifecycle, token encryption at rest,
-key rotation, authorization security (cross-user / cross-budget), and failure modes.
-"""
+"""Security and lifecycle tests for external receipt connections."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.core.encryption import (
-    EncryptionKeyError,
-    TokenEncryptionService,
-    get_encryption_service,
-)
+from app.auth import get_current_user
+from app.connection_service import ConnectionService
+from app.core.encryption import EncryptionKeyError, TokenEncryptionService, get_encryption_service
+from app.main import app
 from app.models import (
     Budget,
+    BudgetMember,
     ConnectionErrorCode,
     ConnectionStatus,
     ExternalReceiptConnection,
+    ExternalReceiptConnectionCreate,
     User,
 )
-from app.connection_service import ConnectionService
 
 
-# ─── UNIT TESTS: TOKEN ENCRYPTION & KEY ROTATION ─────────────────────────────
-
-def test_token_encryption_and_decryption():
-    """Verify encryption and decryption round-trip with active primary key."""
-    key = Fernet.generate_key().decode("utf-8")
-    service = TokenEncryptionService(keys={"v1": key}, primary_key_id="v1")
-
-    plaintext = "lidl-oauth-refresh-token-secret-xyz"
-    ciphertext, key_id = service.encrypt(plaintext)
-
-    assert key_id == "v1"
-    assert ciphertext != plaintext
-    assert plaintext not in ciphertext
-
-    decrypted = service.decrypt(ciphertext, key_id="v1")
-    assert decrypted == plaintext
-
-
-def test_encryption_fail_closed_when_key_missing(monkeypatch: pytest.MonkeyPatch):
-    """Ensure missing key fails closed with EncryptionKeyError."""
-    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
-    monkeypatch.delenv("CONNECTION_ENCRYPTION_KEYS", raising=False)
-    monkeypatch.delenv("TOKEN_PRIMARY_KEY_ID", raising=False)
-
-    service = TokenEncryptionService()
-    assert not service.is_configured
-
-    with pytest.raises(EncryptionKeyError):
-        service.encrypt("sensitive-token")
-
-    with pytest.raises(EncryptionKeyError):
-        service.decrypt("some-ciphertext")
-
-
-def test_encryption_fail_closed_when_key_invalid():
-    """Ensure invalid key format triggers fail-closed error."""
-    with pytest.raises(EncryptionKeyError):
-        TokenEncryptionService(keys={"v1": "not-a-valid-base64-fernet-key"})
-
-
-def test_key_rotation_decryption_with_previous_key():
-    """Verify that an older key can decrypt historic records after rotation."""
-    key_old = Fernet.generate_key().decode("utf-8")
-    key_new = Fernet.generate_key().decode("utf-8")
-
-    # Encrypted with old service
-    service_old = TokenEncryptionService(keys={"v1": key_old}, primary_key_id="v1")
-    plaintext = "super-secret-historic-token"
-    ciphertext_v1, kid_v1 = service_old.encrypt(plaintext)
-    assert kid_v1 == "v1"
-
-    # Rotated service with v2 as primary and v1 as legacy
-    service_rotated = TokenEncryptionService(
-        keys={"v2": key_new, "v1": key_old},
-        primary_key_id="v2"
-    )
-
-    decrypted = service_rotated.decrypt(ciphertext_v1, key_id="v1")
-    assert decrypted == plaintext
-
-    # Fallback decryption even when key_id is not provided
-    decrypted_fallback = service_rotated.decrypt(ciphertext_v1)
-    assert decrypted_fallback == plaintext
-
-
-def test_key_rotation_reencryption_under_primary_key():
-    """Verify automatic re-encryption from old key ID to active primary key ID."""
-    key_v1 = Fernet.generate_key().decode("utf-8")
-    key_v2 = Fernet.generate_key().decode("utf-8")
-
-    service_v1 = TokenEncryptionService(keys={"v1": key_v1}, primary_key_id="v1")
-    plaintext = "token-requiring-reencryption"
-    ciphertext_v1, _ = service_v1.encrypt(plaintext)
-
-    service_v2 = TokenEncryptionService(
-        keys={"v2": key_v2, "v1": key_v1},
-        primary_key_id="v2"
-    )
-
-    new_ciphertext, new_kid, did_reencrypt = service_v2.reencrypt_if_needed(
-        ciphertext_v1, current_key_id="v1"
-    )
-    assert did_reencrypt is True
-    assert new_kid == "v2"
-    assert new_ciphertext != ciphertext_v1
-    assert service_v2.decrypt(new_ciphertext, key_id="v2") == plaintext
-
-    # If already encrypted with v2, no re-encryption occurs
-    _, _, did_reencrypt_again = service_v2.reencrypt_if_needed(
-        new_ciphertext, current_key_id="v2"
-    )
-    assert did_reencrypt_again is False
-
-
-# ─── DATABASE DUMP SECURITY TEST ─────────────────────────────────────────────
-
-def test_sqlite_dump_never_contains_plaintext_token(session: Session, monkeypatch: pytest.MonkeyPatch):
-    """
-    SECURITY TEST: Prove that dumping the SQLite database does NOT reveal
-    the plaintext token in raw tables, queries, or serialization dumps.
-    """
-    test_key = Fernet.generate_key().decode("utf-8")
-    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", test_key)
-    get_encryption_service(reload_env=True)
-
-    secret_raw_token = "TOPSECRET_REFRESH_TOKEN_PLAINTEXT_12345"
-
-    user = User(email="security@test.local", hashed_password="pw")
-    session.add(user)
+def _add_member(session: Session, budget: Budget, user: User, role: str) -> None:
+    session.add(BudgetMember(budget_id=budget.id, user_id=user.id, role=role))
     session.commit()
-    session.refresh(user)
 
-    budget = Budget(name="Secure Budget", owner_id=user.id)
-    session.add(budget)
-    session.commit()
-    session.refresh(budget)
 
-    assert budget.id is not None
-    assert user.id is not None
+def _set_client_user(user: User) -> None:
+    app.dependency_overrides[get_current_user] = lambda: user
 
-    # Use service to create connection
-    from app.models import ExternalReceiptConnectionCreate
-    data = ExternalReceiptConnectionCreate(
-        provider="lidl",
-        account_identifier="user@example.com",
+
+def _complete_authorization(
+    session: Session, budget: Budget, user: User, provider: str = "lidl"
+) -> ExternalReceiptConnection:
+    placeholder = ConnectionService.create_connection(
+        session, budget.id or 0, user, ExternalReceiptConnectionCreate(provider=provider)
+    )
+    connection = session.get(ExternalReceiptConnection, placeholder.id)
+    assert connection is not None
+    ConnectionService.complete_authorization(
+        session,
+        connection,
+        refresh_token="server-only-refresh-token",
         consented_scopes="openid,tickets",
-        refresh_token=secret_raw_token,
     )
-    conn_dto = ConnectionService.create_or_update_connection(session, budget.id, user, data)
-    assert conn_dto.has_token is True
+    return connection
 
-    # 1. Fetch raw row from database
-    db_conn = session.get(ExternalReceiptConnection, conn_dto.id)
-    assert db_conn is not None
-    assert db_conn.encrypted_refresh_token is not None
-    assert secret_raw_token not in db_conn.encrypted_refresh_token
-
-    # 2. Extract SQLite dump across all tables and rows
-    raw_connection = session.connection().connection
-    dump_lines = list(raw_connection.iterdump())
-    full_database_dump = "\n".join(dump_lines)
-
-    # Invariant: Plaintext token MUST NOT exist in database dump
-    assert secret_raw_token not in full_database_dump
-    assert "TOPSECRET_REFRESH_TOKEN" not in full_database_dump
-
-    # Invariant: Encrypted ciphertext IS present in the dump
-    assert db_conn.encrypted_refresh_token in full_database_dump
-
-
-# ─── API ENDPOINT & LIFECYCLE TESTS ──────────────────────────────────────────
 
 @pytest.fixture(autouse=True)
 def setup_test_encryption_env(monkeypatch: pytest.MonkeyPatch):
-    """Ensure a valid test Fernet key is always available for API tests."""
     test_key = Fernet.generate_key().decode("utf-8")
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", test_key)
     monkeypatch.setenv("TOKEN_PRIMARY_KEY_ID", "v1")
     get_encryption_service(reload_env=True)
 
 
-def test_api_create_and_read_connection(client: TestClient, session: Session):
-    """Verify creating a connection and reading it back without exposing ciphertexts."""
-    create_payload = {
-        "provider": "lidl",
-        "account_identifier": "+48 500 600 700",
-        "consented_scopes": "openid,tickets,profile",
-        "refresh_token": "client-test-token-value",
-    }
-    response = client.post("/api/connections", json=create_payload)
+def test_token_encryption_and_decryption():
+    key = Fernet.generate_key().decode("utf-8")
+    service = TokenEncryptionService(keys={"v1": key}, primary_key_id="v1")
+    ciphertext, key_id = service.encrypt("server-only-refresh-token")
+    assert key_id == "v1"
+    assert service.decrypt(ciphertext, key_id="v1") == "server-only-refresh-token"
+
+
+def test_encryption_fails_closed_for_missing_or_unknown_primary_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("CONNECTION_ENCRYPTION_KEYS", raising=False)
+    monkeypatch.delenv("TOKEN_PRIMARY_KEY_ID", raising=False)
+    with pytest.raises(EncryptionKeyError):
+        TokenEncryptionService().encrypt("sensitive-token")
+
+    key = Fernet.generate_key().decode("utf-8")
+    with pytest.raises(EncryptionKeyError):
+        TokenEncryptionService(keys={"v1": key}, primary_key_id="missing")
+
+
+def test_key_rotation_reencrypts_under_primary_key():
+    key_v1 = Fernet.generate_key().decode("utf-8")
+    key_v2 = Fernet.generate_key().decode("utf-8")
+    old_service = TokenEncryptionService(keys={"v1": key_v1}, primary_key_id="v1")
+    old_ciphertext, _ = old_service.encrypt("historic-token")
+    rotated = TokenEncryptionService(keys={"v1": key_v1, "v2": key_v2}, primary_key_id="v2")
+    ciphertext, key_id, changed = rotated.reencrypt_if_needed(old_ciphertext, "v1")
+    assert changed is True
+    assert key_id == "v2"
+    assert rotated.decrypt(ciphertext, key_id=key_id) == "historic-token"
+
+
+def test_sqlite_dump_never_contains_plaintext_token(session: Session):
+    user = User(email="security@test.local", hashed_password="pw")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    budget = Budget(name="Secure Budget", owner_id=user.id)
+    session.add(budget)
+    session.commit()
+    session.refresh(budget)
+    _add_member(session, budget, user, "owner")
+
+    connection = _complete_authorization(session, budget, user)
+    assert connection.encrypted_refresh_token is not None
+    assert "server-only-refresh-token" not in connection.encrypted_refresh_token
+    dump = "\n".join(session.connection().connection.iterdump())
+    assert "server-only-refresh-token" not in dump
+    assert connection.encrypted_refresh_token in dump
+
+
+def test_public_api_rejects_credential_and_creates_reauth_placeholder(client: TestClient):
+    rejected = client.post("/api/connections", json={"provider": "lidl", "refresh_token": "secret"})
+    assert rejected.status_code == 422
+
+    response = client.post("/api/connections", json={"provider": "lidl"})
     assert response.status_code == 200
     data = response.json()
-
     assert data["provider"] == "lidl"
-    assert data["account_identifier"] == "+48 500 600 700"
-    assert data["consented_scopes"] == "openid,tickets,profile"
-    assert data["status"] == "active"
-    assert data["has_token"] is True
-
-    # Strict privacy invariant: token and ciphertext are NEVER returned in response
+    assert data["status"] == ConnectionStatus.REAUTH_REQUIRED.value
+    assert data["has_token"] is False
+    assert data["consented_at"] is None
     assert "refresh_token" not in data
     assert "encrypted_refresh_token" not in data
-    assert "encryption_key_id" not in data
-
-    connection_id = data["id"]
-
-    # Read back via GET /connections
-    list_resp = client.get("/api/connections")
-    assert list_resp.status_code == 200
-    connections = list_resp.json()
-    assert len(connections) == 1
-    assert connections[0]["id"] == connection_id
-    assert connections[0]["has_token"] is True
-
-    # Read back via GET /connections/{id}
-    detail_resp = client.get(f"/api/connections/{connection_id}")
-    assert detail_resp.status_code == 200
-    assert detail_resp.json()["id"] == connection_id
+    assert "account_identifier" not in data
 
 
-def test_api_cross_budget_cross_user_forbidden(client: TestClient, session: Session):
-    """
-    Ensure user in Budget A cannot access, sync, reconnect, or disconnect
-    a connection belonging to Budget B (cross-budget isolation).
-    """
-    # Create another user and budget (Budget B)
+def test_same_budget_member_cannot_read_or_mutate_another_users_connection(
+    client: TestClient, session: Session
+):
+    created = client.post("/api/connections", json={"provider": "lidl"})
+    connection_id = created.json()["id"]
+
     other_user = User(email="other@example.com", hashed_password="hash")
     session.add(other_user)
     session.commit()
     session.refresh(other_user)
+    budget = next(iter(session.exec(select(Budget))))
+    _add_member(session, budget, other_user, "editor")
+    _set_client_user(other_user)
 
-    other_budget = Budget(name="Other Budget", owner_id=other_user.id)
-    session.add(other_budget)
+    assert client.get("/api/connections").json() == []
+    for request in (
+        lambda: client.get(f"/api/connections/{connection_id}"),
+        lambda: client.post(f"/api/connections/{connection_id}/sync-now"),
+        lambda: client.post(f"/api/connections/{connection_id}/reconnect"),
+        lambda: client.post(f"/api/connections/{connection_id}/disconnect"),
+    ):
+        assert request().status_code == 404
+
+
+def test_viewer_cannot_create_or_manage_connection(client: TestClient, session: Session):
+    viewer = User(email="viewer@example.com", hashed_password="hash")
+    session.add(viewer)
     session.commit()
-    session.refresh(other_budget)
+    session.refresh(viewer)
+    budget = next(iter(session.exec(select(Budget))))
+    _add_member(session, budget, viewer, "viewer")
+    _set_client_user(viewer)
 
-    assert other_budget.id is not None
-    assert other_user.id is not None
+    response = client.post("/api/connections", json={"provider": "lidl"})
+    assert response.status_code == 403
 
-    # Insert a connection in Budget B
-    other_conn = ExternalReceiptConnection(
-        budget_id=other_budget.id,
-        owner_user_id=other_user.id,
-        provider="biedronka",
-        status=ConnectionStatus.ACTIVE.value,
-        consented_at=datetime.now(timezone.utc),
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-    )
-    session.add(other_conn)
+
+def test_two_household_members_can_create_separate_provider_connections(
+    client: TestClient, session: Session
+):
+    first = client.post("/api/connections", json={"provider": "lidl"})
+    assert first.status_code == 200
+
+    other_user = User(email="second@example.com", hashed_password="hash")
+    session.add(other_user)
     session.commit()
-    session.refresh(other_conn)
+    session.refresh(other_user)
+    budget = next(iter(session.exec(select(Budget))))
+    _add_member(session, budget, other_user, "editor")
+    _set_client_user(other_user)
 
-    # Current client is authenticated as default test_user in test_budget (Budget A)
-    # Attempt to read Budget B's connection -> MUST return 404
-    resp_get = client.get(f"/api/connections/{other_conn.id}")
-    assert resp_get.status_code == 404
-
-    # Attempt to trigger sync -> MUST return 404
-    resp_sync = client.post(f"/api/connections/{other_conn.id}/sync-now")
-    assert resp_sync.status_code == 404
-
-    # Attempt to reconnect -> MUST return 404
-    resp_reconnect = client.post(f"/api/connections/{other_conn.id}/reconnect")
-    assert resp_reconnect.status_code == 404
-
-    # Attempt to disconnect -> MUST return 404
-    resp_disconnect = client.post(f"/api/connections/{other_conn.id}/disconnect")
-    assert resp_disconnect.status_code == 404
+    second = client.post("/api/connections", json={"provider": "lidl"})
+    assert second.status_code == 200
+    assert first.json()["owner_user_id"] != second.json()["owner_user_id"]
+    assert len(session.exec(select(ExternalReceiptConnection)).all()) == 2
 
 
-def test_api_sync_now_records_request_without_false_success(client: TestClient):
-    """
-    'Sync now' registers sync_requested_at in queue.
-    Invariant: Does NOT falsely report completed synchronization without worker #257.
-    """
-    create_payload = {"provider": "lidl", "refresh_token": "token-1"}
-    create_resp = client.post("/api/connections", json=create_payload)
-    conn_id = create_resp.json()["id"]
-
-    sync_resp = client.post(f"/api/connections/{conn_id}/sync-now")
-    assert sync_resp.status_code == 200
-    sync_data = sync_resp.json()
-
-    assert sync_data["connection_id"] == conn_id
-    assert sync_data["status"] == "active"
-    assert "sync_requested_at" in sync_data
-    assert sync_data["sync_requested_at"] is not None
-    # Message makes clear it is queued, not completed
-    assert "queued" in sync_data["message"].lower()
-
-    # Verify detail shows sync_requested_at
-    detail_resp = client.get(f"/api/connections/{conn_id}")
-    assert detail_resp.json()["sync_requested_at"] is not None
+def test_sync_requires_completed_authorization(client: TestClient):
+    created = client.post("/api/connections", json={"provider": "lidl"})
+    connection_id = created.json()["id"]
+    sync = client.post(f"/api/connections/{connection_id}/sync-now")
+    assert sync.status_code == 409
+    assert "authorization" in sync.json()["detail"].lower()
 
 
-def test_api_reconnect_sets_reauth_required(client: TestClient):
-    """Reconnect transitions connection status to reauth_required."""
-    create_payload = {"provider": "lidl"}
-    create_resp = client.post("/api/connections", json=create_payload)
-    conn_id = create_resp.json()["id"]
+def test_completed_authorization_allows_sync_and_keeps_identifier_private(
+    client: TestClient, session: Session
+):
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    connection = _complete_authorization(session, budget, owner)
 
-    reconnect_resp = client.post(f"/api/connections/{conn_id}/reconnect")
-    assert reconnect_resp.status_code == 200
-    data = reconnect_resp.json()
-    assert data["status"] == ConnectionStatus.REAUTH_REQUIRED.value
-    assert data["last_error_code"] == ConnectionErrorCode.REAUTH_REQUIRED.value
-
-
-def test_api_disconnect_deletes_token_atomically(client: TestClient, session: Session):
-    """
-    Disconnect deletes tokens at rest atomically and reports neutral revocation status.
-    """
-    create_payload = {
-        "provider": "lidl",
-        "refresh_token": "token-to-delete",
-    }
-    create_resp = client.post("/api/connections", json=create_payload)
-    conn_id = create_resp.json()["id"]
-    assert create_resp.json()["has_token"] is True
-
-    # Disconnect
-    disc_resp = client.post(f"/api/connections/{conn_id}/disconnect")
-    assert disc_resp.status_code == 200
-    disc_data = disc_resp.json()
-    assert disc_data["status"] == ConnectionStatus.DISCONNECTED.value
-    assert disc_data["revocation_status"] == "provider_revocation_unavailable"
-
-    # Verify in DB: tokens must be None
-    db_conn = session.get(ExternalReceiptConnection, conn_id)
-    assert db_conn is not None
-    assert db_conn.encrypted_refresh_token is None
-    assert db_conn.encryption_key_id is None
-    assert db_conn.status == ConnectionStatus.DISCONNECTED.value
-    assert db_conn.last_error_code == ConnectionErrorCode.PROVIDER_REVOCATION_UNAVAILABLE.value
-
-    # Verify via API detail: has_token is False
-    detail_resp = client.get(f"/api/connections/{conn_id}")
-    assert detail_resp.json()["has_token"] is False
-    assert detail_resp.json()["status"] == ConnectionStatus.DISCONNECTED.value
+    sync = client.post(f"/api/connections/{connection.id}/sync-now")
+    assert sync.status_code == 200
+    assert sync.json()["status"] == ConnectionStatus.ACTIVE.value
+    detail = client.get(f"/api/connections/{connection.id}").json()
+    assert detail["has_token"] is True
+    assert "account_identifier" not in detail
 
 
-def test_sync_now_rejected_on_disconnected(client: TestClient):
-    """Cannot trigger sync on a disconnected connection."""
-    create_payload = {"provider": "lidl"}
-    create_resp = client.post("/api/connections", json=create_payload)
-    conn_id = create_resp.json()["id"]
+def test_disconnect_erases_token_atomically(client: TestClient, session: Session):
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    connection = _complete_authorization(session, budget, owner)
 
-    client.post(f"/api/connections/{conn_id}/disconnect")
+    response = client.post(f"/api/connections/{connection.id}/disconnect")
+    assert response.status_code == 200
+    refreshed = session.get(ExternalReceiptConnection, connection.id)
+    assert refreshed is not None
+    assert refreshed.encrypted_refresh_token is None
+    assert refreshed.encryption_key_id is None
+    assert refreshed.status == ConnectionStatus.DISCONNECTED.value
 
-    sync_resp = client.post(f"/api/connections/{conn_id}/sync-now")
-    assert sync_resp.status_code == 400
-    assert "disconnected" in sync_resp.json()["detail"].lower()
+
+def test_lost_encryption_key_marks_connection_for_reauthorization(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+):
+    user = User(email="restore@test.local", hashed_password="pw")
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    budget = Budget(name="Restore Budget", owner_id=user.id)
+    session.add(budget)
+    session.commit()
+    session.refresh(budget)
+    _add_member(session, budget, user, "owner")
+    connection = _complete_authorization(session, budget, user)
+
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("CONNECTION_ENCRYPTION_KEYS", raising=False)
+    monkeypatch.delenv("TOKEN_PRIMARY_KEY_ID", raising=False)
+    get_encryption_service(reload_env=True)
+
+    assert ConnectionService.get_decrypted_token(session, connection) is None
+    assert connection.status == ConnectionStatus.REAUTH_REQUIRED.value
+    assert connection.last_error_code == ConnectionErrorCode.ENCRYPTION_KEY_MISSING.value

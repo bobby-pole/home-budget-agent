@@ -31,7 +31,7 @@ from .models import (
     BudgetAlert, AppStatusRead,
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
-    ExternalReceiptConnectionUpdate, ConnectionSyncNowResponse, ConnectionDisconnectResponse
+    ConnectionSyncNowResponse, ConnectionDisconnectResponse
 )
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
@@ -2353,7 +2353,7 @@ def list_receipt_connections(
     """List all external receipt connections configured for the current budget."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.list_connections(session, current_budget.id)
+    return ConnectionService.list_connections(session, current_budget.id, current_user)
 
 
 @router.post("/connections", response_model=ExternalReceiptConnectionRead)
@@ -2363,10 +2363,10 @@ def create_or_update_receipt_connection(
     current_budget: Budget = Depends(get_current_budget),
     current_user: User = Depends(get_current_user),
 ):
-    """Create or update a store receipt connection with encrypted credentials at rest."""
+    """Create a credential-free connection placeholder for the current user."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.create_or_update_connection(session, current_budget.id, current_user, data)
+    return ConnectionService.create_connection(session, current_budget.id, current_user, data)
 
 
 @router.get("/connections/{connection_id}", response_model=ExternalReceiptConnectionRead)
@@ -2379,22 +2379,8 @@ def get_receipt_connection(
     """Get connection details by ID within the current budget."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    conn = ConnectionService.get_connection(session, current_budget.id, connection_id)
+    conn = ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
     return to_read_dto(conn)
-
-
-@router.patch("/connections/{connection_id}", response_model=ExternalReceiptConnectionRead)
-def update_receipt_connection(
-    connection_id: int,
-    data: ExternalReceiptConnectionUpdate,
-    session: Session = Depends(get_ops_session),
-    current_budget: Budget = Depends(get_current_budget),
-    current_user: User = Depends(get_current_user),
-):
-    """Update connection metadata or refresh token."""
-    if current_budget.id is None:
-        raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.update_connection(session, current_budget.id, connection_id, data)
 
 
 @router.post("/connections/{connection_id}/sync-now", response_model=ConnectionSyncNowResponse)
@@ -2407,7 +2393,7 @@ def sync_now_receipt_connection(
     """Trigger an immediate sync queue request for a connection."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.trigger_sync_now(session, current_budget.id, connection_id)
+    return ConnectionService.trigger_sync_now(session, current_budget.id, connection_id, current_user)
 
 
 @router.post("/connections/{connection_id}/reconnect", response_model=ExternalReceiptConnectionRead)
@@ -2420,7 +2406,7 @@ def reconnect_receipt_connection(
     """Transition connection to reauth_required state."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.reconnect(session, current_budget.id, connection_id)
+    return ConnectionService.reconnect(session, current_budget.id, connection_id, current_user)
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=ConnectionDisconnectResponse)
@@ -2433,5 +2419,4 @@ def disconnect_receipt_connection(
     """Atomically erase stored tokens and mark connection as disconnected."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.disconnect(session, current_budget.id, connection_id)
-
+    return ConnectionService.disconnect(session, current_budget.id, connection_id, current_user)

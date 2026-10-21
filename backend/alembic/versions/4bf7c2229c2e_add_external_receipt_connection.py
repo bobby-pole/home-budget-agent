@@ -26,11 +26,10 @@ def upgrade() -> None:
         sa.Column('budget_id', sa.Integer(), nullable=False),
         sa.Column('owner_user_id', sa.Integer(), nullable=False),
         sa.Column('provider', sa.String(), nullable=False),
-        sa.Column('account_identifier', sa.String(), nullable=True),
         sa.Column('consented_scopes', sa.String(), nullable=True),
-        sa.Column('status', sa.String(), nullable=False, server_default='active'),
+        sa.Column('status', sa.String(), nullable=False, server_default='reauth_required'),
         sa.Column('last_error_code', sa.String(), nullable=True),
-        sa.Column('consented_at', sa.DateTime(), nullable=False),
+        sa.Column('consented_at', sa.DateTime(), nullable=True),
         sa.Column('encrypted_refresh_token', sa.String(), nullable=True),
         sa.Column('encryption_key_id', sa.String(), nullable=True),
         sa.Column('last_success_at', sa.DateTime(), nullable=True),
@@ -41,7 +40,10 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['budget_id'], ['budget.id']),
         sa.ForeignKeyConstraint(['owner_user_id'], ['user.id']),
         sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('budget_id', 'provider', name='uq_connection_budget_provider'),
+        sa.UniqueConstraint(
+            'budget_id', 'owner_user_id', 'provider',
+            name='uq_connection_budget_owner_provider',
+        ),
     )
     with op.batch_alter_table('external_receipt_connection', schema=None) as batch_op:
         batch_op.create_index('ix_connection_budget_status', ['budget_id', 'status'], unique=False)

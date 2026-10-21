@@ -2574,7 +2574,7 @@
       },
       "post": {
         "summary": "Create Or Update Receipt Connection",
-        "description": "Create or update a store receipt connection with encrypted credentials at rest.",
+        "description": "Create a credential-free connection placeholder for the current user.",
         "operationId": "create_or_update_receipt_connection_api_connections_post",
         "security": [
           {
@@ -2670,75 +2670,6 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExternalReceiptConnectionRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "summary": "Update Receipt Connection",
-        "description": "Update connection metadata or refresh token.",
-        "operationId": "update_receipt_connection_api_connections__connection_id__patch",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "connection_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Connection Id"
-            }
-          },
-          {
-            "name": "x-budget-id",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Budget-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExternalReceiptConnectionUpdate"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3625,6 +3556,17 @@
         ],
         "title": "ConnectionDisconnectResponse"
       },
+      "ConnectionStatus": {
+        "type": "string",
+        "enum": [
+          "active",
+          "expired",
+          "reauth_required",
+          "sync_error",
+          "disconnected"
+        ],
+        "title": "ConnectionStatus"
+      },
       "ConnectionSyncNowResponse": {
         "properties": {
           "connection_id": {
@@ -3632,8 +3574,7 @@
             "title": "Connection Id"
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/ConnectionStatus"
           },
           "sync_requested_at": {
             "type": "string",
@@ -3716,46 +3657,15 @@
           "provider": {
             "type": "string",
             "title": "Provider"
-          },
-          "account_identifier": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Identifier"
-          },
-          "consented_scopes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Consented Scopes"
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "required": [
           "provider"
         ],
-        "title": "ExternalReceiptConnectionCreate"
+        "title": "ExternalReceiptConnectionCreate",
+        "description": "Create a local authorization placeholder; it never accepts credentials."
       },
       "ExternalReceiptConnectionRead": {
         "properties": {
@@ -3775,17 +3685,6 @@
             "type": "string",
             "title": "Provider"
           },
-          "account_identifier": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Identifier"
-          },
           "consented_scopes": {
             "anyOf": [
               {
@@ -3798,13 +3697,19 @@
             "title": "Consented Scopes"
           },
           "consented_at": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Consented At"
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/ConnectionStatus"
           },
           "has_token": {
             "type": "boolean",
@@ -3875,62 +3780,11 @@
           "budget_id",
           "owner_user_id",
           "provider",
-          "consented_at",
           "status",
           "created_at",
           "updated_at"
         ],
         "title": "ExternalReceiptConnectionRead"
-      },
-      "ExternalReceiptConnectionUpdate": {
-        "properties": {
-          "account_identifier": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Account Identifier"
-          },
-          "consented_scopes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Consented Scopes"
-          },
-          "refresh_token": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Refresh Token"
-          },
-          "status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Status"
-          }
-        },
-        "type": "object",
-        "title": "ExternalReceiptConnectionUpdate"
       },
       "HTTPValidationError": {
         "properties": {

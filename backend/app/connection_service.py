@@ -1,32 +1,22 @@
-"""
-backend/app/services/connection_service.py
+"""Lifecycle and authorization policy for external receipt connections.
 
-Service managing external receipt provider connections, lifecycle transitions,
-token encryption at rest, key rotation, and authorization enforcement.
-
-Scope & Boundary Rules:
-- Phase 1 Web MVP: Privacy-first server-side token encryption at rest.
-- Provider-agnostic lifecycle: Does not implement store-specific scrapers, reverse-engineered
-  native clients, or background sync worker (#257).
-- "Sync now" registers a timestamped queue request without asserting false sync completion.
-- "Disconnect" atomically deletes stored tokens at rest and records a neutral revocation status.
-- Never logs tokens, ciphertexts, or raw provider payload responses.
+This module deliberately does not expose merchant credentials through the web
+API. A future approved provider adapter completes authorization server-side and
+calls :meth:`complete_authorization`; the public API can only create a local
+placeholder and manage its lifecycle.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.encryption import (
-    DecryptionError,
-    EncryptionKeyError,
-    get_encryption_service,
-)
+from app.core.encryption import DecryptionError, EncryptionKeyError, get_encryption_service
 from app.models import (
+    BudgetMember,
     ConnectionDisconnectResponse,
     ConnectionErrorCode,
     ConnectionStatus,
@@ -34,22 +24,23 @@ from app.models import (
     ExternalReceiptConnection,
     ExternalReceiptConnectionCreate,
     ExternalReceiptConnectionRead,
-    ExternalReceiptConnectionUpdate,
     User,
 )
 
 
+CONNECTION_WRITE_ROLES = {"owner", "editor"}
+
+
 def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRead:
-    """Convert an internal DB model to an API-safe DTO without leaking ciphertexts."""
+    """Return the public, credential-free representation of a connection."""
     return ExternalReceiptConnectionRead(
         id=conn.id or 0,
         budget_id=conn.budget_id,
         owner_user_id=conn.owner_user_id,
         provider=conn.provider,
-        account_identifier=conn.account_identifier,
         consented_scopes=conn.consented_scopes,
         consented_at=conn.consented_at,
-        status=conn.status,
+        status=ConnectionStatus(conn.status),
         has_token=bool(conn.encrypted_refresh_token),
         last_success_at=conn.last_success_at,
         last_error_code=conn.last_error_code,
@@ -61,45 +52,54 @@ def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRea
 
 
 class ConnectionService:
-    """Orchestrates connection lifecycle operations."""
+    """Orchestrates a per-user, per-budget connection lifecycle."""
 
     @staticmethod
-    def list_connections(session: Session, budget_id: int) -> List[ExternalReceiptConnectionRead]:
-        """List all external receipt connections belonging to the specified budget."""
+    def _require_write_member(session: Session, budget_id: int, user: User) -> None:
+        membership = session.exec(
+            select(BudgetMember).where(
+                BudgetMember.budget_id == budget_id,
+                BudgetMember.user_id == user.id,
+            )
+        ).first()
+        if not membership or membership.role not in CONNECTION_WRITE_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only budget owners and editors can manage receipt connections",
+            )
+
+    @staticmethod
+    def list_connections(
+        session: Session, budget_id: int, user: User
+    ) -> list[ExternalReceiptConnectionRead]:
+        """List only connections owned by the authenticated household member."""
         connections = session.exec(
-            select(ExternalReceiptConnection).where(ExternalReceiptConnection.budget_id == budget_id)
+            select(ExternalReceiptConnection).where(
+                ExternalReceiptConnection.budget_id == budget_id,
+                ExternalReceiptConnection.owner_user_id == user.id,
+            )
         ).all()
-        return [to_read_dto(c) for c in connections]
+        return [to_read_dto(connection) for connection in connections]
 
     @staticmethod
     def get_connection(
-        session: Session, budget_id: int, connection_id: int
+        session: Session, budget_id: int, connection_id: int, user: User
     ) -> ExternalReceiptConnection:
-        """
-        Fetch a single connection verifying budget ownership.
-
-        Raises:
-            HTTPException 404: If connection is missing or belongs to a different budget.
-        """
+        """Fetch an owned connection without disclosing another member's record."""
         conn = session.get(ExternalReceiptConnection, connection_id)
-        if not conn or conn.budget_id != budget_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Connection not found",
-            )
+        if not conn or conn.budget_id != budget_id or conn.owner_user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
         return conn
 
     @staticmethod
-    def create_or_update_connection(
+    def create_connection(
         session: Session,
         budget_id: int,
         user: User,
         data: ExternalReceiptConnectionCreate,
     ) -> ExternalReceiptConnectionRead:
-        """
-        Register or update a provider connection for a budget.
-        Encrypts refresh tokens at rest with the active primary key.
-        """
+        """Create an unauthorised placeholder; credentials are never accepted here."""
+        ConnectionService._require_write_member(session, budget_id, user)
         provider_clean = data.provider.strip().lower()
         if not provider_clean:
             raise HTTPException(
@@ -107,117 +107,82 @@ class ConnectionService:
                 detail="Provider cannot be blank",
             )
 
-        now = datetime.now(timezone.utc)
-        encrypted_token: Optional[str] = None
-        key_id: Optional[str] = None
-
-        if data.refresh_token:
-            token_clean = data.refresh_token.strip()
-            if token_clean:
-                encryption_svc = get_encryption_service()
-                try:
-                    encrypted_token, key_id = encryption_svc.encrypt(token_clean)
-                except EncryptionKeyError as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Token encryption service is not configured (fail-closed)",
-                    ) from exc
-
         existing = session.exec(
             select(ExternalReceiptConnection).where(
                 ExternalReceiptConnection.budget_id == budget_id,
+                ExternalReceiptConnection.owner_user_id == user.id,
                 ExternalReceiptConnection.provider == provider_clean,
             )
         ).first()
-
         if existing:
-            existing.account_identifier = data.account_identifier or existing.account_identifier
-            existing.consented_scopes = data.consented_scopes or existing.consented_scopes
-            existing.status = ConnectionStatus.ACTIVE.value
-            existing.last_error_code = None
-            existing.updated_at = now
-            if encrypted_token and key_id:
-                existing.encrypted_refresh_token = encrypted_token
-                existing.encryption_key_id = key_id
-            session.add(existing)
-            session.commit()
-            session.refresh(existing)
-            return to_read_dto(existing)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A connection for this provider already exists for this user",
+            )
 
-        new_conn = ExternalReceiptConnection(
+        now = datetime.now(timezone.utc)
+        connection = ExternalReceiptConnection(
             budget_id=budget_id,
             owner_user_id=user.id or 0,
             provider=provider_clean,
-            account_identifier=data.account_identifier,
-            consented_scopes=data.consented_scopes,
-            status=ConnectionStatus.ACTIVE.value,
-            consented_at=now,
-            encrypted_refresh_token=encrypted_token,
-            encryption_key_id=key_id,
+            status=ConnectionStatus.REAUTH_REQUIRED,
+            last_error_code=ConnectionErrorCode.REAUTH_REQUIRED.value,
             created_at=now,
             updated_at=now,
         )
-        session.add(new_conn)
+        session.add(connection)
         session.commit()
-        session.refresh(new_conn)
-        return to_read_dto(new_conn)
+        session.refresh(connection)
+        return to_read_dto(connection)
 
     @staticmethod
-    def update_connection(
+    def complete_authorization(
         session: Session,
-        budget_id: int,
-        connection_id: int,
-        data: ExternalReceiptConnectionUpdate,
+        connection: ExternalReceiptConnection,
+        *,
+        refresh_token: str,
+        consented_scopes: Optional[str],
     ) -> ExternalReceiptConnectionRead:
-        """Update connection metadata or refresh token."""
-        conn = ConnectionService.get_connection(session, budget_id, connection_id)
+        """Persist an adapter's server-side authorization result, encrypted at rest.
+
+        This is intentionally not routed through FastAPI. Only a future approved
+        adapter callback may provide credentials to this boundary.
+        """
+        token_clean = refresh_token.strip()
+        if not token_clean:
+            raise ValueError("Authorization result must include a refresh token")
+        try:
+            ciphertext, key_id = get_encryption_service().encrypt(token_clean)
+        except EncryptionKeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Token encryption service is not configured (fail-closed)",
+            ) from exc
+
         now = datetime.now(timezone.utc)
-
-        if data.account_identifier is not None:
-            conn.account_identifier = data.account_identifier
-        if data.consented_scopes is not None:
-            conn.consented_scopes = data.consented_scopes
-        if data.status is not None:
-            conn.status = data.status
-
-        if data.refresh_token is not None:
-            token_clean = data.refresh_token.strip()
-            if token_clean:
-                encryption_svc = get_encryption_service()
-                try:
-                    encrypted_token, key_id = encryption_svc.encrypt(token_clean)
-                    conn.encrypted_refresh_token = encrypted_token
-                    conn.encryption_key_id = key_id
-                except EncryptionKeyError as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Token encryption service is not configured (fail-closed)",
-                    ) from exc
-            else:
-                conn.encrypted_refresh_token = None
-                conn.encryption_key_id = None
-
-        conn.updated_at = now
-        session.add(conn)
+        connection.encrypted_refresh_token = ciphertext
+        connection.encryption_key_id = key_id
+        connection.consented_scopes = consented_scopes
+        connection.consented_at = now
+        connection.status = ConnectionStatus.ACTIVE
+        connection.last_error_code = None
+        connection.updated_at = now
+        session.add(connection)
         session.commit()
-        session.refresh(conn)
-        return to_read_dto(conn)
+        session.refresh(connection)
+        return to_read_dto(connection)
 
     @staticmethod
     def trigger_sync_now(
-        session: Session,
-        budget_id: int,
-        connection_id: int,
+        session: Session, budget_id: int, connection_id: int, user: User
     ) -> ConnectionSyncNowResponse:
-        """
-        Record immediate synchronization request timestamp.
-        Does NOT report false success when the asynchronous sync worker (#257) is absent.
-        """
-        conn = ConnectionService.get_connection(session, budget_id, connection_id)
-        if conn.status == ConnectionStatus.DISCONNECTED.value:
+        """Queue sync only for an authorised, active connection owned by the caller."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        if conn.status != ConnectionStatus.ACTIVE or not conn.encrypted_refresh_token:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot synchronize a disconnected connection",
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Connection requires a completed authorization before synchronization",
             )
 
         now = datetime.now(timezone.utc)
@@ -226,29 +191,23 @@ class ConnectionService:
         session.add(conn)
         session.commit()
         session.refresh(conn)
-
         return ConnectionSyncNowResponse(
             connection_id=conn.id or 0,
-            status=conn.status,
+            status=ConnectionStatus(conn.status),
             sync_requested_at=now,
             message="Synchronization requested and queued. Background sync worker will process this request.",
         )
 
     @staticmethod
     def reconnect(
-        session: Session,
-        budget_id: int,
-        connection_id: int,
+        session: Session, budget_id: int, connection_id: int, user: User
     ) -> ExternalReceiptConnectionRead:
-        """
-        Set connection to reauth_required state and prepare integration handoff.
-        """
-        conn = ConnectionService.get_connection(session, budget_id, connection_id)
-        now = datetime.now(timezone.utc)
-        conn.status = ConnectionStatus.REAUTH_REQUIRED.value
+        """Move an owned connection to the authorization-required state."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        conn.status = ConnectionStatus.REAUTH_REQUIRED
         conn.last_error_code = ConnectionErrorCode.REAUTH_REQUIRED.value
-        conn.updated_at = now
-
+        conn.updated_at = datetime.now(timezone.utc)
         session.add(conn)
         session.commit()
         session.refresh(conn)
@@ -256,63 +215,66 @@ class ConnectionService:
 
     @staticmethod
     def disconnect(
-        session: Session,
-        budget_id: int,
-        connection_id: int,
+        session: Session, budget_id: int, connection_id: int, user: User
     ) -> ConnectionDisconnectResponse:
-        """
-        Atomically delete stored tokens at rest, clear credentials, and record
-        neutral revocation availability without false claims of remote revocation.
-        """
-        conn = ConnectionService.get_connection(session, budget_id, connection_id)
-        now = datetime.now(timezone.utc)
-
-        # Atomic token erasure at rest
+        """Atomically erase local credentials for a connection owned by the caller."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         conn.encrypted_refresh_token = None
         conn.encryption_key_id = None
-        conn.status = ConnectionStatus.DISCONNECTED.value
+        conn.status = ConnectionStatus.DISCONNECTED
         conn.last_error_code = ConnectionErrorCode.PROVIDER_REVOCATION_UNAVAILABLE.value
-        conn.updated_at = now
-
+        conn.updated_at = datetime.now(timezone.utc)
         session.add(conn)
         session.commit()
         session.refresh(conn)
-
         return ConnectionDisconnectResponse(
             connection_id=conn.id or 0,
-            status=conn.status,
+            status=ConnectionStatus(conn.status),
             revocation_status="provider_revocation_unavailable",
             message="Stored tokens and credentials deleted locally. Remote provider revocation is not available.",
         )
 
     @staticmethod
-    def get_decrypted_token(
-        session: Session,
-        conn: ExternalReceiptConnection,
-    ) -> Optional[str]:
-        """
-        Decrypt stored refresh token for execution workers (#257).
-        Automatically re-encrypts under active primary key if key rotation occurred.
-        """
-        if not conn.encrypted_refresh_token:
+    def get_decrypted_token(session: Session, conn: ExternalReceiptConnection) -> Optional[str]:
+        """Return a worker-only token and fail visibly if it cannot be decrypted."""
+        if conn.status != ConnectionStatus.ACTIVE or not conn.encrypted_refresh_token:
             return None
 
-        encryption_svc = get_encryption_service()
         try:
-            plaintext = encryption_svc.decrypt(
+            encryption_service = get_encryption_service()
+            plaintext = encryption_service.decrypt(
                 conn.encrypted_refresh_token, key_id=conn.encryption_key_id
             )
-            # Check key rotation
-            new_ciphertext, new_key_id, did_reencrypt = encryption_svc.reencrypt_if_needed(
+            ciphertext, key_id, did_reencrypt = encryption_service.reencrypt_if_needed(
                 conn.encrypted_refresh_token, conn.encryption_key_id
             )
             if did_reencrypt:
-                conn.encrypted_refresh_token = new_ciphertext
-                conn.encryption_key_id = new_key_id
+                conn.encrypted_refresh_token = ciphertext
+                conn.encryption_key_id = key_id
                 conn.updated_at = datetime.now(timezone.utc)
                 session.add(conn)
                 session.commit()
-
             return plaintext
-        except (EncryptionKeyError, DecryptionError):
-            return None
+        except EncryptionKeyError:
+            ConnectionService._mark_reauth_required(
+                session, conn, ConnectionErrorCode.ENCRYPTION_KEY_MISSING
+            )
+        except DecryptionError:
+            ConnectionService._mark_reauth_required(
+                session, conn, ConnectionErrorCode.TOKEN_DECRYPTION_FAILED
+            )
+        return None
+
+    @staticmethod
+    def _mark_reauth_required(
+        session: Session,
+        conn: ExternalReceiptConnection,
+        error_code: ConnectionErrorCode,
+    ) -> None:
+        """Persist a visible failure without deleting recoverable ciphertext."""
+        conn.status = ConnectionStatus.REAUTH_REQUIRED
+        conn.last_error_code = error_code.value
+        conn.updated_at = datetime.now(timezone.utc)
+        session.add(conn)
+        session.commit()

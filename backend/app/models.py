@@ -374,21 +374,26 @@ class ConnectionErrorCode(str, Enum):
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_REVOCATION_UNAVAILABLE = "PROVIDER_REVOCATION_UNAVAILABLE"
     ENCRYPTION_KEY_MISSING = "ENCRYPTION_KEY_MISSING"
+    TOKEN_DECRYPTION_FAILED = "TOKEN_DECRYPTION_FAILED"
     SYNC_FAILED = "SYNC_FAILED"
 
 
 class ExternalReceiptConnectionBase(SQLModel):
     provider: str = Field(index=True)
-    account_identifier: Optional[str] = Field(default=None)
     consented_scopes: Optional[str] = Field(default=None)
-    status: str = Field(default=ConnectionStatus.ACTIVE.value, index=True)
+    status: ConnectionStatus = Field(default=ConnectionStatus.REAUTH_REQUIRED, index=True)
     last_error_code: Optional[str] = Field(default=None)
 
 
 class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
     __tablename__: str = "external_receipt_connection"  # type: ignore
     __table_args__ = (
-        UniqueConstraint("budget_id", "provider", name="uq_connection_budget_provider"),
+        UniqueConstraint(
+            "budget_id",
+            "owner_user_id",
+            "provider",
+            name="uq_connection_budget_owner_provider",
+        ),
         Index("ix_connection_budget_status", "budget_id", "status"),
     )
 
@@ -396,7 +401,7 @@ class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
     budget_id: int = Field(foreign_key="budget.id", index=True)
     owner_user_id: int = Field(foreign_key="user.id", index=True)
 
-    consented_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    consented_at: Optional[datetime] = Field(default=None)
     encrypted_refresh_token: Optional[str] = Field(default=None)
     encryption_key_id: Optional[str] = Field(default=None)
 
@@ -418,10 +423,9 @@ class ExternalReceiptConnectionRead(SQLModel):
     budget_id: int
     owner_user_id: int
     provider: str
-    account_identifier: Optional[str] = None
     consented_scopes: Optional[str] = None
-    consented_at: datetime
-    status: str
+    consented_at: Optional[datetime] = None
+    status: ConnectionStatus
     has_token: bool = False
     last_success_at: Optional[datetime] = None
     last_error_code: Optional[str] = None
@@ -432,22 +436,16 @@ class ExternalReceiptConnectionRead(SQLModel):
 
 
 class ExternalReceiptConnectionCreate(SQLModel):
+    """Create a local authorization placeholder; it never accepts credentials."""
+
+    model_config = SQLModelConfig(extra="forbid")
+
     provider: str
-    account_identifier: Optional[str] = None
-    consented_scopes: Optional[str] = None
-    refresh_token: Optional[str] = None
-
-
-class ExternalReceiptConnectionUpdate(SQLModel):
-    account_identifier: Optional[str] = None
-    consented_scopes: Optional[str] = None
-    refresh_token: Optional[str] = None
-    status: Optional[str] = None
 
 
 class ConnectionSyncNowResponse(SQLModel):
     connection_id: int
-    status: str
+    status: ConnectionStatus
     sync_requested_at: datetime
     message: str
 

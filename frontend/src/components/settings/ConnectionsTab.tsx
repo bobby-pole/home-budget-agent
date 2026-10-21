@@ -34,9 +34,6 @@ export function ConnectionsTab() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState<ExternalReceiptConnectionCreate>({
     provider: "lidl",
-    account_identifier: "",
-    consented_scopes: "openid,tickets,profile",
-    refresh_token: "",
   });
 
   const { data: connections = [], isLoading } = useQuery({
@@ -45,17 +42,14 @@ export function ConnectionsTab() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: ExternalReceiptConnectionCreate) => api.createOrUpdateConnection(data),
+    mutationFn: (data: ExternalReceiptConnectionCreate) => api.createConnection(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
       setIsDialogOpen(false);
       setFormData({
         provider: "lidl",
-        account_identifier: "",
-        consented_scopes: "openid,tickets,profile",
-        refresh_token: "",
       });
-      toast.success(t("settings.connections.toast_sync_queued"));
+      toast.info(t("settings.connections.toast_authorization_required"));
     },
     onError: () => toast.error(t("common.error")),
   });
@@ -148,30 +142,9 @@ export function ConnectionsTab() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="account-id">{t("settings.connections.connect_modal_account")}</Label>
-                <Input
-                  id="account-id"
-                  placeholder={t("settings.connections.connect_modal_account_placeholder")}
-                  value={formData.account_identifier || ""}
-                  onChange={(e) => setFormData({ ...formData, account_identifier: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="auth-token">{t("settings.connections.connect_modal_token")}</Label>
-                <Input
-                  id="auth-token"
-                  type="password"
-                  placeholder={t("settings.connections.connect_modal_token_placeholder")}
-                  value={formData.refresh_token || ""}
-                  onChange={(e) => setFormData({ ...formData, refresh_token: e.target.value })}
-                />
-              </div>
-
               <div className="p-3 bg-muted/60 rounded-lg text-xs text-muted-foreground flex gap-2">
                 <ShieldCheck className="size-4 shrink-0 text-emerald-600 mt-0.5" />
-                <span>{t("settings.connections.connect_modal_consent")}</span>
+                <span>{t("settings.connections.connect_modal_authorization_note")}</span>
               </div>
             </div>
 
@@ -237,11 +210,6 @@ export function ConnectionsTab() {
                     <div>
                       <CardTitle className="text-base flex items-center gap-2">
                         <span className="capitalize">{conn.provider}</span>
-                        {conn.account_identifier && (
-                          <span className="text-xs font-normal text-muted-foreground">
-                            ({conn.account_identifier})
-                          </span>
-                        )}
                       </CardTitle>
                       <CardDescription className="text-xs">
                         {t("settings.connections.sync_frequency")}: {t("settings.connections.sync_frequency_val")}
@@ -290,7 +258,7 @@ export function ConnectionsTab() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={conn.status === "disconnected" || syncNowMutation.isPending}
+                    disabled={conn.status !== "active" || !conn.has_token || syncNowMutation.isPending}
                     onClick={() => syncNowMutation.mutate(conn.id)}
                     className="gap-1.5"
                   >

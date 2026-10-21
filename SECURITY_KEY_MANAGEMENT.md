@@ -13,7 +13,7 @@ Sensitive external tokens at rest (e.g., OAuth refresh tokens for store receipt 
 * **Authentication**: **HMAC with SHA-256** for message integrity and authenticity verification.
 * **Key Derivation & Structure**: 32-byte key (composed of 16-byte signing key and 16-byte encryption key), encoded as URL-safe base64.
 * **Standard Clarification**: Fernet is explicitly **AES-128-CBC + HMAC-SHA256**, not AES-256.
-* **Plaintext Invariant**: Plaintext tokens are **never** persisted to SQLite, **never** exposed over API response payloads (`has_token: bool` is returned instead), **never** printed to application logs, and **never** stored in browser `localStorage` or session state.
+* **Plaintext Invariant**: Plaintext tokens are **never** persisted to SQLite, exposed in API request or response payloads, printed to application logs, or passed to browser code. The public lifecycle API creates only credential-free authorization placeholders.
 
 ---
 
@@ -25,7 +25,7 @@ Master encryption keys must be sourced **exclusively from environment variables*
 |---|---|---|
 | `TOKEN_ENCRYPTION_KEY` | Optional (if single-key mode) | URL-safe base64-encoded 32-byte Fernet key used as default active key `v1`. |
 | `CONNECTION_ENCRYPTION_KEYS` | Optional (if multi-key rotation mode) | JSON dictionary mapping key identifiers to keys, e.g. `{"v1":"...", "v2":"..."}` or comma-separated pairs `v2:key2,v1:key1`. |
-| `TOKEN_PRIMARY_KEY_ID` | Optional | Specifies the active key identifier used for all new encryption operations (e.g. `v2`). |
+| `TOKEN_PRIMARY_KEY_ID` | Optional | Specifies the active key identifier used for all new encryption operations (e.g. `v2`). If set, it must name a configured key or the service fails closed. |
 
 > **Security Rule**: Do not place sample secrets or default fallback keys in codebase configuration or `.env.example`.
 
@@ -56,7 +56,7 @@ Rachownik supports zero-downtime key rotation without requiring simultaneous mas
 If a SQLite database backup is restored to a new server without the corresponding master encryption key:
 * **Fail-Closed Guarantee**: The encryption service strictly refuses to decrypt corrupted, missing, or mismatched keys, raising `EncryptionKeyError` or `DecryptionError`.
 * **Application Integrity**: The application continues to operate for budgeting, manual transactions, and existing cached data.
-* **Connection State**: External connections will transition to `reauth_required` or `sync_error` (`ENCRYPTION_KEY_MISSING`). Stored ciphertexts cannot be decrypted by unauthorized parties holding only the database dump.
+* **Connection State**: If a worker cannot load a key, the connection transitions to `reauth_required` with `ENCRYPTION_KEY_MISSING`; if ciphertext authentication fails, it uses `TOKEN_DECRYPTION_FAILED`. Ciphertexts are retained for a possible key restore but are never retried as active credentials.
 * **Zero Plaintext in Dumps**: SQLite database dumps contain only ciphertext strings and `encryption_key_id` metadata. Plaintext tokens never appear in `.sql` dumps or raw file backups.
 
 ---
@@ -67,7 +67,7 @@ When a user initiates a disconnect action via the UI or `POST /api/connections/{
 1. **Atomic Local Erasure**: The stored `encrypted_refresh_token` and `encryption_key_id` columns are set to `NULL` within an atomic database transaction.
 2. **Status Transition**: The connection status transitions to `disconnected`.
 3. **Revocation Neutrality**:
-   * If an external provider supports an official, authorized revocation endpoint, it is invoked via an isolated adapter interface.
+   * A future adapter may invoke an official, authorized provider revocation endpoint. #258 does not implement such an adapter and therefore never claims remote revocation.
    * If remote provider revocation is unavailable (Phase 1 Web MVP), the system explicitly records `last_error_code="PROVIDER_REVOCATION_UNAVAILABLE"` and returns `revocation_status="provider_revocation_unavailable"`.
    * The UI and API **never** falsely claim that tokens were revoked on third-party merchant servers when no such revocation occurred.
 
@@ -78,7 +78,7 @@ When a user initiates a disconnect action via the UI or `POST /api/connections/{
 The following strict prohibitions apply to all contributors and automated agents:
 1. **No Secrets in Logs**: Never log request bodies, response payloads, authorization codes, refresh tokens, access tokens, or full exception stack traces containing user PII.
 2. **No Secrets in Git**: Master keys, test keys, and real user credentials are strictly forbidden from Git commits and tracked files.
-3. **No Secrets in Browser Storage**: Client-side tokens for external store merchants must never be passed to the browser or stored in `localStorage`, `sessionStorage`, or IndexedDB.
+3. **No Secrets in Browser Storage or Requests**: Client-side tokens for external store merchants must never be passed to browser code, stored in `localStorage`, `sessionStorage`, or IndexedDB, or accepted by public lifecycle request bodies.
 4. **No Plaintext in DB**: All external credentials in database tables must be encrypted prior to persistence.
 
 ---
@@ -89,7 +89,7 @@ The following strict prohibitions apply to all contributors and automated agents
   * Server-side envelope encryption at rest via environment master keys.
   * Centralized privacy-first handling with normalized domain models (`CanonicalReceipt`, `CanonicalItem`).
   * Manual and on-demand trigger mechanisms.
-  * Explicit user consent and data scope transparency in UI.
+  * The public web lifecycle starts in `reauth_required`; only a future approved server-side adapter callback may call the internal authorization-completion boundary.
 * **Phase 2 Local-First / Mobile (Future)**:
   * Secure credential storage moved to user device hardware enclaves (iOS Keychain, Android KeyStore / SecureStore).
   * Direct device-to-merchant communication without intermediate server-side token retention.

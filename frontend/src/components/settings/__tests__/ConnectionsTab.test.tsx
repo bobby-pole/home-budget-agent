@@ -8,7 +8,7 @@ import type { ExternalReceiptConnectionRead } from "@/client";
 vi.mock("@/lib/api", () => ({
   api: {
     getConnections: vi.fn(),
-    createOrUpdateConnection: vi.fn(),
+    createConnection: vi.fn(),
     syncNowConnection: vi.fn(),
     reconnectConnection: vi.fn(),
     disconnectConnection: vi.fn(),
@@ -20,7 +20,6 @@ const mockActiveConnection: ExternalReceiptConnectionRead = {
   budget_id: 10,
   owner_user_id: 5,
   provider: "lidl",
-  account_identifier: "+48 123 456 789",
   consented_scopes: "openid,tickets,profile",
   consented_at: "2026-09-20T12:00:00Z",
   status: "active",
@@ -38,7 +37,6 @@ const mockReauthConnection: ExternalReceiptConnectionRead = {
   budget_id: 10,
   owner_user_id: 5,
   provider: "biedronka",
-  account_identifier: "user@example.com",
   consented_scopes: "receipts",
   consented_at: "2026-09-18T10:00:00Z",
   status: "reauth_required",
@@ -67,9 +65,8 @@ describe("ConnectionsTab", () => {
     vi.mocked(api.getConnections).mockResolvedValue([mockActiveConnection]);
     render(<ConnectionsTab />);
 
-    // Provider and account
+    // Provider; account identifier is intentionally not exposed in the UI.
     expect(await screen.findByText("lidl")).toBeInTheDocument();
-    expect(screen.getByText("(+48 123 456 789)")).toBeInTheDocument();
 
     // Health badge
     expect(screen.getByText("Aktywne")).toBeInTheDocument();

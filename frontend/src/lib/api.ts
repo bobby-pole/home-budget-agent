@@ -18,7 +18,6 @@ import type {
   AccountUpdate,
   ExternalReceiptConnectionRead,
   ExternalReceiptConnectionCreate,
-  ExternalReceiptConnectionUpdate,
   ConnectionSyncNowResponse,
   ConnectionDisconnectResponse
 } from "@/client";
@@ -326,13 +325,8 @@ export const api = {
     return response.data;
   },
 
-  createOrUpdateConnection: async (data: ExternalReceiptConnectionCreate): Promise<ExternalReceiptConnectionRead> => {
+  createConnection: async (data: ExternalReceiptConnectionCreate): Promise<ExternalReceiptConnectionRead> => {
     const response = await apiClient.post<ExternalReceiptConnectionRead>("/connections", data);
-    return response.data;
-  },
-
-  updateConnection: async (id: number, data: ExternalReceiptConnectionUpdate): Promise<ExternalReceiptConnectionRead> => {
-    const response = await apiClient.patch<ExternalReceiptConnectionRead>(`/connections/${id}`, data);
     return response.data;
   },
 

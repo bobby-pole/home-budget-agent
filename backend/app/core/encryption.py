@@ -90,12 +90,17 @@ class TokenEncryptionService:
         if not self._keys:
             return
 
-        if primary_key_id and primary_key_id in self._keys:
+        if primary_key_id:
+            if primary_key_id not in self._keys:
+                raise EncryptionKeyError(
+                    "Configured TOKEN_PRIMARY_KEY_ID does not exist in the available key set"
+                )
             self._primary_key_id = primary_key_id
-        else:
-            # Default to the first key or highest version identifier
-            sorted_keys = sorted(self._keys.keys(), reverse=True)
-            self._primary_key_id = sorted_keys[0]
+            return
+
+        # Without an explicit primary ID, choose the highest version identifier.
+        sorted_keys = sorted(self._keys.keys(), reverse=True)
+        self._primary_key_id = sorted_keys[0]
 
     def _load_from_env(self) -> None:
         raw_multi = os.getenv("CONNECTION_ENCRYPTION_KEYS", "").strip()
