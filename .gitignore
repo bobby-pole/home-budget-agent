@@ -39,3 +39,7 @@ docs/
 node_modules/
 dist/
 .eslintcache
+
+# Local integration research and security notes
+/LIDL_FEASIBILITY.md
+/SECURITY_KEY_MANAGEMENT.md
