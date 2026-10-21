@@ -19,7 +19,9 @@ import type {
   ExternalReceiptConnectionRead,
   ExternalReceiptConnectionCreate,
   ConnectionSyncNowResponse,
-  ConnectionDisconnectResponse
+  ConnectionDisconnectResponse,
+  ConnectionOAuthStartResponse,
+  ConnectionOAuthCallbackRequest
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import axios from "axios";
@@ -330,8 +332,26 @@ export const api = {
     return response.data;
   },
 
-  syncNowConnection: async (id: number): Promise<ConnectionSyncNowResponse> => {
-    const response = await apiClient.post<ConnectionSyncNowResponse>(`/connections/${id}/sync-now`);
+  startConnectionOAuth: async (id: number): Promise<ConnectionOAuthStartResponse> => {
+    const response = await apiClient.post<ConnectionOAuthStartResponse>(`/connections/${id}/oauth/start`);
+    return response.data;
+  },
+
+  completeConnectionOAuth: async (
+    id: number,
+    data: ConnectionOAuthCallbackRequest
+  ): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.post<ExternalReceiptConnectionRead>(
+      `/connections/${id}/oauth/callback`,
+      data
+    );
+    return response.data;
+  },
+
+  syncNowConnection: async (id: number, live: boolean = true): Promise<ConnectionSyncNowResponse> => {
+    const response = await apiClient.post<ConnectionSyncNowResponse>(
+      `/connections/${id}/sync-now?live=${live}`
+    );
     return response.data;
   },
 

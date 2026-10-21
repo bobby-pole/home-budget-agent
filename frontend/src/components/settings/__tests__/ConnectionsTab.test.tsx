@@ -9,6 +9,8 @@ vi.mock("@/lib/api", () => ({
   api: {
     getConnections: vi.fn(),
     createConnection: vi.fn(),
+    startConnectionOAuth: vi.fn(),
+    completeConnectionOAuth: vi.fn(),
     syncNowConnection: vi.fn(),
     reconnectConnection: vi.fn(),
     disconnectConnection: vi.fn(),
@@ -66,7 +68,7 @@ describe("ConnectionsTab", () => {
     render(<ConnectionsTab />);
 
     // Provider; account identifier is intentionally not exposed in the UI.
-    expect(await screen.findByText("lidl")).toBeInTheDocument();
+    expect(await screen.findByText("Lidl Plus")).toBeInTheDocument();
 
     // Health badge
     expect(screen.getByText("Aktywne")).toBeInTheDocument();
@@ -142,4 +144,27 @@ describe("ConnectionsTab", () => {
       expect(api.reconnectConnection).toHaveBeenCalledWith(2);
     });
   });
+});
+
+
+it("selects a store without accepting a free-text provider", async () => {
+  vi.mocked(api.getConnections).mockResolvedValue([]);
+  vi.mocked(api.createConnection).mockResolvedValue(mockReauthConnection);
+  render(<ConnectionsTab />);
+  fireEvent.click(await screen.findByRole("button", { name: /Dodaj połączenie sklepu/i }));
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "Lidl Plus" })).toBeChecked();
+  fireEvent.click(screen.getByRole("radio", { name: "Biedronka" }));
+  expect(screen.getByText(/Zapisanie wyboru doda oczekujące połączenie/i)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Zapisz wybór" }));
+  await waitFor(() => expect(api.createConnection).toHaveBeenCalledWith({ provider: "biedronka" }));
+});
+
+it("prevents adding an existing provider and selects the remaining store", async () => {
+  vi.mocked(api.getConnections).mockResolvedValue([mockActiveConnection]);
+  render(<ConnectionsTab />);
+  await screen.findByText("Lidl Plus");
+  fireEvent.click(screen.getByRole("button", { name: /Dodaj połączenie sklepu/i }));
+  expect(screen.getByRole("radio", { name: /Lidl Plus/ })).toBeDisabled();
+  expect(screen.getByRole("radio", { name: "Biedronka" })).toBeChecked();
 });

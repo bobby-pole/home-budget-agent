@@ -451,6 +451,23 @@ class ConnectionSyncNowResponse(SQLModel):
     status: ConnectionStatus
     sync_requested_at: datetime
     message: str
+    imported_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+
+
+class ConnectionOAuthStartResponse(SQLModel):
+    connection_id: int
+    provider: str
+    authorize_url: str
+    state: str
+    redirect_uri: str
+
+
+class ConnectionOAuthCallbackRequest(SQLModel):
+    model_config = SQLModelConfig(extra="forbid")
+
+    callback_url_or_code: str
 
 
 class ConnectionDisconnectResponse(SQLModel):
