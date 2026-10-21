@@ -150,6 +150,23 @@ def test_sum_mismatch_marks_needs_review() -> None:
     assert receipt.calculated_total == Decimal("15.27")
 
 
+@pytest.mark.parametrize("value", ["NaN", "sNaN", "Infinity", "-Infinity"])
+@pytest.mark.parametrize(
+    "field", ["totalAmount", "currentUnitPrice", "quantity", "originalUnitPrice", "discount_amount"]
+)
+def test_mapping_rejects_non_finite_numbers(field: str, value: str) -> None:
+    ticket = _ticket()
+    if field == "totalAmount":
+        ticket[field] = value
+    elif field == "discount_amount":
+        ticket["itemsLine"][0]["discounts"] = [{"amount": value}]
+    else:
+        ticket["itemsLine"][0][field] = value
+
+    with pytest.raises(TicketMappingError, match="must be a finite decimal"):
+        lidl_ticket_to_canonical(ticket)
+
+
 class _Response:
     def __init__(self, status_code: int, payload: dict) -> None:
         self.status_code = status_code

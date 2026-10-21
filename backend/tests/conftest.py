@@ -60,3 +60,21 @@ def client_fixture(session: Session):
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def require_aware_transaction_dates(session):
+    """Check dates before persistence, even when SQLite strips timezone metadata."""
+    from sqlalchemy import event
+    from app.models import Transaction
+
+    def check_dates(flush_session, flush_context, instances):
+        for obj in flush_session.new.union(flush_session.dirty):
+            if isinstance(obj, Transaction) and obj.date is not None:
+                assert obj.date.utcoffset() is not None, "Transaction date must include a timezone"
+
+    event.listen(Session, "before_flush", check_dates)
+    try:
+        yield
+    finally:
+        event.remove(Session, "before_flush", check_dates)

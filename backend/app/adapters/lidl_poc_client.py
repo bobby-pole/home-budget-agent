@@ -265,9 +265,12 @@ def _required_decimal(value: Any, field_name: str) -> Decimal:
     if value is None or isinstance(value, bool):
         raise TicketMappingError(f"{field_name} is required")
     try:
-        return Decimal(str(value).replace(",", "."))
+        result = Decimal(str(value).replace(",", "."))
     except (InvalidOperation, ValueError) as error:
         raise TicketMappingError(f"{field_name} must be a decimal") from error
+    if not result.is_finite():
+        raise TicketMappingError(f"{field_name} must be a finite decimal")
+    return result
 
 
 def _ticket_date(value: Any) -> str:
@@ -318,7 +321,10 @@ def lidl_ticket_to_canonical(raw_ticket: dict[str, Any]) -> CanonicalReceipt:
             unit_price=unit_price,
             quantity=quantity,
             discount_total=discount_total,
-            original_price=line.get("originalUnitPrice"),
+            original_price=(
+                _required_decimal(line["originalUnitPrice"], f"itemsLine[{index}].originalUnitPrice")
+                if line.get("originalUnitPrice") is not None else None
+            ),
             is_adjustment=bool(
                 line.get("isDeposit", False)
                 or line.get("isAdjustment", False)

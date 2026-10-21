@@ -46,7 +46,7 @@ def test_receipt_scan_model_needs_review_default():
     assert hasattr(scan_read, "needs_review")
 
 
-def test_process_scan_valid_receipt(client: TestClient, session: Session):
+def test_process_scan_valid_receipt(client: TestClient, session: Session, require_aware_transaction_dates):
     """When receipt validation passes and confidence is high, status is CATEGORIZATION_OK and needs_review is False."""
     user = session.exec(select(User).where(User.email == "test@example.com")).first()
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
