@@ -8,7 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import type { ExternalReceiptConnectionCreate, ExternalReceiptConnectionRead } from "@/client";
+import type {
+  ConnectionOAuthStartResponse,
+  ExternalReceiptConnectionCreate,
+  ExternalReceiptConnectionRead,
+} from "@/client";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +31,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Store, RefreshCw, Unplug, Plus, ShieldCheck, AlertTriangle, Clock } from "lucide-react";
+import { Store, RefreshCw, Unplug, Plus, ShieldCheck, AlertTriangle, Clock, ExternalLink, KeyRound } from "lucide-react";
+
+const STORES = [
+  { id: "lidl", name: "Lidl Plus", icon: "/brands/lidl.svg" },
+  { id: "biedronka", name: "Biedronka", icon: "/brands/biedronka.ico" },
+];
 
 export function ConnectionsTab() {
   const queryClient = useQueryClient();
@@ -35,11 +44,15 @@ export function ConnectionsTab() {
   const [formData, setFormData] = useState<ExternalReceiptConnectionCreate>({
     provider: "lidl",
   });
+  const [oauthSession, setOauthSession] = useState<ConnectionOAuthStartResponse | null>(null);
+  const [callbackInput, setCallbackInput] = useState("");
 
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ["connections"],
     queryFn: api.getConnections,
   });
+
+  const providerAlreadyAdded = connections.some((connection) => connection.provider === formData.provider);
 
   const createMutation = useMutation({
     mutationFn: (data: ExternalReceiptConnectionCreate) => api.createConnection(data),
@@ -54,11 +67,34 @@ export function ConnectionsTab() {
     onError: () => toast.error(t("common.error")),
   });
 
-  const syncNowMutation = useMutation({
-    mutationFn: (id: number) => api.syncNowConnection(id),
+  const startOAuthMutation = useMutation({
+    mutationFn: (id: number) => api.startConnectionOAuth(id),
+    onSuccess: (data) => {
+      setOauthSession(data);
+      setCallbackInput("");
+    },
+    onError: () => toast.error(t("common.error")),
+  });
+
+  const completeOAuthMutation = useMutation({
+    mutationFn: ({ id, callback }: { id: number; callback: string }) =>
+      api.completeConnectionOAuth(id, { callback_url_or_code: callback }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
-      toast.success(t("settings.connections.toast_sync_queued"));
+      setOauthSession(null);
+      setCallbackInput("");
+      toast.success(t("settings.connections.toast_oauth_success"));
+    },
+    onError: () => toast.error(t("common.error")),
+  });
+
+  const syncNowMutation = useMutation({
+    mutationFn: (id: number) => api.syncNowConnection(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+      toast.success(res.message || t("settings.connections.toast_sync_queued"));
     },
     onError: () => toast.error(t("common.error")),
   });
@@ -116,7 +152,12 @@ export function ConnectionsTab() {
           </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          if (open) {
+            setFormData({ provider: STORES.find((store) => !connections.some((connection) => connection.provider === store.id))?.id ?? "lidl" });
+          }
+          setIsDialogOpen(open);
+        }}>
           <DialogTrigger asChild>
             <Button className="gap-2 shrink-0">
               <Plus className="size-4" />
@@ -128,19 +169,30 @@ export function ConnectionsTab() {
               <DialogTitle>{t("settings.connections.connect_modal_title")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-900 dark:text-amber-200 flex gap-2">
-                <AlertTriangle className="size-4 shrink-0 text-amber-600 mt-0.5" />
-                <span>{t("settings.connections.disclaimer")}</span>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="provider-name">{t("settings.connections.connect_modal_provider")}</Label>
-                <Input
-                  id="provider-name"
-                  value={formData.provider}
-                  onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                />
-              </div>
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">{t("settings.connections.connect_modal_provider")}</legend>
+                <div className="grid grid-cols-2 gap-3">
+                  {STORES.map((store) => {
+                    const added = connections.some((connection) => connection.provider === store.id);
+                    return (
+                      <label key={store.id} className={`relative flex cursor-pointer flex-col items-center gap-3 rounded-xl border p-4 text-center has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${added ? "cursor-not-allowed opacity-50" : "hover:bg-muted/50"}`}>
+                        <input
+                          type="radio"
+                          name="store-provider"
+                          value={store.id}
+                          checked={formData.provider === store.id}
+                          onChange={() => setFormData({ provider: store.id })}
+                          disabled={added || createMutation.isPending}
+                          className="absolute right-3 top-3 accent-primary"
+                        />
+                        <img src={store.icon} alt="" className="size-12 rounded-md object-contain" />
+                        <span className="text-sm font-medium">{store.name}</span>
+                        {added && <span className="text-xs text-muted-foreground">{t("settings.connections.already_added")}</span>}
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
 
               <div className="p-3 bg-muted/60 rounded-lg text-xs text-muted-foreground flex gap-2">
                 <ShieldCheck className="size-4 shrink-0 text-emerald-600 mt-0.5" />
@@ -153,7 +205,7 @@ export function ConnectionsTab() {
                 {t("settings.connections.connect_modal_cancel")}
               </Button>
               <Button
-                disabled={!formData.provider.trim() || createMutation.isPending}
+                disabled={providerAlreadyAdded || createMutation.isPending}
                 onClick={() => createMutation.mutate(formData)}
               >
                 {t("settings.connections.connect_modal_save")}
@@ -204,12 +256,14 @@ export function ConnectionsTab() {
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-semibold uppercase">
-                      {conn.provider.slice(0, 2)}
-                    </div>
+                    {STORES.find((store) => store.id === conn.provider) ? (
+                      <img src={STORES.find((store) => store.id === conn.provider)!.icon} alt="" className="size-10 rounded-lg object-contain" />
+                    ) : (
+                      <Store aria-hidden="true" className="size-9 text-muted-foreground" />
+                    )}
                     <div>
                       <CardTitle className="text-base flex items-center gap-2">
-                        <span className="capitalize">{conn.provider}</span>
+                        <span>{STORES.find((store) => store.id === conn.provider)?.name ?? conn.provider}</span>
                       </CardTitle>
                       <CardDescription className="text-xs">
                         {t("settings.connections.sync_frequency")}: {t("settings.connections.sync_frequency_val")}
@@ -253,8 +307,25 @@ export function ConnectionsTab() {
                   </div>
                 </div>
 
+                {!conn.has_token && conn.status === "reauth_required" && (
+                  <p className="text-sm text-muted-foreground">{t("settings.connections.authorization_unavailable")}</p>
+                )}
+
                 {/* Actions */}
                 <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t">
+                  {conn.provider === "lidl" && conn.status !== "active" && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      disabled={startOAuthMutation.isPending}
+                      onClick={() => startOAuthMutation.mutate(conn.id)}
+                      className="gap-1.5"
+                    >
+                      <KeyRound className="size-3.5" />
+                      {t("settings.connections.authorize_lidl_btn")}
+                    </Button>
+                  )}
+
                   <Button
                     size="sm"
                     variant="outline"
@@ -307,6 +378,79 @@ export function ConnectionsTab() {
           ))}
         </div>
       )}
+
+      {/* Lidl Plus OAuth2 PKCE Modal */}
+      <Dialog
+        open={Boolean(oauthSession)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setOauthSession(null);
+            setCallbackInput("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>{t("settings.connections.oauth_modal_title")}</DialogTitle>
+          </DialogHeader>
+          {oauthSession && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2 text-sm">
+                <p className="text-muted-foreground">{t("settings.connections.oauth_step1_desc")}</p>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                >
+                  <a href={oauthSession.authorize_url} target="_blank" rel="noreferrer">
+                    <ExternalLink className="size-3.5" />
+                    {t("settings.connections.oauth_open_login_btn")}
+                  </a>
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">{t("settings.connections.oauth_step2_desc")}</p>
+                <Label htmlFor="oauth-callback-input">{t("settings.connections.oauth_callback_label")}</Label>
+                <Input
+                  id="oauth-callback-input"
+                  value={callbackInput}
+                  onChange={(e) => setCallbackInput(e.target.value)}
+                  placeholder={t("settings.connections.oauth_callback_placeholder")}
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setOauthSession(null);
+                    setCallbackInput("");
+                  }}
+                >
+                  {t("settings.connections.connect_modal_cancel")}
+                </Button>
+                <Button
+                  type="button"
+                  disabled={!callbackInput.trim() || completeOAuthMutation.isPending}
+                  onClick={() =>
+                    completeOAuthMutation.mutate({
+                      id: oauthSession.connection_id,
+                      callback: callbackInput.trim(),
+                    })
+                  }
+                >
+                  {completeOAuthMutation.isPending
+                    ? t("settings.connections.oauth_submitting_btn")
+                    : t("settings.connections.oauth_submit_btn")}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

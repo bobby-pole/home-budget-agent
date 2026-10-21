@@ -31,7 +31,8 @@ from .models import (
     BudgetAlert, AppStatusRead,
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
-    ConnectionSyncNowResponse, ConnectionDisconnectResponse
+    ConnectionSyncNowResponse, ConnectionDisconnectResponse,
+    ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest
 )
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
@@ -2387,17 +2388,49 @@ def get_receipt_connection(
     return to_read_dto(conn)
 
 
-@router.post("/connections/{connection_id}/sync-now", response_model=ConnectionSyncNowResponse)
-def sync_now_receipt_connection(
+@router.post("/connections/{connection_id}/oauth/start", response_model=ConnectionOAuthStartResponse)
+def start_receipt_connection_oauth(
     connection_id: int,
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
     current_user: User = Depends(get_current_user),
 ):
-    """Trigger an immediate sync queue request for a connection."""
+    """Generate an OAuth2 PKCE authorization URL for an external receipt connection."""
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
-    return ConnectionService.trigger_sync_now(session, current_budget.id, connection_id, current_user)
+    return ConnectionService.start_oauth(session, current_budget.id, connection_id, current_user)
+
+
+@router.post("/connections/{connection_id}/oauth/callback", response_model=ExternalReceiptConnectionRead)
+def complete_receipt_connection_oauth(
+    connection_id: int,
+    data: ConnectionOAuthCallbackRequest,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Complete OAuth2 PKCE flow using the captured redirect callback URL or authorization code."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.complete_oauth_callback(
+        session, current_budget.id, connection_id, current_user, data
+    )
+
+
+@router.post("/connections/{connection_id}/sync-now", response_model=ConnectionSyncNowResponse)
+def sync_now_receipt_connection(
+    connection_id: int,
+    live: bool = Query(default=False),
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Trigger an immediate sync queue request (or live sync when live=true) for a connection."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.trigger_sync_now(
+        session, current_budget.id, connection_id, current_user, execute_live=live
+    )
 
 
 @router.post("/connections/{connection_id}/reconnect", response_model=ExternalReceiptConnectionRead)

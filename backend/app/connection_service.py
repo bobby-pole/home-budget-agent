@@ -1,34 +1,50 @@
-"""Lifecycle and authorization policy for external receipt connections.
-
-This module deliberately does not expose merchant credentials through the web
-API. A future approved provider adapter completes authorization server-side and
-calls :meth:`complete_authorization`; the public API can only create a local
-placeholder and manage its lifecycle.
-"""
+"""Lifecycle, OAuth2 PKCE authorization, and receipt synchronization for external connections."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
+from app.adapters.lidl_poc_client import (
+    AuthorizationAttempt,
+    LidlPoCClient,
+    MerchantRequestError,
+    OAuthCallbackError,
+    TicketMappingError,
+    extract_ticket_list_entries,
+    get_lidl_live_config,
+    lidl_ticket_to_canonical,
+)
 from app.core.encryption import DecryptionError, EncryptionKeyError, get_encryption_service
 from app.models import (
     BudgetMember,
+    Category,
     ConnectionDisconnectResponse,
     ConnectionErrorCode,
+    ConnectionOAuthCallbackRequest,
+    ConnectionOAuthStartResponse,
     ConnectionStatus,
     ConnectionSyncNowResponse,
     ExternalReceiptConnection,
     ExternalReceiptConnectionCreate,
     ExternalReceiptConnectionRead,
+    ReceiptScan,
+    ScanStatus,
+    Transaction,
+    TransactionLine,
     User,
 )
 
 
 CONNECTION_WRITE_ROLES = {"owner", "editor"}
+
+# Ephemeral in-memory store of active PKCE authorization attempts keyed by connection_id
+_PENDING_OAUTH_ATTEMPTS: dict[int, tuple[AuthorizationAttempt, datetime]] = {}
+_OAUTH_ATTEMPT_TTL = timedelta(minutes=15)
 
 
 def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRead:
@@ -136,6 +152,113 @@ class ConnectionService:
         return to_read_dto(connection)
 
     @staticmethod
+    def start_oauth(
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+        client_override: Optional[LidlPoCClient] = None,
+    ) -> ConnectionOAuthStartResponse:
+        """Generate an OAuth2 PKCE S256 authorization URL and bind it to the connection."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        if conn.provider != "lidl":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Live OAuth PKCE flow is currently only supported for Lidl Plus (got '{conn.provider}')",
+            )
+        try:
+            get_encryption_service().primary_key_id
+        except EncryptionKeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Store authorization is not configured on this server",
+            ) from exc
+        lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
+        attempt = lidl_client.create_authorization_attempt()
+        authorize_url = lidl_client.build_authorize_url(attempt)
+        _PENDING_OAUTH_ATTEMPTS[conn.id or 0] = (attempt, datetime.now(timezone.utc))
+        return ConnectionOAuthStartResponse(
+            connection_id=conn.id or 0,
+            provider=conn.provider,
+            authorize_url=authorize_url,
+            state=attempt.state,
+            redirect_uri=lidl_client.config.redirect_uri,
+        )
+
+    @staticmethod
+    def complete_oauth_callback(
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+        data: ConnectionOAuthCallbackRequest,
+        client_override: Optional[LidlPoCClient] = None,
+    ) -> ExternalReceiptConnectionRead:
+        """Validate callback URL/code, exchange PKCE code for tokens, and persist encrypted refresh_token."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        if conn.provider != "lidl":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Live OAuth PKCE flow is currently only supported for Lidl Plus (got '{conn.provider}')",
+            )
+
+        pending = _PENDING_OAUTH_ATTEMPTS.get(conn.id or 0)
+        if not pending:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active OAuth authorization attempt found. Start authorization first.",
+            )
+        attempt, created_at = pending
+        if datetime.now(timezone.utc) - created_at > _OAUTH_ATTEMPT_TTL:
+            _PENDING_OAUTH_ATTEMPTS.pop(conn.id or 0, None)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth authorization attempt expired. Please start authorization again.",
+            )
+
+        lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
+        try:
+            code = lidl_client.validate_callback(
+                data.callback_url_or_code, attempt, allow_raw_code=True
+            )
+        except OAuthCallbackError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+        try:
+            token_payload = lidl_client.exchange_code(code, attempt)
+        except MerchantRequestError as exc:
+            conn.status = ConnectionStatus.REAUTH_REQUIRED
+            conn.last_error_code = ConnectionErrorCode.AUTH_EXPIRED.value
+            conn.updated_at = datetime.now(timezone.utc)
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Provider token exchange failed: {exc}",
+            ) from exc
+
+        refresh_token = str(token_payload.get("refresh_token") or "").strip()
+        if not refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Provider did not return a refresh_token",
+            )
+
+        _PENDING_OAUTH_ATTEMPTS.pop(conn.id or 0, None)
+        scopes_str = str(token_payload.get("scope") or " ".join(lidl_client.config.scopes))
+        return ConnectionService.complete_authorization(
+            session,
+            conn,
+            refresh_token=refresh_token,
+            consented_scopes=scopes_str,
+        )
+
+    @staticmethod
     def complete_authorization(
         session: Session,
         connection: ExternalReceiptConnection,
@@ -143,11 +266,7 @@ class ConnectionService:
         refresh_token: str,
         consented_scopes: Optional[str],
     ) -> ExternalReceiptConnectionRead:
-        """Persist an adapter's server-side authorization result, encrypted at rest.
-
-        This is intentionally not routed through FastAPI. Only a future approved
-        adapter callback may provide credentials to this boundary.
-        """
+        """Persist an adapter's server-side authorization result, encrypted at rest."""
         token_clean = refresh_token.strip()
         if not token_clean:
             raise ValueError("Authorization result must include a refresh token")
@@ -173,10 +292,115 @@ class ConnectionService:
         return to_read_dto(connection)
 
     @staticmethod
+    def _ingest_lidl_canonical_receipt(
+        session: Session,
+        budget_id: int,
+        user_id: int,
+        ticket_id: str,
+        raw_ticket: dict,
+    ) -> tuple[bool, bool]:
+        """Map a Lidl v3 ticket to CanonicalReceipt and persist it in ReceiptScan/Transaction inbox.
+
+        Returns (imported, skipped). Raises TicketMappingError on invalid payload.
+        """
+        content_hash = hashlib.sha256(f"lidl_plus:{budget_id}:{ticket_id}".encode("utf-8")).hexdigest()
+        existing_scan = session.exec(
+            select(ReceiptScan).where(
+                ReceiptScan.content_hash == content_hash,
+                ReceiptScan.transaction_id.in_(  # type: ignore
+                    select(Transaction.id).where(Transaction.budget_id == budget_id)
+                ),
+            )
+        ).first()
+        if existing_scan:
+            return False, True
+
+        canonical = lidl_ticket_to_canonical(raw_ticket)
+        receipt_dict = canonical.to_dict()
+
+        db_categories = session.exec(
+            select(Category).where(
+                (Category.budget_id == budget_id) | (Category.is_system)
+            )
+        ).all()
+        cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories if c.id is not None]
+        if cat_dicts:
+            try:
+                from app.services import AIService
+
+                categorized = AIService._categorize_parsed_items(receipt_dict, cat_dicts, user_id)
+                if categorized:
+                    receipt_dict = categorized
+            except Exception:
+                pass
+
+        try:
+            tx_date = datetime.strptime(canonical.date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            tx_date = datetime.now(timezone.utc)
+
+        tx = Transaction(
+            merchant_name=canonical.merchant_name,
+            total_amount=float(canonical.total_amount),
+            currency=canonical.currency,
+            date=tx_date,
+            is_manual=False,
+            type="expense",
+            uploaded_by=user_id,
+            budget_id=budget_id,
+            import_hash=content_hash,
+            note=f"Lidl Plus #{ticket_id}",
+        )
+        session.add(tx)
+        session.flush()  # Persist the receipt and all its lines in one transaction.
+
+        needs_review = canonical.get("validation_status") != "verified"
+        scan = ReceiptScan(
+            transaction_id=tx.id or 0,
+            image_path=None,
+            status=ScanStatus.NEEDS_REVIEW.value if needs_review else ScanStatus.CATEGORIZATION_OK.value,
+            content_hash=content_hash,
+            needs_review=needs_review,
+            validation_message=canonical.get("validation_error"),
+        )
+        session.add(scan)
+
+        cat_name_to_id = {c.name.lower(): c.id for c in db_categories if c.id is not None}
+        for item_raw in receipt_dict.get("items", []):
+            cat_name = str(item_raw.get("category") or "").strip().lower()
+            cat_id = cat_name_to_id.get(cat_name) if cat_name else None
+            orig = item_raw.get("original_price")
+            fin = item_raw.get("final_price")
+            session.add(
+                TransactionLine(
+                    name=str(item_raw.get("name") or "Pozycja"),
+                    price=float(item_raw.get("price", 0.0)),
+                    quantity=float(item_raw.get("quantity", 1.0)),
+                    category_id=cat_id,
+                    category_source=item_raw.get("category_source"),
+                    transaction_id=tx.id,
+                    original_price=float(orig) if orig is not None else None,
+                    discount_total=float(item_raw.get("discount_total", 0.0)),
+                    final_price=float(fin) if fin is not None else None,
+                    is_adjustment=bool(item_raw.get("is_adjustment", False)),
+                )
+            )
+
+        session.commit()
+        return True, False
+
+    @staticmethod
     def trigger_sync_now(
-        session: Session, budget_id: int, connection_id: int, user: User
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+        *,
+        execute_live: bool = False,
+        max_tickets: int = 10,
+        client_override: Optional[LidlPoCClient] = None,
     ) -> ConnectionSyncNowResponse:
-        """Queue sync only for an authorised, active connection owned by the caller."""
+        """Queue or execute synchronization for an authorised, active connection owned by the caller."""
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         if conn.status != ConnectionStatus.ACTIVE or not conn.encrypted_refresh_token:
@@ -191,11 +415,119 @@ class ConnectionService:
         session.add(conn)
         session.commit()
         session.refresh(conn)
+
+        if not execute_live or conn.provider != "lidl":
+            return ConnectionSyncNowResponse(
+                connection_id=conn.id or 0,
+                status=ConnectionStatus(conn.status),
+                sync_requested_at=now,
+                message="Synchronization request recorded. Processing requires a configured provider adapter and background worker.",
+            )
+
+        refresh_token = ConnectionService.get_decrypted_token(session, conn)
+        if not refresh_token:
+            session.refresh(conn)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Stored connection token could not be decrypted; re-authorization required.",
+            )
+
+        lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
+        try:
+            token_data = lidl_client.refresh_access_token(refresh_token)
+        except MerchantRequestError as exc:
+            if exc.status_code in (400, 401, 403):
+                conn.status = ConnectionStatus.REAUTH_REQUIRED
+                conn.last_error_code = ConnectionErrorCode.AUTH_EXPIRED.value
+            else:
+                conn.status = ConnectionStatus.SYNC_ERROR
+                conn.last_error_code = ConnectionErrorCode.NETWORK_ERROR.value
+            conn.updated_at = datetime.now(timezone.utc)
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Lidl token refresh failed: {exc}",
+            ) from exc
+
+        access_token = str(token_data.get("access_token") or "").strip()
+        new_refresh_token = str(token_data.get("refresh_token") or "").strip()
+        if not access_token:
+            conn.status = ConnectionStatus.SYNC_ERROR
+            conn.last_error_code = ConnectionErrorCode.SYNC_FAILED.value
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Lidl token refresh did not return an access_token",
+            )
+
+        # Rotate refresh token if Lidl issued a new one
+        if new_refresh_token:
+            ciphertext, key_id = get_encryption_service().encrypt(new_refresh_token)
+            conn.encrypted_refresh_token = ciphertext
+            conn.encryption_key_id = key_id
+
+        try:
+            list_payload = lidl_client.get_tickets_list(access_token, page_number=1)
+        except MerchantRequestError as exc:
+            conn.status = ConnectionStatus.SYNC_ERROR
+            conn.last_error_code = (
+                ConnectionErrorCode.RATE_LIMITED.value
+                if exc.status_code == 429
+                else ConnectionErrorCode.SYNC_FAILED.value
+            )
+            conn.updated_at = datetime.now(timezone.utc)
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch Lidl ticket list: {exc}",
+            ) from exc
+
+        entries = extract_ticket_list_entries(list_payload)[:max_tickets]
+        imported_count = 0
+        skipped_count = 0
+        failed_count = 0
+
+        for entry in entries:
+            ticket_id = str(entry.get("id") or "").strip()
+            if not ticket_id:
+                failed_count += 1
+                continue
+            try:
+                raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
+                imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
+                    session, budget_id, user.id or 0, ticket_id, raw_ticket
+                )
+                if imported:
+                    imported_count += 1
+                elif skipped:
+                    skipped_count += 1
+            except (MerchantRequestError, TicketMappingError):
+                failed_count += 1
+
+        finish_now = datetime.now(timezone.utc)
+        conn.status = ConnectionStatus.SYNC_ERROR if failed_count else ConnectionStatus.ACTIVE
+        conn.last_error_code = ConnectionErrorCode.SYNC_FAILED.value if failed_count else None
+        if not failed_count:
+            conn.last_success_at = finish_now
+        conn.sync_requested_at = None
+        # Scheduling is delivered by #257; do not advertise a nonexistent next run.
+        conn.next_sync_at = None
+        conn.updated_at = finish_now
+        session.add(conn)
+        session.commit()
+        session.refresh(conn)
+
         return ConnectionSyncNowResponse(
             connection_id=conn.id or 0,
             status=ConnectionStatus(conn.status),
-            sync_requested_at=now,
-            message="Synchronization request recorded. Processing requires a configured provider adapter and background worker.",
+            sync_requested_at=finish_now,
+            message=f"Synchronizacja zakończona: pobrano {imported_count} nowych paragonów (pominięto duplikatów: {skipped_count}, błędów: {failed_count}).",
+            imported_count=imported_count,
+            skipped_count=skipped_count,
+            failed_count=failed_count,
         )
 
     @staticmethod

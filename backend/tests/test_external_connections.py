@@ -51,6 +51,7 @@ def _complete_authorization(
 
 @pytest.fixture(autouse=True)
 def setup_test_encryption_env(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("CONNECTION_ENCRYPTION_KEYS", raising=False)
     test_key = Fernet.generate_key().decode("utf-8")
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", test_key)
     monkeypatch.setenv("TOKEN_PRIMARY_KEY_ID", "v1")
@@ -334,3 +335,158 @@ def test_connection_status_storage_matches_migration_default(client: TestClient,
     session.commit()
     session.expire_all()
     assert client.get(f"/api/connections/{connection_id}").json()["status"] == "reauth_required"
+
+
+def test_lidl_oauth_start_callback_and_live_sync_e2e(client: TestClient, session: Session):
+    from typing import Any
+    from app.adapters.lidl_poc_client import LidlPoCClient, MOCK_LIDL_V3_TICKET, get_lidl_live_config
+    from app.models import ReceiptScan, Transaction
+
+    created = client.post("/api/connections", json={"provider": "lidl"})
+    assert created.status_code == 200
+    conn_id = created.json()["id"]
+
+    start_res = client.post(f"/api/connections/{conn_id}/oauth/start")
+    assert start_res.status_code == 200
+    start_data = start_res.json()
+    assert "https://accounts.lidl.com/connect/authorize" in start_data["authorize_url"]
+    state = start_data["state"]
+
+    class _FakeResp:
+        def __init__(self, status_code: int, payload: Any) -> None:
+            self.status_code = status_code
+            self._payload = payload
+
+        def json(self) -> Any:
+            return self._payload
+
+    class _FakeHttpSession:
+        def post(self, url: str, **kwargs: Any) -> _FakeResp:
+            data = kwargs.get("data", {})
+            if data.get("grant_type") == "authorization_code":
+                return _FakeResp(
+                    200,
+                    {
+                        "access_token": "initial-access-token",
+                        "refresh_token": "initial-refresh-token",
+                        "scope": "openid profile offline_access lpprofile lpapis",
+                    },
+                )
+            return _FakeResp(
+                200,
+                {
+                    "access_token": "refreshed-access-token",
+                    "refresh_token": "rotated-refresh-token",
+                },
+            )
+
+        def get(self, url: str, **kwargs: Any) -> _FakeResp:
+            if "/api/v2/" in url:
+                return _FakeResp(200, {"tickets": [{"id": "live-ticket-001"}]})
+            return _FakeResp(200, MOCK_LIDL_V3_TICKET)
+
+    fake_lidl = LidlPoCClient(get_lidl_live_config(), session=_FakeHttpSession())
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    from app.models import ConnectionOAuthCallbackRequest
+
+    cb_res = ConnectionService.complete_oauth_callback(
+        session,
+        budget.id or 0,
+        conn_id,
+        owner,
+        ConnectionOAuthCallbackRequest(
+            callback_url_or_code=f"com.lidlplus.app://callback?code=auth-code-999&state={state}"
+        ),
+        client_override=fake_lidl,
+    )
+    assert cb_res.status == ConnectionStatus.ACTIVE
+    assert cb_res.has_token is True
+
+    sync_res = ConnectionService.trigger_sync_now(
+        session,
+        budget.id or 0,
+        conn_id,
+        owner,
+        execute_live=True,
+        client_override=fake_lidl,
+    )
+    assert sync_res.imported_count == 1
+    assert sync_res.skipped_count == 0
+    assert sync_res.failed_count == 0
+
+    # Second run is deduplicated by ticket_id
+    sync_res_2 = ConnectionService.trigger_sync_now(
+        session,
+        budget.id or 0,
+        conn_id,
+        owner,
+        execute_live=True,
+        client_override=fake_lidl,
+    )
+    assert sync_res_2.imported_count == 0
+    assert sync_res_2.skipped_count == 1
+
+    scans = session.exec(select(ReceiptScan)).all()
+    assert len(scans) == 1
+    tx = session.get(Transaction, scans[0].transaction_id)
+    assert tx is not None
+    assert tx.merchant_name == "Lidl PL0422"
+
+
+def test_failed_live_sync_does_not_report_success(client: TestClient, session: Session):
+    from unittest.mock import Mock
+    from app.adapters.lidl_poc_client import TicketMappingError
+
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    connection = _complete_authorization(session, budget, owner)
+    provider = Mock()
+    provider.refresh_access_token.return_value = {"access_token": "test-access"}
+    provider.get_tickets_list.return_value = {"tickets": [{"id": "bad-ticket"}]}
+    provider.get_ticket_detail.side_effect = TicketMappingError("invalid payload")
+    result = ConnectionService.trigger_sync_now(
+        session, budget.id or 0, connection.id or 0, owner,
+        execute_live=True, client_override=provider,
+    )
+    assert result.failed_count == 1
+    assert result.status == ConnectionStatus.SYNC_ERROR
+    session.refresh(connection)
+    assert connection.last_success_at is None
+    assert connection.next_sync_at is None
+    assert connection.last_error_code == ConnectionErrorCode.SYNC_FAILED.value
+
+
+def test_receipt_and_lines_are_atomic(client: TestClient, session: Session, monkeypatch):
+    from app.adapters.lidl_poc_client import MOCK_LIDL_V3_TICKET
+    from app.models import Transaction, TransactionLine
+    from app.services import AIService
+
+    budget = next(iter(session.exec(select(Budget))))
+    add = session.add
+
+    def fail_on_line(obj, *args, **kwargs):
+        if isinstance(obj, TransactionLine):
+            raise RuntimeError("Simulated line storage failure")
+        return add(obj, *args, **kwargs)
+
+    monkeypatch.setattr(session, "add", fail_on_line)
+    monkeypatch.setattr(AIService, "_categorize_parsed_items", lambda receipt, *args: receipt)
+    with pytest.raises(RuntimeError, match="Simulated line"):
+        ConnectionService._ingest_lidl_canonical_receipt(
+            session, budget.id or 0, budget.owner_id or 0, "atomic-ticket", MOCK_LIDL_V3_TICKET,
+        )
+    session.rollback()
+    assert session.exec(select(Transaction)).all() == []
+
+
+def test_oauth_cannot_start_without_server_encryption_key(client: TestClient, monkeypatch):
+    created = client.post("/api/connections", json={"provider": "lidl"})
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
+    monkeypatch.delenv("CONNECTION_ENCRYPTION_KEYS", raising=False)
+    get_encryption_service(reload_env=True)
+    response = client.post(f"/api/connections/{created.json()['id']}/oauth/start")
+    assert response.status_code == 503
+    assert "not configured" in response.json()["detail"]

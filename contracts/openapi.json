@@ -2694,10 +2694,142 @@
         }
       }
     },
+    "/api/connections/{connection_id}/oauth/start": {
+      "post": {
+        "summary": "Start Receipt Connection Oauth",
+        "description": "Generate an OAuth2 PKCE authorization URL for an external receipt connection.",
+        "operationId": "start_receipt_connection_oauth_api_connections__connection_id__oauth_start_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOAuthStartResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/connections/{connection_id}/oauth/callback": {
+      "post": {
+        "summary": "Complete Receipt Connection Oauth",
+        "description": "Complete OAuth2 PKCE flow using the captured redirect callback URL or authorization code.",
+        "operationId": "complete_receipt_connection_oauth_api_connections__connection_id__oauth_callback_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionOAuthCallbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalReceiptConnectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connections/{connection_id}/sync-now": {
       "post": {
         "summary": "Sync Now Receipt Connection",
-        "description": "Trigger an immediate sync queue request for a connection.",
+        "description": "Trigger an immediate sync queue request (or live sync when live=true) for a connection.",
         "operationId": "sync_now_receipt_connection_api_connections__connection_id__sync_now_post",
         "security": [
           {
@@ -2712,6 +2844,16 @@
             "schema": {
               "type": "integer",
               "title": "Connection Id"
+            }
+          },
+          {
+            "name": "live",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Live"
             }
           },
           {
@@ -3556,6 +3698,53 @@
         ],
         "title": "ConnectionDisconnectResponse"
       },
+      "ConnectionOAuthCallbackRequest": {
+        "properties": {
+          "callback_url_or_code": {
+            "type": "string",
+            "title": "Callback Url Or Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "callback_url_or_code"
+        ],
+        "title": "ConnectionOAuthCallbackRequest"
+      },
+      "ConnectionOAuthStartResponse": {
+        "properties": {
+          "connection_id": {
+            "type": "integer",
+            "title": "Connection Id"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "authorize_url": {
+            "type": "string",
+            "title": "Authorize Url"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "redirect_uri": {
+            "type": "string",
+            "title": "Redirect Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connection_id",
+          "provider",
+          "authorize_url",
+          "state",
+          "redirect_uri"
+        ],
+        "title": "ConnectionOAuthStartResponse"
+      },
       "ConnectionStatus": {
         "type": "string",
         "enum": [
@@ -3584,6 +3773,21 @@
           "message": {
             "type": "string",
             "title": "Message"
+          },
+          "imported_count": {
+            "type": "integer",
+            "title": "Imported Count",
+            "default": 0
+          },
+          "skipped_count": {
+            "type": "integer",
+            "title": "Skipped Count",
+            "default": 0
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count",
+            "default": 0
           }
         },
         "type": "object",

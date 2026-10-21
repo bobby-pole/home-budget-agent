@@ -94,3 +94,31 @@ The following strict prohibitions apply to all contributors and automated agents
   * Secure credential storage moved to user device hardware enclaves (iOS Keychain, Android KeyStore / SecureStore).
   * Direct device-to-merchant communication without intermediate server-side token retention.
   * End-to-end encrypted synchronization with the user's private household database.
+
+
+## 8. Local Lidl research session
+
+The CLI reads explicitly configured keys from the environment or the root `.env`.
+It never supplies a default encryption key. `scratch/lidl_poc_session.json` contains
+only a version, key identifier and Fernet ciphertext; tokens and the optional
+connection binding are encrypted together. Writes use an atomic replacement with
+0600 permissions. `migrate-session` encrypts a legacy plaintext file in place,
+without contacting Lidl or changing application connections. Keep the encryption
+key when restoring the session; losing it requires another login.
+
+A research login without a target does not modify the application database.
+To bind a login to one application connection, provide all three positive IDs:
+
+```sh
+backend/.venv/bin/python scripts/poc_lidl_auth.py login \
+  --connection-id <connection-id> --budget-id <budget-id> --user-id <user-id>
+```
+
+The script checks membership, owner and provider before authorization and again
+before storing credentials. Refresh retains this encrypted binding and updates
+only that connection. A response without a replacement refresh token retains
+the previous token. No command assigns credentials to every Lidl connection.
+
+The local key-rotation rollback artifact in `data/backups/*.sql.encrypted.json`
+contains an encrypted SQL dump: decrypt `ciphertext` with the key named by `key_id`
+to recover SQL for a separate restore database. It is not a plaintext SQLite file.

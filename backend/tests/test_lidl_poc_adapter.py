@@ -13,6 +13,7 @@ from app.adapters.lidl_poc_client import (
     OAuthCallbackError,
     OAuthConfigurationError,
     TicketMappingError,
+    get_lidl_live_config,
     lidl_ticket_to_canonical,
 )
 
@@ -210,3 +211,77 @@ def test_http_errors_do_not_expose_provider_body() -> None:
         client.get_tickets_list("also-sensitive")
     assert "sensitive-value" not in str(error.value)
     assert "also-sensitive" not in str(error.value)
+
+
+def test_live_lidl_config_uses_basic_auth_and_mobile_headers() -> None:
+    cfg = get_lidl_live_config()
+    session = _Session(_Response(200, {"access_token": "tok", "refresh_token": "ref"}))
+    client = LidlPoCClient(cfg, session=session)
+    attempt = client.create_authorization_attempt()
+
+    callback = f"com.lidlplus.app://callback?code=live-code-123&state={attempt.state}"
+    code = client.validate_callback(callback, attempt)
+    assert code == "live-code-123"
+
+    client.exchange_code(code, attempt)
+    token_call = session.calls[0]
+    assert token_call["headers"]["Authorization"].startswith("Basic ")
+    assert token_call["data"]["code"] == "live-code-123"
+    assert token_call["data"]["code_verifier"] == attempt.code_verifier
+
+    session.response = _Response(200, {"tickets": [{"id": "t-1"}]})
+    client.get_tickets_list("tok")
+    list_call = session.calls[1]
+    assert list_call["headers"]["Operating-System"] == "iOS"
+    assert list_call["headers"]["App"] == "com.lidl.eci.lidl.plus"
+    assert "pageNumber=1" in list_call["url"]
+
+
+def test_polish_html_printed_receipt_maps_to_verified_canonical() -> None:
+    sample_html = """<html><body><pre>
+<span class="header"><span id="h1">Lidl sp. z o.o.</span></span>
+<span class="purchase_list"><span id="p1" class="currency" data-currency="zł">2026-10-21</span>
+<span id="p2" class="article" data-art-id="1" data-art-quantity="0,505" data-unit-price="43,90" data-tax-type="C" data-art-description="Ciasto Sernik">Ciasto Sernik</span>
+<span id="p3" class="article" data-art-id="1" data-art-quantity="0,505" data-unit-price="43,90" data-tax-type="C" data-art-description="Ciasto Sernik">0,505kg x 43.9 22.17 C</span>
+<span id="p4" class="discount" data-promotion-id="_DISCOUNT1">RABAT 50% -11,09</span>
+<span id="p5" class="article" data-art-id="2" data-art-quantity="6" data-unit-price="0,99" data-tax-type="A" data-art-description="Woda lekko gaz.">Woda lekko gaz.</span>
+<span id="p6" class="article" data-art-id="2" data-art-quantity="6" data-unit-price="0,99" data-tax-type="A" data-art-description="Woda lekko gaz.">6 * 0.99 5.94 A</span>
+</span><span class="vat_info"><span id="v1" data-tax-type="A" data-tax-percentage="23,00">PTU A 5,94</span>
+<span id="v2" data-tax-type="C" data-tax-percentage="5,00">PTU C 11,08</span>
+</span><span class="purchase_summary"><span id="s1">Suma PLN 17,02</span>
+<span id="s2">Opakowania zwrotne wydania</span>
+<span id="s3">Kaucja PET 6 * 0.5 3.0</span>
+<span id="s4">Opakowania zwrotne suma 3,00</span>
+<span id="s5">Suma 20,02</span>
+</span></pre></body></html>"""
+    ticket = {
+        "ticketType": "HTML",
+        "id": "240019528420261021332821",
+        "date": "2026-10-21T08:51:10",
+        "totalAmount": 20.02,
+        "store": {"id": "PL1952", "locality": "Rybnik"},
+        "htmlPrintedReceipt": sample_html,
+    }
+    receipt = lidl_ticket_to_canonical(ticket)
+    assert receipt.merchant_name == "Lidl Rybnik"
+    assert receipt.date == "2026-10-21"
+    assert receipt.total_amount == Decimal("20.02")
+    assert receipt.calculated_total == Decimal("20.02")
+    assert receipt["validation_status"] == "verified"
+    assert len(receipt.items) == 3
+    assert receipt.items[0].discount_total == Decimal("-11.09")
+    assert receipt.items[0]["is_weighted"] is True
+    assert receipt.items[0]["tax_letter"] == "C"
+    assert receipt.items[0]["tax_rate"] == "5.00"
+    assert receipt.items[2].is_adjustment is True
+    assert receipt.items[2].final_line_total == Decimal("3.00")
+
+
+def test_callback_url_requires_state_even_when_raw_codes_are_allowed():
+    client = LidlPoCClient(_config())
+    attempt = client.create_authorization_attempt()
+    with pytest.raises(OAuthCallbackError, match="state"):
+        client.validate_callback(
+            "https://rachownik.example/oauth/lidl/callback?code=one-time-code",
+            attempt, allow_raw_code=True,
+        )
