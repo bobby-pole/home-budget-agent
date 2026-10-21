@@ -195,7 +195,7 @@ class ConnectionService:
             connection_id=conn.id or 0,
             status=ConnectionStatus(conn.status),
             sync_requested_at=now,
-            message="Synchronization requested and queued. Background sync worker will process this request.",
+            message="Synchronization request recorded. Processing requires a configured provider adapter and background worker.",
         )
 
     @staticmethod
@@ -223,6 +223,8 @@ class ConnectionService:
         conn.encrypted_refresh_token = None
         conn.encryption_key_id = None
         conn.status = ConnectionStatus.DISCONNECTED
+        conn.sync_requested_at = None
+        conn.next_sync_at = None
         conn.last_error_code = ConnectionErrorCode.PROVIDER_REVOCATION_UNAVAILABLE.value
         conn.updated_at = datetime.now(timezone.utc)
         session.add(conn)

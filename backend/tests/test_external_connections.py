@@ -6,6 +6,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
+from sqlalchemy import text
 
 from app.auth import get_current_user
 from app.connection_service import ConnectionService
@@ -210,6 +211,7 @@ def test_disconnect_erases_token_atomically(client: TestClient, session: Session
     assert owner is not None
     connection = _complete_authorization(session, budget, owner)
 
+    client.post(f"/api/connections/{connection.id}/sync-now")
     response = client.post(f"/api/connections/{connection.id}/disconnect")
     assert response.status_code == 200
     refreshed = session.get(ExternalReceiptConnection, connection.id)
@@ -217,6 +219,9 @@ def test_disconnect_erases_token_atomically(client: TestClient, session: Session
     assert refreshed.encrypted_refresh_token is None
     assert refreshed.encryption_key_id is None
     assert refreshed.status == ConnectionStatus.DISCONNECTED.value
+    assert refreshed.sync_requested_at is None
+    assert refreshed.next_sync_at is None
+    assert ConnectionService.get_decrypted_token(session, refreshed) is None
 
 
 def test_lost_encryption_key_marks_connection_for_reauthorization(
@@ -241,3 +246,91 @@ def test_lost_encryption_key_marks_connection_for_reauthorization(
     assert ConnectionService.get_decrypted_token(session, connection) is None
     assert connection.status == ConnectionStatus.REAUTH_REQUIRED.value
     assert connection.last_error_code == ConnectionErrorCode.ENCRYPTION_KEY_MISSING.value
+
+
+def test_cross_budget_connection_is_not_accessible(client: TestClient, session: Session):
+    owner = session.exec(select(User).where(User.email == "test@example.com")).one()
+    other_budget = Budget(name="Other budget", owner_id=owner.id)
+    session.add(other_budget)
+    session.commit()
+    session.refresh(other_budget)
+    _add_member(session, other_budget, owner, "owner")
+    connection = _complete_authorization(session, other_budget, owner)
+
+    assert client.get("/api/connections").json() == []
+    assert client.get(f"/api/connections/{connection.id}").status_code == 404
+    for action in ("sync-now", "reconnect", "disconnect"):
+        assert client.post(f"/api/connections/{connection.id}/{action}").status_code == 404
+
+
+def test_viewer_cannot_mutate_existing_connection(client: TestClient, session: Session):
+    budget = next(iter(session.exec(select(Budget))))
+    viewer = User(email="existing-viewer@example.com", hashed_password="hash")
+    session.add(viewer)
+    session.commit()
+    session.refresh(viewer)
+    _add_member(session, budget, viewer, "editor")
+    connection = _complete_authorization(session, budget, viewer)
+    membership = session.exec(select(BudgetMember).where(
+        BudgetMember.budget_id == budget.id, BudgetMember.user_id == viewer.id
+    )).one()
+    membership.role = "viewer"
+    session.add(membership)
+    session.commit()
+    _set_client_user(viewer)
+    for action in ("sync-now", "reconnect", "disconnect"):
+        assert client.post(f"/api/connections/{connection.id}/{action}").status_code == 403
+
+
+def test_corrupted_ciphertext_marks_reauthorization(client: TestClient, session: Session):
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    connection = _complete_authorization(session, budget, owner)
+    connection.encrypted_refresh_token = "invalid-ciphertext"
+    session.add(connection)
+    session.commit()
+
+    assert ConnectionService.get_decrypted_token(session, connection) is None
+    assert connection.status == ConnectionStatus.REAUTH_REQUIRED
+    assert connection.last_error_code == ConnectionErrorCode.TOKEN_DECRYPTION_FAILED.value
+    session.refresh(connection)
+    assert connection.status == ConnectionStatus.REAUTH_REQUIRED
+
+
+def test_worker_rotates_stored_ciphertext(client: TestClient, session: Session, monkeypatch):
+    import json
+
+    budget = next(iter(session.exec(select(Budget))))
+    owner = session.get(User, budget.owner_id)
+    assert owner is not None
+    connection = _complete_authorization(session, budget, owner)
+    old_ciphertext = connection.encrypted_refresh_token
+    import os
+    old_key = os.environ["TOKEN_ENCRYPTION_KEY"]
+    new_key = Fernet.generate_key().decode()
+    monkeypatch.setenv("CONNECTION_ENCRYPTION_KEYS", json.dumps({"v1": old_key, "v2": new_key}))
+    monkeypatch.setenv("TOKEN_PRIMARY_KEY_ID", "v2")
+    get_encryption_service(reload_env=True)
+
+    assert ConnectionService.get_decrypted_token(session, connection) == "server-only-refresh-token"
+    session.refresh(connection)
+    assert connection.encryption_key_id == "v2"
+    assert connection.encrypted_refresh_token != old_ciphertext
+
+
+def test_connection_status_storage_matches_migration_default(client: TestClient, session: Session):
+    response = client.post("/api/connections", json={"provider": "lidl"})
+    assert response.status_code == 200
+    connection_id = response.json()["id"]
+    stored = session.execute(text(
+        "SELECT status FROM external_receipt_connection WHERE id = :id"
+    ), {"id": connection_id}).scalar_one()
+    assert stored == "reauth_required"
+    # A row written using the migration's lowercase default must remain readable.
+    session.execute(text(
+        "UPDATE external_receipt_connection SET status = 'reauth_required' WHERE id = :id"
+    ), {"id": connection_id})
+    session.commit()
+    session.expire_all()
+    assert client.get(f"/api/connections/{connection_id}").json()["status"] == "reauth_required"

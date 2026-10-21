@@ -381,7 +381,10 @@ class ConnectionErrorCode(str, Enum):
 class ExternalReceiptConnectionBase(SQLModel):
     provider: str = Field(index=True)
     consented_scopes: Optional[str] = Field(default=None)
-    status: ConnectionStatus = Field(default=ConnectionStatus.REAUTH_REQUIRED, index=True)
+    status: ConnectionStatus = Field(
+        default=ConnectionStatus.REAUTH_REQUIRED,
+        sa_column=Column(String, nullable=False, index=True, server_default="reauth_required"),
+    )
     last_error_code: Optional[str] = Field(default=None)
 
 
