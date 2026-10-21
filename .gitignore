@@ -27,6 +27,7 @@ scratch/
 
 .vscode/
 .DS_Store
+pyrefly.toml
 
 # --- Private Project Management (Moved to hba-project-context repo) ---
 docs/

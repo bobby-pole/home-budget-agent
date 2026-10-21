@@ -497,7 +497,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         ai_date_str = data.get("date")
         if ai_date_str:
             try:
-                transaction.date = datetime.strptime(ai_date_str, "%Y-%m-%d")
+                transaction.date = datetime.strptime(ai_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 logger.warning("Could not parse AI date", extra={"scan_id": scan_id, "date": ai_date_str})
 
@@ -1621,9 +1621,9 @@ async def import_transactions(
     for r in final_rows:
         try:
             if "-" in r["date_str"]:
-                parsed_dates.append(datetime.strptime(r["date_str"], "%Y-%m-%d"))
+                parsed_dates.append(datetime.strptime(r["date_str"], "%Y-%m-%d").replace(tzinfo=timezone.utc))
             else:
-                parsed_dates.append(datetime.strptime(r["date_str"], "%d.%m.%Y"))
+                parsed_dates.append(datetime.strptime(r["date_str"], "%d.%m.%Y").replace(tzinfo=timezone.utc))
         except ValueError:
             pass
 
@@ -1669,7 +1669,11 @@ async def import_transactions(
 
         for cand in manual_candidates:
             # Match if same amount and within 2 days window
-            if cand.total_amount == t_amount and cand.date and d_start <= cand.date <= d_end:
+            # Older SQLite/SQLModel versions return naive stored datetimes.
+            candidate_date = cand.date
+            if candidate_date is not None and candidate_date.tzinfo is None:
+                candidate_date = candidate_date.replace(tzinfo=timezone.utc)
+            if cand.total_amount == t_amount and candidate_date and d_start <= candidate_date <= d_end:
                 existing_duplicate = cand
                 manual_candidates.remove(cand) # Don't match the same receipt twice
                 break

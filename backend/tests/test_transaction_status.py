@@ -1,4 +1,5 @@
 import io
+import pytest
 from fastapi.testclient import TestClient
 
 from app.models import TransactionStatus
@@ -152,10 +153,11 @@ def test_transfer_status(client: TestClient):
     assert t2["status"] == "cleared"
 
 
-def test_bank_csv_import_status_cleared(client: TestClient):
+@pytest.mark.parametrize("date_text", ["2026-03-01", "01.03.2026"])
+def test_bank_csv_import_status_cleared(client: TestClient, require_aware_transaction_dates, date_text):
     csv_content = (
         "Data transakcji;Kontrahent;Tytuł;Kwota;Waluta\n"
-        "2026-03-01;Sklep ABC;Płatność kartą;-75,20;PLN\n"
+        f"{date_text};Sklep ABC;Płatność kartą;-75,20;PLN\n"
     )
     file_payload = {"file": ("statement.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
     response = client.post("/api/transactions/import", files=file_payload)
