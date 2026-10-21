@@ -56,6 +56,7 @@ class User(SQLModel, table=True):
     )
     memberships: List["BudgetMember"] = Relationship(back_populates="user")
     transactions: List["Transaction"] = Relationship(back_populates="uploader")
+    receipt_connections: List["ExternalReceiptConnection"] = Relationship(back_populates="owner")
 
 
 # ─── Budget (multi-tenant household container) ────────────────────────────────
@@ -80,6 +81,7 @@ class Budget(SQLModel, table=True):
     transactions: List["Transaction"] = Relationship(back_populates="budget")
     envelope_allocations: List["EnvelopeAllocation"] = Relationship(back_populates="budget")
     accounts: List["Account"] = Relationship(back_populates="budget")
+    receipt_connections: List["ExternalReceiptConnection"] = Relationship(back_populates="budget")
 
 
 # ─── BudgetMember ─────────────────────────────────────────────────────────────
@@ -353,7 +355,109 @@ class BudgetAlert(SQLModel, table=True):
     budget: Optional[Budget] = Relationship()
     user: Optional[User] = Relationship()
 
+
+# ─── ExternalReceiptConnection (Store / Merchant Ingestion Lifecycle) ─────────
+
+class ConnectionStatus(str, Enum):
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    REAUTH_REQUIRED = "reauth_required"
+    SYNC_ERROR = "sync_error"
+    DISCONNECTED = "disconnected"
+
+
+class ConnectionErrorCode(str, Enum):
+    AUTH_EXPIRED = "AUTH_EXPIRED"
+    REAUTH_REQUIRED = "REAUTH_REQUIRED"
+    RATE_LIMITED = "RATE_LIMITED"
+    NETWORK_ERROR = "NETWORK_ERROR"
+    PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    PROVIDER_REVOCATION_UNAVAILABLE = "PROVIDER_REVOCATION_UNAVAILABLE"
+    ENCRYPTION_KEY_MISSING = "ENCRYPTION_KEY_MISSING"
+    TOKEN_DECRYPTION_FAILED = "TOKEN_DECRYPTION_FAILED"
+    SYNC_FAILED = "SYNC_FAILED"
+
+
+class ExternalReceiptConnectionBase(SQLModel):
+    provider: str = Field(index=True)
+    consented_scopes: Optional[str] = Field(default=None)
+    status: ConnectionStatus = Field(
+        default=ConnectionStatus.REAUTH_REQUIRED,
+        sa_column=Column(String, nullable=False, index=True, server_default="reauth_required"),
+    )
+    last_error_code: Optional[str] = Field(default=None)
+
+
+class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
+    __tablename__: str = "external_receipt_connection"  # type: ignore
+    __table_args__ = (
+        UniqueConstraint(
+            "budget_id",
+            "owner_user_id",
+            "provider",
+            name="uq_connection_budget_owner_provider",
+        ),
+        Index("ix_connection_budget_status", "budget_id", "status"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+    owner_user_id: int = Field(foreign_key="user.id", index=True)
+
+    consented_at: Optional[datetime] = Field(default=None)
+    encrypted_refresh_token: Optional[str] = Field(default=None)
+    encryption_key_id: Optional[str] = Field(default=None)
+
+    last_success_at: Optional[datetime] = Field(default=None)
+    next_sync_at: Optional[datetime] = Field(default=None)
+    sync_requested_at: Optional[datetime] = Field(default=None)
+
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    budget: Optional[Budget] = Relationship(back_populates="receipt_connections")
+    owner: Optional[User] = Relationship(back_populates="receipt_connections")
+
+
 # ─── API DTOs ────────────────────────────────────────────────────────────────
+
+class ExternalReceiptConnectionRead(SQLModel):
+    id: int
+    budget_id: int
+    owner_user_id: int
+    provider: str
+    consented_scopes: Optional[str] = None
+    consented_at: Optional[datetime] = None
+    status: ConnectionStatus
+    has_token: bool = False
+    last_success_at: Optional[datetime] = None
+    last_error_code: Optional[str] = None
+    next_sync_at: Optional[datetime] = None
+    sync_requested_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ExternalReceiptConnectionCreate(SQLModel):
+    """Create a local authorization placeholder; it never accepts credentials."""
+
+    model_config = SQLModelConfig(extra="forbid")
+
+    provider: str
+
+
+class ConnectionSyncNowResponse(SQLModel):
+    connection_id: int
+    status: ConnectionStatus
+    sync_requested_at: datetime
+    message: str
+
+
+class ConnectionDisconnectResponse(SQLModel):
+    connection_id: int
+    status: str
+    revocation_status: str
+    message: str
 
 class AccountRead(AccountBase):
     id: int

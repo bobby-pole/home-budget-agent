@@ -29,8 +29,11 @@ from .models import (
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead,
     BudgetAlert, AppStatusRead,
-    UserBudgetRead, ChangePasswordRequest, UserUpdate
+    UserBudgetRead, ChangePasswordRequest, UserUpdate,
+    ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
+    ConnectionSyncNowResponse, ConnectionDisconnectResponse
 )
+from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
 from .auth import get_current_user, hash_password, verify_password, create_access_token
@@ -2341,3 +2344,83 @@ async def reconcile_account(
         session.refresh(account)
 
     return account
+
+
+# ─── External Receipt Connections Lifecycle ──────────────────────────────────
+
+@router.get("/connections", response_model=List[ExternalReceiptConnectionRead])
+def list_receipt_connections(
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """List all external receipt connections configured for the current budget."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.list_connections(session, current_budget.id, current_user)
+
+
+@router.post("/connections", response_model=ExternalReceiptConnectionRead)
+def create_or_update_receipt_connection(
+    data: ExternalReceiptConnectionCreate,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a credential-free connection placeholder for the current user."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.create_connection(session, current_budget.id, current_user, data)
+
+
+@router.get("/connections/{connection_id}", response_model=ExternalReceiptConnectionRead)
+def get_receipt_connection(
+    connection_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Get connection details by ID within the current budget."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    conn = ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
+    return to_read_dto(conn)
+
+
+@router.post("/connections/{connection_id}/sync-now", response_model=ConnectionSyncNowResponse)
+def sync_now_receipt_connection(
+    connection_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Trigger an immediate sync queue request for a connection."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.trigger_sync_now(session, current_budget.id, connection_id, current_user)
+
+
+@router.post("/connections/{connection_id}/reconnect", response_model=ExternalReceiptConnectionRead)
+def reconnect_receipt_connection(
+    connection_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Transition connection to reauth_required state."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.reconnect(session, current_budget.id, connection_id, current_user)
+
+
+@router.post("/connections/{connection_id}/disconnect", response_model=ConnectionDisconnectResponse)
+def disconnect_receipt_connection(
+    connection_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Atomically erase stored tokens and mark connection as disconnected."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.disconnect(session, current_budget.id, connection_id, current_user)

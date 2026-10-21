@@ -1,12 +1,14 @@
+HBA_REPO_ROOT="$(git rev-parse --show-toplevel)"
+
 echo "▶ [pre-push] Frontend Type-check..."
-cd "$(git rev-parse --show-toplevel)/frontend"
+cd "$HBA_REPO_ROOT/frontend"
 npx tsc --noEmit -p tsconfig.app.json || { echo "❌ Frontend Type-check failed. Push aborted."; exit 1; }
 
 echo "▶ [pre-push] Frontend Build..."
 pnpm build || { echo "❌ Frontend Build failed. Push aborted."; exit 1; }
 
 echo "▶ [pre-push] Backend Checks..."
-cd "$(git rev-parse --show-toplevel)/backend"
+cd "$HBA_REPO_ROOT/backend"
 if [ -d ".venv" ]; then
     source .venv/bin/activate
 elif [ -d "venv" ]; then
