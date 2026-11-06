@@ -179,30 +179,30 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
     categories_def = [
         # (Group name, icon, color, [(Subcat name, icon, color, planned_amount)])
         (
-            "Stałe opłaty", "home", "#fb923c", [
-                ("Mieszkanie / Czynsz", "home", "#fb923c", 2500.00),
-                ("Prąd i Gaz", "lightbulb", "#facc15", 350.00),
-                ("Internet i Telefon", "lightbulb", "#60a5fa", 120.00),
+            "Stałe opłaty", "building-2", "#f97316", [
+                ("Mieszkanie / Czynsz", "home", "#ea580c", 2500.00),
+                ("Prąd i Gaz", "zap", "#eab308", 350.00),
+                ("Internet i Telefon", "wifi", "#0284c7", 120.00),
             ]
         ),
         (
-            "Codzienne wydatki", "utensils", "#f87171", [
-                ("Żywność i Supermarket", "utensils", "#f87171", 1800.00),
-                ("Restauracje i Kawiarnie", "cookie", "#c084fc", 400.00),
-                ("Transport i Paliwo", "car", "#38bdf8", 600.00),
-                ("Drogeria i Zdrowie", "heart-pulse", "#f472b6", 300.00),
+            "Codzienne wydatki", "shopping-bag", "#ef4444", [
+                ("Żywność i Supermarket", "shopping-cart", "#10b981", 1800.00),
+                ("Restauracje i Kawiarnie", "coffee", "#a855f7", 400.00),
+                ("Transport i Paliwo", "fuel", "#06b6d4", 600.00),
+                ("Drogeria i Zdrowie", "sparkles", "#ec4899", 300.00),
             ]
         ),
         (
-            "Rozrywka i Czas wolny", "clapperboard", "#a78bfa", [
-                ("Subskrypcje (Netflix, Spotify)", "clapperboard", "#a78bfa", 100.00),
-                ("Rozrywka i Wyjścia", "gift", "#fb7185", 250.00),
+            "Rozrywka i Czas wolny", "gamepad-2", "#8b5cf6", [
+                ("Subskrypcje (Netflix, Spotify)", "tv", "#6366f1", 100.00),
+                ("Rozrywka i Wyjścia", "ticket", "#f43f5e", 250.00),
             ]
         ),
         (
-            "Oszczędności", "coins", "#fbbf24", [
-                ("Fundusz Awaryjny", "coins", "#fbbf24", 1000.00),
-                ("Wakacje", "plane", "#34d399", 500.00),
+            "Oszczędności", "piggy-bank", "#f59e0b", [
+                ("Fundusz Awaryjny", "shield-check", "#10b981", 1000.00),
+                ("Wakacje", "palmtree", "#14b8a6", 500.00),
             ]
         ),
     ]
