@@ -11,6 +11,24 @@
     "done": "Gotowe",
     "error": "Błąd"
   },
+  "demo": {
+    "login": {
+      "title": "Rachownik – wersja demonstracyjna",
+      "description": "Poznaj budżetowanie kopertowe oraz automatyczne kategoryzowanie pozycji z paragonów na przykładowych danych.",
+      "button": "Wypróbuj wersję demonstracyjną",
+      "loading": "Uruchamianie wersji demonstracyjnej...",
+      "show_traditional": "Masz konto? Zaloguj się tradycyjnie",
+      "hide_traditional": "Ukryj logowanie tradycyjne",
+      "error_login": "Nie udało się uruchomić trybu demonstracyjnego."
+    },
+    "banner": {
+      "notice": "Tryb demonstracyjny — przeglądasz wersję demonstracyjną z danymi przykładowymi.",
+      "reset_button": "Zresetuj dane",
+      "resetting": "Resetowanie...",
+      "reset_success": "Dane demonstracyjne zostały przywrócone do stanu początkowego.",
+      "reset_error": "Nie udało się zresetować danych demonstracyjnych."
+    }
+  },
   "auth": {
     "login": {
       "title": "Smart Budget AI",

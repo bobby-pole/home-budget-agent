@@ -11,6 +11,24 @@
     "done": "Done",
     "error": "Error"
   },
+  "demo": {
+    "login": {
+      "title": "Rachownik – Demo Showcase",
+      "description": "Explore envelope budgeting and automated receipt item categorization with rich sample data.",
+      "button": "Try Demo Version",
+      "loading": "Launching demo version...",
+      "show_traditional": "Have an account? Log in with credentials",
+      "hide_traditional": "Hide traditional login",
+      "error_login": "Failed to launch demo mode."
+    },
+    "banner": {
+      "notice": "Demo Mode — you are viewing a public showcase with sample data.",
+      "reset_button": "Reset Data",
+      "resetting": "Resetting...",
+      "reset_success": "Demo data has been reset to its baseline state.",
+      "reset_error": "Failed to reset demo data."
+    }
+  },
   "auth": {
     "login": {
       "title": "Smart Budget AI",
