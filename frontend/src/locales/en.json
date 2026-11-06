@@ -27,7 +27,9 @@
       "resetting": "Resetting...",
       "reset_success": "Demo data has been reset to its baseline state.",
       "reset_error": "Failed to reset demo data."
-    }
+    },
+    "disabled_in_demo": "Option disabled in demo mode",
+    "disabled_tooltip": "This operation is disabled in demo mode."
   },
   "auth": {
     "login": {

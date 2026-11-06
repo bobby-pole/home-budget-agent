@@ -154,6 +154,29 @@ def test_demo_security_guards(client: TestClient, session: Session):
     assert del_res.status_code == 403
     assert "Demo budget cannot be deleted" in del_res.text
 
+    # 4. POST /api/budgets -> 403
+    post_b_res = client.post("/api/budgets", json={"name": "Nowy Budżet"})
+    assert post_b_res.status_code == 403
+    assert "Budget creation is disabled in demo mode" in post_b_res.text
+
+    # 5. PATCH /api/budgets/{id} -> 403
+    patch_b_res = client.patch(f"/api/budgets/{demo_budget.id}", json={"name": "Zmieniona Nazwa"})
+    assert patch_b_res.status_code == 403
+    assert "Demo budget cannot be modified" in patch_b_res.text
+
+    # 6. POST /api/budget/members -> 403
+    member_res = client.post("/api/budget/members", json={"email": "member@example.com", "role": "editor"})
+    assert member_res.status_code == 403
+    assert "Inviting budget members is disabled in demo mode" in member_res.text
+
+    # 7. POST /api/transactions/import -> 403
+    import_res = client.post(
+        "/api/transactions/import",
+        files={"file": ("test.csv", b"Date,Amount,Merchant\n2026-01-01,10.00,Test", "text/csv")},
+    )
+    assert import_res.status_code == 403
+    assert "CSV import is disabled in demo mode" in import_res.text
+
 
 def test_demo_reset_endpoint_access_control(client: TestClient, session: Session):
     """POST /api/auth/demo/reset is guarded based on demo user or DEMO_MODE flag."""

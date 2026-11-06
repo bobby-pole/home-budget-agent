@@ -372,6 +372,9 @@ def create_budget(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_ops_session)
 ):
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Budget creation is disabled in demo mode")
+
     new_budget = Budget(name=data.name, owner_id=current_user.id)
     session.add(new_budget)
     session.commit()
@@ -1542,6 +1545,9 @@ async def import_transactions(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="CSV import is disabled in demo mode")
+
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
@@ -2101,6 +2107,9 @@ async def invite_member(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Inviting budget members is disabled in demo mode")
+
     # Verify if current user is owner/editor of the budget
     # We need to query from identity_engine to find the user by email,
     # but the membership is in operations_engine.

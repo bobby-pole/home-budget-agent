@@ -27,7 +27,9 @@
       "resetting": "Resetowanie...",
       "reset_success": "Dane demonstracyjne zostały przywrócone do stanu początkowego.",
       "reset_error": "Nie udało się zresetować danych demonstracyjnych."
-    }
+    },
+    "disabled_in_demo": "Opcja zablokowana w wersji demo",
+    "disabled_tooltip": "Ta operacja jest niedostępna w trybie demonstracyjnym."
   },
   "auth": {
     "login": {
