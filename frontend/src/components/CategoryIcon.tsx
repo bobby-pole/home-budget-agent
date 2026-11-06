@@ -38,10 +38,10 @@ const emojiMap: Record<string, string> = {
   "🛍️": "ShoppingBag",
 };
 
-// Map kebab-case (e.g. "heart-pulse", "building-2") to PascalCase (e.g. "HeartPulse", "Building2")
+// Map kebab-case, snake_case, or space-separated to PascalCase (e.g. "heart-pulse", "building-2" -> "HeartPulse", "Building2")
 const toPascalCase = (str: string): string => {
   return str
-    .split("-")
+    .split(/[-_\s]+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join("");
 };

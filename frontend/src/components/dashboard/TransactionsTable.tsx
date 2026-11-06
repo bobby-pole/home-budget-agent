@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { getStatusLabel, getStatusVariant } from "@/lib/receiptStatus";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 interface TransactionsTableProps {
   transactions: Transaction[];
@@ -161,6 +162,7 @@ export function TransactionsTable({
                   const isTransferNeutral = isTransfer && !selectedAccountId;
                   const category = categories.find((c) => c.id === transaction.category_id);
                   const categoryIcon = category?.icon;
+                  const categoryColor = category?.color;
                   const categoryName = category
                     ? (CATEGORY_LABELS[category.name] || category.name)
                     : null;
@@ -181,16 +183,25 @@ export function TransactionsTable({
                       onClick={() => handleOpenModal(transaction)}
                     >
                       {/* Icon — matches RecentTransactionsList */}
-                      <div className={cn(
-                        "size-11 rounded-full flex items-center justify-center shrink-0 shadow-inner text-xl",
-                        isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
-                        isExpense && categoryIcon ? "bg-muted" :
-                        isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
-                        "bg-muted text-muted-foreground"
-                      )}>
-                        {categoryIcon ? categoryIcon : (isIncome ? <ArrowUpRight className="size-5" /> :
-                         isExpense ? <Store className="size-5" /> :
-                         <ArrowDownRight className="size-5" />)}
+                      <div
+                        className={cn(
+                          "size-11 rounded-full flex items-center justify-center shrink-0 shadow-inner",
+                          isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
+                          isExpense && categoryIcon ? "" :
+                          isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
+                          "bg-muted text-muted-foreground"
+                        )}
+                        style={isExpense && categoryIcon ? { backgroundColor: `${categoryColor || "#3b82f6"}15` } : undefined}
+                      >
+                        {categoryIcon ? (
+                          <CategoryIcon name={categoryIcon} className="size-5" style={{ color: categoryColor ?? undefined }} />
+                        ) : isIncome ? (
+                          <ArrowUpRight className="size-5" />
+                        ) : isExpense ? (
+                          <Store className="size-5" />
+                        ) : (
+                          <ArrowDownRight className="size-5" />
+                        )}
                       </div>
 
                       {/* Details (name + metadata wrap) */}
@@ -345,6 +356,7 @@ export function TransactionsTable({
                   const isTransferNeutral = isTransfer && !selectedAccountId;
                   const category = categories.find((c) => c.id === transaction.category_id);
                   const categoryIcon = category?.icon;
+                  const categoryColor = category?.color;
 
                   return (
                     <TableRow
@@ -358,16 +370,25 @@ export function TransactionsTable({
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className={cn(
-                            "flex h-9 w-9 items-center justify-center rounded-full shadow-inner shrink-0 text-base",
-                            isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
-                            isExpense && categoryIcon ? "bg-muted" :
-                            isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
-                            "bg-muted text-muted-foreground"
-                          )}>
-                            {categoryIcon ? categoryIcon : (isIncome ? <ArrowUpRight className="h-4 w-4" /> :
-                             isExpense ? <Store className="h-4 w-4" /> :
-                             <ArrowDownRight className="h-4 w-4" />)}
+                          <div
+                            className={cn(
+                              "flex h-9 w-9 items-center justify-center rounded-full shadow-inner shrink-0",
+                              isIncome ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" :
+                              isExpense && categoryIcon ? "" :
+                              isExpense ? "bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400" :
+                              "bg-muted text-muted-foreground"
+                            )}
+                            style={isExpense && categoryIcon ? { backgroundColor: `${categoryColor || "#3b82f6"}15` } : undefined}
+                          >
+                            {categoryIcon ? (
+                              <CategoryIcon name={categoryIcon} className="size-4.5" style={{ color: categoryColor ?? undefined }} />
+                            ) : isIncome ? (
+                              <ArrowUpRight className="h-4 w-4" />
+                            ) : isExpense ? (
+                              <Store className="h-4 w-4" />
+                            ) : (
+                              <ArrowDownRight className="h-4 w-4" />
+                            )}
                           </div>
                           <div className="flex flex-col">
                             <span className="font-medium">
