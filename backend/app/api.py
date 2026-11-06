@@ -37,7 +37,8 @@ from .models import (
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
-from .auth import get_current_user, hash_password, verify_password, create_access_token
+from .auth import get_current_user, get_current_user_optional, hash_password, verify_password, create_access_token
+from .demo_seed import seed_demo_environment
 from .config import settings
 from typing import List, Optional
 
@@ -221,6 +222,44 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, default_budget_id=user.default_budget_id, created_at=user.created_at))
 
 
+@router.post("/auth/demo", response_model=Token)
+def login_demo(ops_session: Session = Depends(get_ops_session)):
+    """
+    Authenticate as the demo user for showcase/recruitment evaluation.
+    Idempotently seeds demo data if not already present.
+    """
+    demo_user = seed_demo_environment(ops_session, force_reset=False)
+    token = create_access_token({"sub": demo_user.email})
+    return Token(
+        access_token=token,
+        user=UserRead(
+            id=demo_user.id,
+            email=demo_user.email,
+            default_budget_id=demo_user.default_budget_id,
+            created_at=demo_user.created_at,
+        ),
+    )
+
+
+@router.post("/auth/demo/reset")
+def reset_demo(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    ops_session: Session = Depends(get_ops_session),
+):
+    """
+    Reset demo environment back to baseline state.
+    Allowed for authenticated demo user or when DEMO_MODE=True.
+    """
+    is_demo_user = current_user is not None and current_user.email == settings.DEMO_USER_EMAIL
+    if not is_demo_user and not settings.DEMO_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Resetting demo data is only permitted for the demo user or when DEMO_MODE is active.",
+        )
+    seed_demo_environment(ops_session, force_reset=True)
+    return {"status": "ok", "message": "Demo data reset successfully"}
+
+
 @router.get("/auth/me", response_model=UserRead)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
@@ -232,6 +271,9 @@ def update_me(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Demo account profile cannot be modified")
+
     if data.default_budget_id is not None:
         membership = session.exec(
             select(BudgetMember).where(
@@ -255,6 +297,9 @@ def change_password(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Demo account password cannot be changed")
+
     if not verify_password(data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid old password")
 
@@ -290,6 +335,9 @@ def delete_budget(
     budget = session.get(Budget, budget_id)
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Demo budget cannot be deleted")
 
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can delete the budget")
@@ -351,6 +399,9 @@ def update_budget(
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
+    if current_user.email == settings.DEMO_USER_EMAIL:
+        raise HTTPException(status_code=403, detail="Demo budget cannot be modified")
+
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can edit the budget")
 
@@ -409,9 +460,65 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
         stage_start = time.monotonic()
-        data = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
-        )
+        if settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: simulating parsed receipt with mock fixtures", extra={"scan_id": scan_id})
+            data = {
+                "merchant_name": "Biedronka (Demo)",
+                "total_amount": 47.90,
+                "currency": "PLN",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "items": [
+                    {
+                        "name": "Mleko Świeże 3.2% 1L",
+                        "price": 3.49,
+                        "quantity": 2.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "original_price": 3.99,
+                        "discount_total": 1.0,
+                        "final_price": 6.98,
+                        "confidence": 0.98,
+                    },
+                    {
+                        "name": "Chleb Graham Krojony 500g",
+                        "price": 4.29,
+                        "quantity": 1.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.95,
+                    },
+                    {
+                        "name": "Kawa Mielona Tchibo 250g",
+                        "price": 18.99,
+                        "quantity": 1.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.92,
+                    },
+                    {
+                        "name": "Płyn do naczyń Fairy 900ml",
+                        "price": 17.64,
+                        "quantity": 1.0,
+                        "category": "Drogeria i Zdrowie",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.91,
+                    },
+                ],
+                "_validation": {"is_valid": True, "issues": [], "confidence": 0.95},
+                "_raw_ocr_text": "BIEDRONKA SP Z O O ... RAZEM PLN: 47.90",
+                "_reconstructed_lines": [
+                    "BIEDRONKA UL. TESTOWA 1",
+                    "Mleko Świeże 3.2% 1L   2 x 3.49 = 6.98 A",
+                    "Chleb Graham 500g      1 x 4.29 = 4.29 A",
+                    "Kawa Mielona Tchibo    1 x 18.99 = 18.99 A",
+                    "Płyn do naczyń Fairy   1 x 17.64 = 17.64 B",
+                    "SUMA PLN: 47.90",
+                ],
+            }
+        else:
+            data = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
+            )
         logger.info(
             "OCR completed",
             extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
