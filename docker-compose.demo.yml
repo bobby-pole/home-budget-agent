@@ -14,7 +14,10 @@ services:
     env_file:
       - .env
     networks:
-      - app_network
+      app_network:
+        aliases:
+          - home-budget-agent-prod
+          - home-budget-agent-demo
     deploy:
       resources:
         limits:
