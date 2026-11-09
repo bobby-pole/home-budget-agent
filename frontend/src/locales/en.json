@@ -11,6 +11,59 @@
     "done": "Done",
     "error": "Error"
   },
+  "demo": {
+    "login": {
+      "title": "Rachownik – Demo Showcase",
+      "description": "Experience envelope budgeting and automated line-item receipt categorization on a realistic household budget.",
+      "button": "Launch Demo Showcase",
+      "loading": "Setting up demo sandbox...",
+      "show_traditional": "Have an account? Log in with credentials",
+      "hide_traditional": "Hide traditional login",
+      "privacy_notice_title": "Private test sandbox & browser storage",
+      "privacy_notice_body": "We create an isolated demo instance with your own private budget. To preserve your session while exploring, a session identifier is stored in your browser's localStorage. All data automatically expires after 24 hours.",
+      "language_label": "Language:",
+      "language_pl": "Polski",
+      "language_en": "English",
+      "error_login": "Failed to launch demo mode."
+    },
+    "quota": {
+      "label": "Daily demo scan quota:",
+      "remaining": "{remaining} of {total} remaining",
+      "depleted": "Daily demo scan limit ({total}/{total}) has been reached. Quota resets at midnight. You can still test the sample receipts above."
+    },
+    "date_adjusted": {
+      "badge": "Detected receipt date: {originalDate}. Adjusted to current date for the demo budget.",
+      "restore_btn": "Restore"
+    },
+    "scan_modal": {
+      "title": "Scan Receipt",
+      "description": "Choose a curated sample receipt or upload your own.",
+      "sample_section_title": "Curated Sample Receipts (Recommended)",
+      "sample_biedronka_title": "Biedronka (Katowice)",
+      "sample_biedronka_desc": "Grocery shopping • 13 items • 101.74 PLN",
+      "sample_lidl_title": "Lidl Plus (Rybnik)",
+      "sample_lidl_desc": "E-receipt with discounts • 5 items • 84.45 PLN",
+      "btn_test_sample": "Test this receipt",
+      "accuracy_badge": "100% OCR Accuracy",
+      "custom_section_title": "Upload your own receipt",
+      "custom_upload_instruction": "Click or drag & drop file here (JPG, PNG, WebP, PDF up to 5 MB)",
+      "custom_upload_hint": "Max 5 MB • Legible fiscal receipts only",
+      "quota_depleted_title": "Limit reached",
+      "processing_sample": "Processing...",
+      "uploading": "Uploading...",
+      "file_too_large": "File exceeds maximum size of 5 MB.",
+      "invalid_format": "Unsupported file format. Please choose JPG, PNG, WebP or PDF."
+    },
+    "banner": {
+      "notice": "Demo Mode — you are viewing a public showcase with sample data.",
+      "reset_button": "Reset Data",
+      "resetting": "Resetting...",
+      "reset_success": "Demo data has been reset to its baseline state.",
+      "reset_error": "Failed to reset demo data."
+    },
+    "disabled_in_demo": "Option disabled in demo mode",
+    "disabled_tooltip": "This operation is disabled in demo mode."
+  },
   "auth": {
     "login": {
       "title": "Smart Budget AI",

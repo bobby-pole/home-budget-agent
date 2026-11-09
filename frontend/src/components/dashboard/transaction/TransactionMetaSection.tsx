@@ -22,6 +22,7 @@ import type { TransactionFormInput } from "./schema";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { TagPicker } from "../shared/TagPicker";
 import { useWatch } from "react-hook-form";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 interface TransactionMetaSectionProps {
   control: Control<TransactionFormInput>;
@@ -126,8 +127,8 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
                   {categories?.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id.toString()}>
                       <span className="flex items-center gap-2">
-                        <span className="w-4 text-center">{cat.icon}</span>
-                        {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                        <CategoryIcon name={cat.icon || "package"} className="size-4 shrink-0" />
+                        <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
                       </span>
                     </SelectItem>
                   ))}

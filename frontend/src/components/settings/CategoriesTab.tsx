@@ -214,8 +214,8 @@ export function CategoriesTab() {
                     <Input 
                       value={editIcon} 
                       onChange={e => setEditIcon(e.target.value)} 
-                      className="w-12 h-8 text-center p-1"
-                      maxLength={2}
+                      className="w-20 h-8 text-center p-1 text-xs"
+                      maxLength={32}
                     />
                     <Input 
                       value={editName} 

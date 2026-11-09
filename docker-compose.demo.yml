@@ -1,0 +1,27 @@
+services:
+  demo:
+    container_name: home-budget-agent-demo
+    image: ghcr.io/bobby-pole/home-budget-agent:demo
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+      target: demo-production
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./data-demo:/app/data
+    restart: unless-stopped
+    env_file:
+      - .env
+    networks:
+      - app_network
+    deploy:
+      resources:
+        limits:
+          memory: 1500M
+        reservations:
+          memory: 256M
+
+networks:
+  app_network:
+    external: true

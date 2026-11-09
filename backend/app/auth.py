@@ -18,6 +18,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -56,3 +57,30 @@ def get_current_user(
     if user is None:
         raise credentials_exception
     return user
+
+
+def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    session: Session = Depends(get_session),
+) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: Optional[str] = payload.get("sub")
+        if email is None:
+            return None
+    except JWTError:
+        return None
+
+    return session.exec(select(User).where(User.email == email)).first()
+
+
+def is_demo_user(user: Optional[User]) -> bool:
+    """Return True if user is either static demo or an ephemeral demo session user."""
+    if user is None or not user.email:
+        return False
+    from .config import settings
+    return user.email == settings.DEMO_USER_EMAIL or user.email.startswith("demo_")
+
+

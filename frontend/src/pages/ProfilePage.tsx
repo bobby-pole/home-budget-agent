@@ -15,6 +15,7 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { Trash2, UserPlus, CheckCircle, Shield, Plus, Pencil } from "lucide-react";
 import type { BudgetMemberCreate, UserBudgetRead } from "@/client";
+import { cn } from "@/lib/utils";
 
 const passwordSchema = z.object({
   old_password: z.string().min(1, t("profile.old_password_required")),
@@ -41,7 +42,7 @@ const budgetNameSchema = z.object({
 type BudgetNameFormValues = z.infer<typeof budgetNameSchema>;
 
 export function ProfilePage() {
-  const { user, activeBudgetId, switchBudget, updateUser } = useAuth();
+  const { user, activeBudgetId, switchBudget, updateUser, isDemo } = useAuth();
   const queryClient = useQueryClient();
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [budgetToDelete, setBudgetToDelete] = useState<number | null>(null);
@@ -177,20 +178,33 @@ export function ProfilePage() {
           </Card>
 
           {/* Change Password */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("profile.change_password")}</CardTitle>
+          <Card className={cn(isDemo && "opacity-75")}>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <div>
+                <CardTitle>{t("profile.change_password")}</CardTitle>
+              </div>
+              {isDemo && (
+                <span className="text-xs text-muted-foreground border border-border px-2 py-0.5 rounded-full font-medium">
+                  {t("demo.disabled_in_demo")}
+                </span>
+              )}
             </CardHeader>
             <CardContent>
               <Form {...passwordForm}>
-                <form onSubmit={passwordForm.handleSubmit((v) => passwordMutation.mutate(v))} className="space-y-4">
+                <form
+                  onSubmit={passwordForm.handleSubmit((v) => {
+                    if (isDemo) return;
+                    passwordMutation.mutate(v);
+                  })}
+                  className="space-y-4"
+                >
                   <FormField
                     control={passwordForm.control}
                     name="old_password"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t("profile.old_password")}</FormLabel>
-                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormControl><Input type="password" disabled={isDemo} {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -201,7 +215,7 @@ export function ProfilePage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t("profile.new_password")}</FormLabel>
-                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormControl><Input type="password" disabled={isDemo} {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -212,12 +226,18 @@ export function ProfilePage() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t("profile.confirm_password")}</FormLabel>
-                        <FormControl><Input type="password" {...field} /></FormControl>
+                        <FormControl><Input type="password" disabled={isDemo} {...field} /></FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={passwordMutation.isPending}>{t("profile.change_password")}</Button>
+                  <Button
+                    type="submit"
+                    disabled={isDemo || passwordMutation.isPending}
+                    title={isDemo ? t("demo.disabled_in_demo") : undefined}
+                  >
+                    {t("profile.change_password")}
+                  </Button>
                 </form>
               </Form>
             </CardContent>
@@ -231,7 +251,17 @@ export function ProfilePage() {
               <CardTitle>{t("profile.my_budgets")}</CardTitle>
               <CardDescription>{t("profile.budgets_subtitle")}</CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setIsCreateBudgetModalOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (isDemo) return;
+                setIsCreateBudgetModalOpen(true);
+              }}
+              disabled={isDemo}
+              title={isDemo ? t("demo.disabled_in_demo") : undefined}
+              className={cn(isDemo && "opacity-50 cursor-not-allowed")}
+            >
               <Plus className="w-4 h-4 mr-2" /> {t("profile.create_budget")}
             </Button>
           </CardHeader>
@@ -269,20 +299,48 @@ export function ProfilePage() {
                             </Button>
                           )}
                           {isActive && canInvite && (
-                            <Button className="flex-1" variant="outline" size="sm" onClick={() => setIsInviteModalOpen(true)}>
+                            <Button
+                              className={cn("flex-1", isDemo && "opacity-50 cursor-not-allowed")}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                if (isDemo) return;
+                                setIsInviteModalOpen(true);
+                              }}
+                              disabled={isDemo}
+                              title={isDemo ? t("demo.disabled_in_demo") : undefined}
+                            >
                               <UserPlus className="w-4 h-4 mr-1" /> {t("profile.invite")}
                             </Button>
                           )}
                         </div>
                         {b.role === "owner" && (
                           <div className="flex gap-2">
-                            <Button variant="outline" size="icon" onClick={() => {
-                              setBudgetToRename({ id: b.id, name: b.name });
-                              renameBudgetForm.setValue("name", b.name);
-                            }}>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                if (isDemo) return;
+                                setBudgetToRename({ id: b.id, name: b.name });
+                                renameBudgetForm.setValue("name", b.name);
+                              }}
+                              disabled={isDemo}
+                              title={isDemo ? t("demo.disabled_in_demo") : undefined}
+                              className={cn(isDemo && "opacity-50 cursor-not-allowed")}
+                            >
                               <Pencil className="w-4 h-4" />
                             </Button>
-                            <Button variant="destructive" size="icon" onClick={() => setBudgetToDelete(b.id)}>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              onClick={() => {
+                                if (isDemo) return;
+                                setBudgetToDelete(b.id);
+                              }}
+                              disabled={isDemo}
+                              title={isDemo ? t("demo.disabled_in_demo") : undefined}
+                              className={cn(isDemo && "opacity-50 cursor-not-allowed")}
+                            >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -336,7 +394,7 @@ export function ProfilePage() {
                 )}
               />
               <DialogFooter>
-                <Button type="submit" disabled={inviteMutation.isPending}>{t("profile.send_invite")}</Button>
+                <Button type="submit" disabled={isDemo || inviteMutation.isPending}>{t("profile.send_invite")}</Button>
               </DialogFooter>
             </form>
           </Form>
@@ -371,8 +429,9 @@ export function ProfilePage() {
               }}>{t("profile.cancel")}</Button>
               <Button
                 variant="destructive"
-                disabled={deleteConfirmText !== t("profile.delete_keyword") || deleteMutation.isPending}
+                disabled={isDemo || deleteConfirmText !== t("profile.delete_keyword") || deleteMutation.isPending}
                 onClick={() => {
+                  if (isDemo) return;
                   if (budgetToDelete) {
                     deleteMutation.mutate(budgetToDelete);
                     setBudgetToDelete(null);
@@ -410,7 +469,7 @@ export function ProfilePage() {
                 <Button type="button" variant="outline" onClick={() => setIsCreateBudgetModalOpen(false)}>
                   {t("common.cancel")}
                 </Button>
-                <Button type="submit" disabled={createBudgetMutation.isPending}>{t("profile.create")}</Button>
+                <Button type="submit" disabled={isDemo || createBudgetMutation.isPending}>{t("profile.create")}</Button>
               </DialogFooter>
             </form>
           </Form>
@@ -440,7 +499,7 @@ export function ProfilePage() {
                 <Button type="button" variant="outline" onClick={() => setBudgetToRename(null)}>
                   {t("common.cancel")}
                 </Button>
-                <Button type="submit" disabled={renameBudgetMutation.isPending}>{t("profile.rename")}</Button>
+                <Button type="submit" disabled={isDemo || renameBudgetMutation.isPending}>{t("profile.rename")}</Button>
               </DialogFooter>
             </form>
           </Form>

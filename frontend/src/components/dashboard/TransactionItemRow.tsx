@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import type { TransactionLineRead } from "@/client";
 import { getIntlLocale } from "@/lib/dates";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 const itemSchema = z.object({
   name: z.string().min(1, t("transactions.item_row.validation.name_required")),
@@ -80,7 +81,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
     return {
       name: cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name,
       color: cat.color || "#9ca3af",
-      icon: cat.icon || "📦",
+      icon: cat.icon || "package",
     };
   };
 
@@ -117,10 +118,11 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
           <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
             {displayCat && (
               <span
-                className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1 text-white shadow-sm"
+                className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1.5 text-white shadow-sm"
                 style={{ backgroundColor: displayCat.color }}
               >
-                <span>{displayCat.icon}</span> {displayCat.name}
+                <CategoryIcon name={displayCat.icon} className="size-3 shrink-0" />
+                <span>{displayCat.name}</span>
               </span>
             )}
             <span className="w-12 text-right">
@@ -199,8 +201,8 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
                       {categories?.map((cat) => (
                         <SelectItem key={cat.id} value={String(cat.id)}>
                           <span className="flex items-center gap-2">
-                            <span>{cat.icon}</span>
-                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                            <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
+                            <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
                           </span>
                         </SelectItem>
                       ))}

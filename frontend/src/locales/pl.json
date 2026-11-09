@@ -11,6 +11,59 @@
     "done": "Gotowe",
     "error": "Błąd"
   },
+  "demo": {
+    "login": {
+      "title": "Rachownik – wersja demonstracyjna",
+      "description": "Poznaj budżetowanie kopertowe oraz automatyczne kategoryzowanie pozycji z paragonów na przygotowanym, dynamicznym budżecie.",
+      "button": "Uruchom wersję demonstracyjną",
+      "loading": "Przygotowywanie sesji demonstracyjnej...",
+      "show_traditional": "Masz konto? Zaloguj się tradycyjnie",
+      "hide_traditional": "Ukryj logowanie tradycyjne",
+      "privacy_notice_title": "Prywatne środowisko testowe i pamięć przeglądarki",
+      "privacy_notice_body": "Tworzymy dla Ciebie odizolowaną instancję demonstracyjną z własnym budżetem. Aby zapamiętać Twoją sesję podczas testów, zapisujemy identyfikator w pamięci przeglądarki (localStorage). Wszystkie dane wygasają automatycznie po 24 godzinach.",
+      "language_label": "Język:",
+      "language_pl": "Polski",
+      "language_en": "English",
+      "error_login": "Nie udało się uruchomić trybu demonstracyjnego."
+    },
+    "quota": {
+      "label": "Dzienny limit skanów demo:",
+      "remaining": "pozostało {remaining} z {total}",
+      "depleted": "Dzienny limit skanów w wersji demonstracyjnej ({total}/{total}) został wyczerpany. Limit odnawia się o północy. Nadal możesz testować wzorcowe paragony demonstracyjne."
+    },
+    "date_adjusted": {
+      "badge": "Wykryto datę z paragonu: {originalDate}. Zaktualizowano na bieżącą dla budżetu demo.",
+      "restore_btn": "Przywróć"
+    },
+    "scan_modal": {
+      "title": "Skanowanie paragonu",
+      "description": "Wybierz przygotowany paragon wzorcowy lub prześlij własne zdjęcie.",
+      "sample_section_title": "Gotowe paragony demonstracyjne (Zalecane)",
+      "sample_biedronka_title": "Biedronka (Katowice)",
+      "sample_biedronka_desc": "Zakupy spożywcze • 13 pozycji • 101,74 PLN",
+      "sample_lidl_title": "Lidl Plus (Rybnik)",
+      "sample_lidl_desc": "E-paragon z rabatami • 5 pozycji • 84,45 PLN",
+      "btn_test_sample": "Przetestuj ten paragon",
+      "accuracy_badge": "Wzorcowa jakość OCR",
+      "custom_section_title": "Prześlij własny paragon",
+      "custom_upload_instruction": "Kliknij lub przeciągnij plik tutaj (JPG, PNG, WebP, PDF do 5 MB)",
+      "custom_upload_hint": "Maks. 5 MB • Tylko czytelne paragony fiskalne",
+      "quota_depleted_title": "Limit wyczerpany",
+      "processing_sample": "Przetwarzanie...",
+      "uploading": "Wysyłanie...",
+      "file_too_large": "Plik przekracza dozwolony rozmiar 5 MB.",
+      "invalid_format": "Nieobsługiwany format pliku. Wybierz JPG, PNG, WebP lub PDF."
+    },
+    "banner": {
+      "notice": "Tryb demonstracyjny — przeglądasz wersję demonstracyjną z danymi przykładowymi.",
+      "reset_button": "Zresetuj dane",
+      "resetting": "Resetowanie...",
+      "reset_success": "Dane demonstracyjne zostały przywrócone do stanu początkowego.",
+      "reset_error": "Nie udało się zresetować danych demonstracyjnych."
+    },
+    "disabled_in_demo": "Opcja zablokowana w wersji demo",
+    "disabled_tooltip": "Ta operacja jest niedostępna w trybie demonstracyjnym."
+  },
   "auth": {
     "login": {
       "title": "Smart Budget AI",

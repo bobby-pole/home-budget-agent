@@ -11,8 +11,11 @@ import type { AxiosError } from "axios";
 import { t } from "@/lib/i18n";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
+import { useAuth } from "@/context/AuthContext";
+import { cn } from "@/lib/utils";
 
 export function TransactionsPage() {
+  const { isDemo } = useAuth();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
@@ -104,9 +107,16 @@ export function TransactionsPage() {
           />
           <Button 
             variant="outline" 
-            className="gap-2 border-dashed border-primary/50 hover:border-primary"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importMutation.isPending}
+            className={cn(
+              "gap-2 border-dashed",
+              isDemo ? "opacity-50 cursor-not-allowed" : "border-primary/50 hover:border-primary"
+            )}
+            onClick={() => {
+              if (isDemo) return;
+              fileInputRef.current?.click();
+            }}
+            disabled={isDemo || importMutation.isPending}
+            title={isDemo ? t("demo.disabled_in_demo") : undefined}
           >
             {importMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />

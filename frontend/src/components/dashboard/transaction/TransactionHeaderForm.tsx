@@ -30,6 +30,7 @@ import type { TransactionRead as Transaction } from "@/client";
 import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
 import { TagPicker } from "../shared/TagPicker";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 const formSchema = z.object({
   merchant_name: z.string().min(1, t("transactions.header_form.validation.merchant_required")),
@@ -128,7 +129,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     return {
       name: cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name,
       color: cat.color || "#9ca3af",
-      icon: cat.icon || "📦",
+      icon: cat.icon || "package",
     };
   };
 
@@ -293,8 +294,8 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                           {categories?.map((cat) => (
                             <SelectItem key={cat.id} value={String(cat.id)}>
                               <span className="flex items-center gap-2">
-                                <span>{cat.icon}</span>
-                                {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                                <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
+                                <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
                               </span>
                             </SelectItem>
                           ))}
@@ -305,10 +306,11 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                     <div className="pt-1">
                       {currentDisplayCat ? (
                         <span
-                          className="px-2 py-1 rounded text-xs uppercase tracking-wide font-medium flex items-center gap-1 w-fit text-white shadow-sm"
+                          className="px-2 py-1 rounded text-xs uppercase tracking-wide font-medium flex items-center gap-1.5 w-fit text-white shadow-sm"
                           style={{ backgroundColor: currentDisplayCat.color }}
                         >
-                          <span>{currentDisplayCat.icon}</span> {currentDisplayCat.name}
+                          <CategoryIcon name={currentDisplayCat.icon} className="size-3.5 shrink-0" />
+                          <span>{currentDisplayCat.name}</span>
                         </span>
                       ) : (
                         <span className="text-sm text-muted-foreground italic">{t("transactions.header_form.no_category")}</span>

@@ -288,6 +288,7 @@ class ReceiptScan(SQLModel, table=True):
     keep_image: bool = Field(default=False)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     validation_message: Optional[str] = Field(default=None)
+    original_date: Optional[str] = Field(default=None)
     raw_ocr_text: Optional[str] = Field(default=None)
     reconstructed_lines: Optional[list[str]] = Field(default=None, sa_column=Column(JSON))
     needs_review: bool = Field(
@@ -559,6 +560,7 @@ class ReceiptScanRead(SQLModel):
     content_hash: Optional[str] = None
     created_at: datetime
     validation_message: Optional[str] = None
+    original_date: Optional[str] = None
     error_message: Optional[str] = None
     raw_ocr_text: Optional[str] = None
     reconstructed_lines: Optional[list[str]] = None
@@ -761,6 +763,11 @@ class BudgetAlertRead(SQLModel):
 class AppStatusRead(SQLModel):
     inbox_items: List[TransactionRead]
     unread_alerts: List[BudgetAlertRead]
+
+
+class AppConfigRead(SQLModel):
+    demo_mode: bool
+    environment: str
 
 # ─── SQLAlchemy Events ────────────────────────────────────────────────────────
 

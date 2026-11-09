@@ -1,7 +1,7 @@
 import pl from "@/locales/pl.json";
 import en from "@/locales/en.json";
 
-type Locale = "pl" | "en";
+export type Locale = "pl" | "en";
 
 const locales = { pl, en } as const;
 
@@ -47,5 +47,5 @@ export function t(key: string, params?: Record<string, string | number>): string
     str = typeof fallback === "string" ? fallback : key;
   }
   if (!params) return str;
-  return str.replace(/\{(\w+)\}/g, (_, k) => String(params[k] ?? `{${k}}`));
+  return str.replace(/\{{1,2}(\w+)\}{1,2}/g, (_, k) => String(params[k] ?? `{${k}}`));
 }

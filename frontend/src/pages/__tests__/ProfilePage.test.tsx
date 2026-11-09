@@ -4,11 +4,14 @@ import { render } from "@/__tests__/test-utils";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { MemoryRouter } from "react-router-dom";
 
+let mockIsDemo = false;
+
 // Mock AuthContext
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     user: { id: 1, email: "test@example.com", name: "Test User", default_budget_id: 1 },
     activeBudgetId: 1,
+    isDemo: mockIsDemo,
     switchBudget: vi.fn(),
     updateUser: vi.fn(),
     logout: vi.fn(),
@@ -36,6 +39,7 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
 
 describe("ProfilePage", () => {
   it("renders correctly with budgets", () => {
+    mockIsDemo = false;
     render(
       <MemoryRouter>
         <ProfilePage />
@@ -47,5 +51,29 @@ describe("ProfilePage", () => {
     // Check if budgets are rendered
     expect(screen.getByText("Test Budget")).toBeInTheDocument();
     expect(screen.getByText("Shared Budget")).toBeInTheDocument();
+  });
+
+  it("disables budget modifications, invite, and password change in demo mode", () => {
+    mockIsDemo = true;
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    );
+
+    // Change password button should be disabled
+    const changePasswordBtn = screen.getByRole("button", { name: "Zmień hasło" });
+    expect(changePasswordBtn).toBeDisabled();
+
+    // Create budget button should be disabled
+    const createBudgetBtn = screen.getByRole("button", { name: /utwórz budżet/i });
+    expect(createBudgetBtn).toBeDisabled();
+
+    // Invite button should be disabled
+    const inviteBtn = screen.getByRole("button", { name: /zaproś/i });
+    expect(inviteBtn).toBeDisabled();
+
+    // In demo mode, disabled badge is shown
+    expect(screen.getByText("Opcja zablokowana w wersji demo")).toBeInTheDocument();
   });
 });

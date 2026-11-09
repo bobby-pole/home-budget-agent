@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 export interface NewItemDraft {
   name: string;
@@ -86,8 +87,8 @@ export function DraftItemRow({
           {categories?.map((cat) => (
             <SelectItem key={cat.id} value={String(cat.id)}>
               <span className="flex items-center gap-2">
-                <span>{cat.icon}</span>
-                {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
+                <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
               </span>
             </SelectItem>
           ))}

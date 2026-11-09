@@ -27,6 +27,7 @@ import { getIntlLocale } from "@/lib/dates";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import type { CategoryRead } from "@/client";
 import type { VerificationFormValues } from "./VerificationCard";
+import { CategoryIcon } from "@/components/CategoryIcon";
 
 type LineFormShape = VerificationFormValues["lines"][number];
 
@@ -206,8 +207,15 @@ function ItemRow({
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {/* Category Icon */}
-          <div className="relative size-8 rounded-full flex items-center justify-center bg-muted text-base shrink-0 select-none">
-            {selectedCategory?.icon || "💰"}
+          <div 
+            className="relative size-8 rounded-full flex items-center justify-center shrink-0 select-none shadow-xs"
+            style={{ backgroundColor: `${selectedCategory?.color || "#3b82f6"}15` }}
+          >
+            <CategoryIcon 
+              name={selectedCategory?.icon || "package"} 
+              className="size-4" 
+              style={{ color: selectedCategory?.color || "#3b82f6" }} 
+            />
             {categorySource === "ai" && (
               <div 
                 className="absolute -top-1 -right-2 flex h-[14px] px-1 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 text-[8px] font-bold uppercase tracking-wider shadow-sm"
@@ -321,7 +329,7 @@ function ItemRow({
                     {categories.map((cat) => (
                       <SelectItem key={cat.id} value={cat.id.toString()}>
                         <span className="flex items-center gap-2">
-                          <span>{cat.icon}</span>
+                          <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
                           <span className="truncate max-w-[80px]">
                             {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
                           </span>

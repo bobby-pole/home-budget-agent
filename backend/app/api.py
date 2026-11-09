@@ -28,7 +28,7 @@ from .models import (
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead,
-    BudgetAlert, AppStatusRead,
+    BudgetAlert, AppStatusRead, AppConfigRead,
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
@@ -37,7 +37,8 @@ from .models import (
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
-from .auth import get_current_user, hash_password, verify_password, create_access_token
+from .auth import get_current_user, get_current_user_optional, hash_password, verify_password, create_access_token, is_demo_user
+from .demo_seed import seed_demo_environment
 from .config import settings
 from typing import List, Optional
 
@@ -54,6 +55,14 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.get("/health")
 def health_check():
     return {"status": "ok", "message": "Backend is running!"}
+
+
+@router.get("/config", response_model=AppConfigRead)
+def get_app_config():
+    return AppConfigRead(
+        demo_mode=bool(settings.DEMO_MODE),
+        environment=settings.ENVIRONMENT,
+    )
 
 
 # --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
@@ -221,6 +230,87 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
     return Token(access_token=token, user=UserRead(id=user.id, email=user.email, default_budget_id=user.default_budget_id, created_at=user.created_at))
 
 
+@router.post("/auth/demo", response_model=Token)
+def login_demo(
+    x_demo_session_id: Optional[str] = Header(None, alias="X-Demo-Session-ID"),
+    x_demo_locale: Optional[str] = Header(None, alias="X-Demo-Locale"),
+    accept_language: Optional[str] = Header(None, alias="Accept-Language"),
+    ops_session: Session = Depends(get_ops_session),
+):
+    """
+    Authenticate as the demo user for showcase/recruitment evaluation.
+    If X-Demo-Session-ID is provided, ensures an isolated ephemeral demo user
+    and budget for this recruiter session.
+    """
+    locale = x_demo_locale or (accept_language.split(",")[0].split("-")[0] if accept_language else "pl")
+    if locale not in ("pl", "en"):
+        locale = "pl"
+
+    if x_demo_session_id:
+        clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", x_demo_session_id)[:32]
+        if clean_id:
+            logger.info("Ephemeral demo login request: session=%s, locale=%s", clean_id, locale)
+            ephemeral_email = f"demo_{clean_id}@rachownik.app"
+            user = ops_session.exec(select(User).where(User.email == ephemeral_email)).first()
+            if not user:
+                from .demo_seed import DEMO_USER_PASSWORD
+                user = User(
+                    email=ephemeral_email,
+                    hashed_password=hash_password(DEMO_USER_PASSWORD),
+                    created_at=datetime.now(timezone.utc),
+                )
+                ops_session.add(user)
+                ops_session.commit()
+                ops_session.refresh(user)
+                demo_user = seed_demo_environment(ops_session, force_reset=False, custom_user=user)
+            else:
+                demo_user = seed_demo_environment(ops_session, force_reset=False, custom_user=user)
+            token = create_access_token({"sub": demo_user.email})
+            assert demo_user.id is not None
+            return Token(
+                access_token=token,
+                user=UserRead(
+                    id=demo_user.id,
+                    email=demo_user.email,
+                    default_budget_id=demo_user.default_budget_id,
+                    created_at=demo_user.created_at,
+                ),
+            )
+
+    demo_user = seed_demo_environment(ops_session, force_reset=False)
+    token = create_access_token({"sub": demo_user.email})
+    assert demo_user.id is not None
+    return Token(
+        access_token=token,
+        user=UserRead(
+            id=demo_user.id,
+            email=demo_user.email,
+            default_budget_id=demo_user.default_budget_id,
+            created_at=demo_user.created_at,
+        ),
+    )
+
+
+@router.post("/auth/demo/reset")
+def reset_demo(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    ops_session: Session = Depends(get_ops_session),
+):
+    """
+    Reset demo environment back to baseline state.
+    Allowed for authenticated demo user or when DEMO_MODE=True.
+    """
+    user_is_demo = is_demo_user(current_user)
+    if not user_is_demo and not settings.DEMO_MODE:
+        raise HTTPException(
+            status_code=403,
+            detail="Resetting demo data is only permitted for the demo user or when DEMO_MODE is active.",
+        )
+    target_user = current_user if (current_user and user_is_demo) else None
+    seed_demo_environment(ops_session, force_reset=True, custom_user=target_user)
+    return {"status": "ok", "message": "Demo data reset successfully"}
+
+
 @router.get("/auth/me", response_model=UserRead)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
@@ -232,6 +322,9 @@ def update_me(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Demo account profile cannot be modified")
+
     if data.default_budget_id is not None:
         membership = session.exec(
             select(BudgetMember).where(
@@ -255,6 +348,9 @@ def change_password(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session)
 ):
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Demo account password cannot be changed")
+
     if not verify_password(data.old_password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid old password")
 
@@ -291,6 +387,9 @@ def delete_budget(
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Demo budget cannot be deleted")
+
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can delete the budget")
 
@@ -324,6 +423,9 @@ def create_budget(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_ops_session)
 ):
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Budget creation is disabled in demo mode")
+
     new_budget = Budget(name=data.name, owner_id=current_user.id)
     session.add(new_budget)
     session.commit()
@@ -350,6 +452,9 @@ def update_budget(
     budget = session.get(Budget, budget_id)
     if not budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Demo budget cannot be modified")
 
     if budget.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Only the owner can edit the budget")
@@ -409,9 +514,130 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
         stage_start = time.monotonic()
-        data = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
-        )
+        data = None
+
+        is_sample_biedronka = bool(scan.content_hash and "sample_biedronka" in scan.content_hash)
+        is_sample_lidl = bool(scan.content_hash and "sample_lidl" in scan.content_hash)
+
+        if is_sample_biedronka:
+            logger.info("DEMO: Processing sample Biedronka receipt", extra={"scan_id": scan_id})
+            data = {
+                "merchant_name": "BIEDRONKA (Katowice)",
+                "total_amount": 101.74,
+                "currency": "PLN",
+                "date": "2024-06-13",
+                "items": [
+                    {"name": "Torba T-SHIRT", "price": 0.79, "quantity": 1.0, "category": "Inne", "category_source": "demo_fixture"},
+                    {"name": "Pomidor Paprycz 500g", "price": 11.98, "quantity": 1.0, "original_price": 29.98, "discount_total": 18.00, "final_price": 11.98, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Cukierki Krówka Mix Luz", "price": 0.76, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Bułka Kajzerka 55g", "price": 1.02, "quantity": 3.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Bułka Całoroczna 80g", "price": 1.19, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Pieczarki 500g opakowanie", "price": 7.99, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Kotlet De Volaille 400g", "price": 10.99, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Ogórek Szklarniowy Luz", "price": 1.39, "quantity": 1.0, "original_price": 2.78, "discount_total": 1.39, "final_price": 1.39, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Pesto Świeża Bazylia 120g", "price": 6.49, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Półbagietka Pełnoziarnista 100g", "price": 5.16, "quantity": 1.0, "original_price": 5.96, "discount_total": 0.80, "final_price": 5.16, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Papier Toaletowy Queen 10 rolek", "price": 26.98, "quantity": 1.0, "original_price": 35.98, "discount_total": 9.00, "final_price": 26.98, "category": "Drogeria i Zdrowie", "category_source": "demo_fixture"},
+                    {"name": "Chłodnik Z Buraczkami VF 250g", "price": 7.02, "quantity": 1.0, "original_price": 9.38, "discount_total": 2.36, "final_price": 7.02, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Polędwica Drobiowa 250g", "price": 19.98, "quantity": 2.0, "original_price": 29.97, "discount_total": 9.99, "final_price": 19.98, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                ],
+                "_validation": {"is_valid": True, "issues": [], "confidence": 0.99},
+                "_raw_ocr_text": "BIEDRONKA CODZIENNIE NISKIE CENY ... JERONIMO MARTINS POLSKA S.A. ... SUMA PLN: 101.74",
+                "_reconstructed_lines": [
+                    "JERONIMO MARTINS POLSKA S.A. KATOWICE",
+                    "PARAGON FISKALNY nr 262307",
+                    "Pomidor Paprycz 500g      11.98 C (Rabat: -18.00)",
+                    "Kotlet De Volaille 400g   10.99 C",
+                    "Papier Queen 10r          26.98 A (Rabat: -9.00)",
+                    "Polędwica Drobiowa 250g   19.98 C (Rabat: -9.99)",
+                    "SUMA PLN: 101.74",
+                ],
+            }
+        elif is_sample_lidl:
+            logger.info("DEMO: Processing sample Lidl Plus receipt", extra={"scan_id": scan_id})
+            data = {
+                "merchant_name": "Lidl (Rybnik)",
+                "total_amount": 84.45,
+                "currency": "PLN",
+                "date": "2024-06-14",
+                "items": [
+                    {"name": "Ser Edam Rycki Kawałek XXL", "price": 28.13, "quantity": 1.0, "original_price": 29.89, "discount_total": 1.76, "final_price": 28.13, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Halibut wędzony na gorąco", "price": 16.81, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Kajzerka pszenna", "price": 4.47, "quantity": 6.0, "original_price": 4.74, "discount_total": 0.27, "final_price": 4.47, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Banany luz", "price": 2.80, "quantity": 1.0, "original_price": 3.06, "discount_total": 0.26, "final_price": 2.80, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                    {"name": "Szynka Wieprzowa XXL", "price": 32.24, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
+                ],
+                "_validation": {"is_valid": True, "issues": [], "confidence": 0.98},
+                "_raw_ocr_text": "LIDL SP Z O.O. RYBNIK UL. ORZEPOWICKA 29A ... LIDL PLUS ... SUMA PLN: 84.45",
+                "_reconstructed_lines": [
+                    "LIDL RYBNIK UL. ORZEPOWICKA 29A",
+                    "Ser Edam Rycki XXL 1 x 28.13 C",
+                    "Halibut wędzony 1 x 16.81 C",
+                    "Kajzerka 6 x 0.79 = 4.47 C",
+                    "Banany luz 1 x 2.80 C",
+                    "Szynka Wieprzowa XXL 1 x 32.24 C",
+                    "SUMA PLN: 84.45",
+                ],
+            }
+        elif settings.DEMO_MODE:
+            logger.info("DEMO_MODE active: simulating parsed receipt with mock fixtures", extra={"scan_id": scan_id})
+            data = {
+                "merchant_name": "Biedronka (Demo)",
+                "total_amount": 47.90,
+                "currency": "PLN",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "items": [
+                    {
+                        "name": "Mleko Świeże 3.2% 1L",
+                        "price": 3.49,
+                        "quantity": 2.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "original_price": 3.99,
+                        "discount_total": 1.0,
+                        "final_price": 6.98,
+                        "confidence": 0.98,
+                    },
+                    {
+                        "name": "Chleb Graham Krojony 500g",
+                        "price": 4.29,
+                        "quantity": 1.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.95,
+                    },
+                    {
+                        "name": "Kawa Mielona Tchibo 250g",
+                        "price": 18.99,
+                        "quantity": 1.0,
+                        "category": "Żywność i Supermarket",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.92,
+                    },
+                    {
+                        "name": "Płyn do naczyń Fairy 900ml",
+                        "price": 17.64,
+                        "quantity": 1.0,
+                        "category": "Drogeria i Zdrowie",
+                        "category_source": "demo_fixture",
+                        "confidence": 0.91,
+                    },
+                ],
+                "_validation": {"is_valid": True, "issues": [], "confidence": 0.95},
+                "_raw_ocr_text": "BIEDRONKA SP Z O O ... RAZEM PLN: 47.90",
+                "_reconstructed_lines": [
+                    "BIEDRONKA UL. TESTOWA 1",
+                    "Mleko Świeże 3.2% 1L   2 x 3.49 = 6.98 A",
+                    "Chleb Graham 500g      1 x 4.29 = 4.29 A",
+                    "Kawa Mielona Tchibo    1 x 18.99 = 18.99 A",
+                    "Płyn do naczyń Fairy   1 x 17.64 = 17.64 B",
+                    "SUMA PLN: 47.90",
+                ],
+            }
+        else:
+            data = await asyncio.get_running_loop().run_in_executor(
+                None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
+            )
         logger.info(
             "OCR completed",
             extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
@@ -501,7 +727,14 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         ai_date_str = data.get("date")
         if ai_date_str:
             try:
-                transaction.date = datetime.strptime(ai_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                parsed_dt = datetime.strptime(ai_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                now_utc = datetime.now(timezone.utc)
+                uploader_is_demo = is_demo_user(transaction.uploader) if transaction.uploader else settings.DEMO_MODE
+                if (settings.DEMO_MODE or uploader_is_demo) and (parsed_dt.year != now_utc.year or parsed_dt.month != now_utc.month):
+                    transaction.date = now_utc
+                    scan2.original_date = ai_date_str
+                else:
+                    transaction.date = parsed_dt
             except (ValueError, TypeError):
                 logger.warning("Could not parse AI date", extra={"scan_id": scan_id, "date": ai_date_str})
 
@@ -822,10 +1055,45 @@ async def scan_transaction(
 ):
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
-    file_content = await file.read()
-    file_hash = hashlib.sha256(file_content).hexdigest()
 
+    file_content = await file.read()
     await file.seek(0)
+
+    if is_demo_user(current_user):
+        # 1. Quota check: max 5 custom scans today (only non-failed, non-sample scans count)
+        start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        daily_scans_used = session.exec(
+            select(func.count(col(ReceiptScan.id)))
+            .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
+            .where(
+                col(Transaction.uploaded_by) == current_user.id,
+                col(ReceiptScan.created_at) >= start_of_day,
+                col(ReceiptScan.status) != ScanStatus.FAILED.value,
+                ~col(ReceiptScan.content_hash).startswith("sample_"),
+            )
+        ).one()
+        if daily_scans_used >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail="Dzienny limit 5 skanów demonstracyjnych został wyczerpany. Spróbuj ponownie jutro lub przetestuj wzorcowe paragony demo.",
+            )
+
+        # 2. File size check (max 5 MB)
+        if len(file_content) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="Plik przekracza maksymalny rozmiar 5 MB dla wersji demonstracyjnej.",
+            )
+
+        # 3. MIME type check
+        allowed_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+        if file.content_type and file.content_type.lower() not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail="Nieobsługiwany format pliku. Dozwolone formaty: JPG, PNG, WebP, PDF.",
+            )
+
+    file_hash = hashlib.sha256(file_content).hexdigest()
 
     if not force:
         existing_scan = session.exec(
@@ -877,6 +1145,104 @@ async def scan_transaction(
         raise HTTPException(status_code=500, detail="Failed to create receipt scan")
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
+    session.refresh(new_transaction)
+    return new_transaction
+
+
+@router.get("/demo/quota")
+def get_demo_quota(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_ops_session),
+):
+    """Return remaining scan quota for the current demo user/session."""
+    user_is_demo = is_demo_user(current_user)
+    if not user_is_demo:
+        return {
+            "is_demo": False,
+            "daily_limit": 9999,
+            "used": 0,
+            "remaining": 9999,
+            "can_scan": True,
+        }
+
+    start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    scans_used = session.exec(
+        select(func.count(col(ReceiptScan.id)))
+        .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
+        .where(
+            col(Transaction.uploaded_by) == current_user.id,
+            col(ReceiptScan.created_at) >= start_of_day,
+            col(ReceiptScan.status) != ScanStatus.FAILED.value,
+            ~col(ReceiptScan.content_hash).startswith("sample_"),
+        )
+    ).one()
+
+    daily_limit = 5
+    remaining = max(0, daily_limit - scans_used)
+    return {
+        "is_demo": True,
+        "daily_limit": daily_limit,
+        "used": scans_used,
+        "remaining": remaining,
+        "can_scan": remaining > 0,
+    }
+
+
+@router.post("/transactions/scan-sample", response_model=TransactionRead)
+async def scan_sample_transaction(
+    background_tasks: BackgroundTasks,
+    sample_id: str = Query(..., pattern="^(biedronka|lidl)$"),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """
+    Instantly trigger processing of a curated sample receipt (Biedronka or Lidl)
+    without requiring file upload from client or consuming custom upload quota.
+    """
+    if not current_budget:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    sample_filename = "biedronka_katowice.png" if sample_id == "biedronka" else "lidl_rybnik.png"
+    sample_src_path = os.path.join(os.path.dirname(__file__), "static", "demo_samples", sample_filename)
+
+    if not os.path.exists(sample_src_path):
+        raise HTTPException(status_code=404, detail=f"Sample receipt {sample_id} not found")
+
+    with open(sample_src_path, "rb") as f:
+        file_content = f.read()
+
+    file_hash = f"sample_{sample_id}_{uuid4().hex[:12]}"
+    unique_filename = f"{uuid4()}.png"
+    file_path = f"{UPLOAD_DIR}/{unique_filename}"
+
+    with open(file_path, "wb") as f_out:
+        f_out.write(file_content)
+
+    merchant_label = "Biedronka (Wzorzec)" if sample_id == "biedronka" else "Lidl Plus (Wzorzec)"
+    new_transaction = Transaction(
+        merchant_name=merchant_label,
+        uploaded_by=current_user.id,
+        budget_id=current_budget.id,
+        note=f"Wzorcowy paragon demonstracyjny: {sample_id.capitalize()}",
+    )
+    session.add(new_transaction)
+    session.commit()
+    session.refresh(new_transaction)
+    assert new_transaction.id is not None
+
+    scan = ReceiptScan(
+        transaction_id=new_transaction.id,
+        image_path=file_path,
+        status=ScanStatus.QUEUED.value,
+        content_hash=file_hash,
+    )
+    session.add(scan)
+    session.commit()
+    session.refresh(scan)
+    assert scan.id is not None
+
+    background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
     session.refresh(new_transaction)
     return new_transaction
 
@@ -1435,6 +1801,9 @@ async def import_transactions(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="CSV import is disabled in demo mode")
+
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
 
@@ -1818,9 +2187,16 @@ def get_summary(
     month: int = Path(..., ge=1, le=12, description="Month of the budget (1-12)"),
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    if current_user and is_demo_user(current_user):
+        from .demo_seed import ensure_demo_data_for_month
+        assert current_budget.id is not None
+        assert current_user.id is not None
+        ensure_demo_data_for_month(session, current_budget.id, current_user.id, year, month)
 
     source_acc = aliased(Account)
     dest_acc = aliased(Account)
@@ -1994,6 +2370,9 @@ async def invite_member(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="Inviting budget members is disabled in demo mode")
+
     # Verify if current user is owner/editor of the budget
     # We need to query from identity_engine to find the user by email,
     # but the membership is in operations_engine.

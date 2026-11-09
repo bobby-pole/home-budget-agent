@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { BottomNav } from "@/components/BottomNav";
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { DemoBanner } from "@/components/DemoBanner";
 import { Dashboard } from "@/pages/Dashboard";
 import { LoginPage } from "@/pages/LoginPage";
 import { RegisterPage } from "@/pages/RegisterPage";
@@ -20,7 +21,7 @@ import { AccountsPage } from "@/pages/AccountsPage";
 import type { ReactNode } from "react";
 
 function ProtectedLayout({ children }: { children: ReactNode }) {
-  const { token } = useAuth();
+  const { token, isDemo } = useAuth();
   if (!token) return <Navigate to="/login" replace />;
 
   return (
@@ -29,6 +30,7 @@ function ProtectedLayout({ children }: { children: ReactNode }) {
         <AppSidebar />
         <SidebarInset>
           <div className="flex flex-col flex-1 h-full relative">
+            {isDemo && <DemoBanner />}
             <DashboardHeader />
             <main className="flex-1 pb-20 md:pb-6 overflow-y-auto">
               {children}
@@ -45,6 +47,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/demo" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       
       <Route
