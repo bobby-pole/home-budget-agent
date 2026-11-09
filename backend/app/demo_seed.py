@@ -261,31 +261,179 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
         return cat.id if cat else None
 
     transactions_data = [
-        # (merchant, days_ago, hours_ago, amount, acc, type, status, cat_name, note)
-        ("Wynagrodzenie (Pracodawca)", 20, 9, 8500.00, acc_checking, "income", TransactionStatus.CLEARED, None, "Wypłata za poprzedni miesiąc"),
-        ("Spółdzielnia Mieszkaniowa", 19, 10, 2500.00, acc_checking, "expense", TransactionStatus.CLEARED, "Mieszkanie / Czynsz", "Czynsz administracyjny"),
-        ("PGE Polska Grupa Energetyczna", 18, 14, 210.50, acc_checking, "expense", TransactionStatus.CLEARED, "Prąd i Gaz", "Faktura za energię"),
-        ("Orange Polska", 17, 11, 89.99, acc_checking, "expense", TransactionStatus.CLEARED, "Internet i Telefon", "Światłowód i abonament komórkowy"),
-        ("Biedronka", 16, 17, 164.20, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Zakupy tygodniowe"),
-        ("Orlen", 15, 8, 245.00, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Tankowanie Pb95"),
-        ("Rossmann", 14, 16, 78.40, acc_checking, "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Kosmetyki i środki czystości"),
-        ("Żabka", 13, 19, 18.50, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Przekąski"),
-        ("Netflix", 12, 6, 43.00, acc_checking, "expense", TransactionStatus.CLEARED, "Subskrypcje (Netflix, Spotify)", "Abonament Standard"),
-        ("Spotify", 12, 6, 24.99, acc_checking, "expense", TransactionStatus.CLEARED, "Subskrypcje (Netflix, Spotify)", "Pakiet Duo"),
-        ("Lidl", 11, 18, 132.80, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Zakupy spożywcze"),
-        ("Piekarnia Rzemieślnicza", 10, 8, 26.50, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Chleb na zakwasie"),
-        ("Green Caffe Nero", 9, 15, 42.00, acc_checking, "expense", TransactionStatus.CLEARED, "Restauracje i Kawiarnie", "Kawa i ciasto"),
-        ("Uber", 8, 23, 34.50, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Powrót ze spotkania"),
-        ("Restauracja Manekin", 7, 19, 94.00, acc_checking, "expense", TransactionStatus.CLEARED, "Restauracje i Kawiarnie", "Obiad dla dwojga"),
-        ("Apteka Gemini", 6, 12, 64.30, acc_checking, "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Witaminy i leki"),
-        ("Biedronka", 5, 17, 98.70, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Uzupełnienie zapasów"),
-        ("Multikino", 4, 20, 72.00, acc_checking, "expense", TransactionStatus.CLEARED, "Rozrywka i Wyjścia", "Bilety na seans filmowy"),
-        ("Allegro", 3, 14, 119.00, acc_checking, "expense", TransactionStatus.CLEARED, "Rozrywka i Wyjścia", "Akcesoria domowe"),
-        ("Żabka", 2, 12, 14.20, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Kawa i kanapka"),
-        ("Stacja Shell", 1, 16, 180.00, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Paliwo na weekend"),
+        # (merchant, days_ago, hours_ago, amount, acc, type, status, cat_name, note, items)
+        (
+            "Wynagrodzenie (Pracodawca)", 20, 9, 8500.00, acc_checking, "income", TransactionStatus.CLEARED, None, "Wypłata za poprzedni miesiąc",
+            [
+                ("Wynagrodzenie zasadnicze", 8500.00, 1.0, None),
+            ],
+        ),
+        (
+            "Spółdzielnia Mieszkaniowa", 19, 10, 2500.00, acc_checking, "expense", TransactionStatus.CLEARED, "Mieszkanie / Czynsz", "Czynsz administracyjny",
+            [
+                ("Zaliczka na koszty eksploatacji", 1450.00, 1.0, "Mieszkanie / Czynsz"),
+                ("Fundusz remontowy", 450.00, 1.0, "Mieszkanie / Czynsz"),
+                ("Centralne ogrzewanie (zaliczka)", 380.00, 1.0, "Mieszkanie / Czynsz"),
+                ("Zimna woda i ścieki", 220.00, 1.0, "Mieszkanie / Czynsz"),
+            ],
+        ),
+        (
+            "PGE Polska Grupa Energetyczna", 18, 14, 210.50, acc_checking, "expense", TransactionStatus.CLEARED, "Prąd i Gaz", "Faktura za energię",
+            [
+                ("Energia elektryczna czynna", 135.20, 1.0, "Prąd i Gaz"),
+                ("Opłata dystrybucyjna stała i zmienna", 75.30, 1.0, "Prąd i Gaz"),
+            ],
+        ),
+        (
+            "Orange Polska", 17, 11, 89.99, acc_checking, "expense", TransactionStatus.CLEARED, "Internet i Telefon", "Światłowód i abonament komórkowy",
+            [
+                ("Internet światłowodowy 600 Mb/s", 59.99, 1.0, "Internet i Telefon"),
+                ("Abonament komórkowy 5G", 30.00, 1.0, "Internet i Telefon"),
+            ],
+        ),
+        (
+            "Biedronka", 16, 17, 164.20, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Zakupy tygodniowe",
+            [
+                ("Mleko Świeże 3.2% 1L", 3.49, 2.0, "Żywność i Supermarket"),
+                ("Jaja Chów Ściółkowy M 10szt", 9.99, 1.0, "Żywność i Supermarket"),
+                ("Pierś z Kurczaka 1kg", 24.99, 1.0, "Żywność i Supermarket"),
+                ("Chleb Żytni Bez Drożdży 450g", 4.89, 1.0, "Żywność i Supermarket"),
+                ("Masło Ekstra 82% 200g", 6.99, 2.0, "Żywność i Supermarket"),
+                ("Kawa Ziarnista Tchibo Barista 1kg", 64.99, 1.0, "Żywność i Supermarket"),
+                ("Papier Toaletowy Queen 3-warstwowy 10 rolek", 18.99, 1.0, "Drogeria i Zdrowie"),
+                ("Pomidory Malinowe 1kg", 14.56, 1.0, "Żywność i Supermarket"),
+                ("Cytryna Luz 0.5kg", 4.83, 1.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Orlen", 15, 8, 245.00, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Tankowanie Pb95",
+            [
+                ("Benzyna Pb95 Efecta", 6.49, 35.0, "Transport i Paliwo"),
+                ("Kawa Duża Cafe Punkt 400ml", 12.90, 1.0, "Restauracje i Kawiarnie"),
+                ("Hot Dog Max z Kabanosem", 4.95, 1.0, "Restauracje i Kawiarnie"),
+            ],
+        ),
+        (
+            "Rossmann", 14, 16, 78.40, acc_checking, "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Kosmetyki i środki czystości",
+            [
+                ("Żel pod prysznic Dove 400ml", 16.99, 1.0, "Drogeria i Zdrowie"),
+                ("Pasta do zębów Elmex Sensitive 75ml", 18.49, 1.0, "Drogeria i Zdrowie"),
+                ("Tabletki do zmywarki Somat All-in-One 36szt", 34.99, 1.0, "Drogeria i Zdrowie"),
+                ("Mydło w płynie Isana zapas 500ml", 7.93, 1.0, "Drogeria i Zdrowie"),
+            ],
+        ),
+        (
+            "Żabka", 13, 19, 18.50, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Przekąski",
+            [
+                ("Hot Dog Gigant sos tysiąca wysp", 8.50, 1.0, "Restauracje i Kawiarnie"),
+                ("Pepsi 0.5L", 5.50, 1.0, "Żywność i Supermarket"),
+                ("Żelki Haribo Złote Misie 100g", 4.50, 1.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Netflix", 12, 6, 43.00, acc_checking, "expense", TransactionStatus.CLEARED, "Subskrypcje (Netflix, Spotify)", "Abonament Standard",
+            [
+                ("Subskrypcja Plan Standard (HD, 2 ekrany)", 43.00, 1.0, "Subskrypcje (Netflix, Spotify)"),
+            ],
+        ),
+        (
+            "Spotify", 12, 6, 24.99, acc_checking, "expense", TransactionStatus.CLEARED, "Subskrypcje (Netflix, Spotify)", "Pakiet Duo",
+            [
+                ("Subskrypcja Spotify Premium Duo", 24.99, 1.0, "Subskrypcje (Netflix, Spotify)"),
+            ],
+        ),
+        (
+            "Lidl", 11, 18, 132.80, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Zakupy spożywcze",
+            [
+                ("Pilos Ser Gouda w plastrach 400g", 11.99, 1.0, "Żywność i Supermarket"),
+                ("Szynka Wieprzowa z Chrzanem 150g", 6.99, 2.0, "Żywność i Supermarket"),
+                ("Oliwa z oliwek Extra Virgin Primadonna 750ml", 36.99, 1.0, "Żywność i Supermarket"),
+                ("Chleb żytni na zakwasie 500g", 4.49, 1.0, "Żywność i Supermarket"),
+                ("Jogurt Naturalny Pilos 400g", 2.29, 3.0, "Żywność i Supermarket"),
+                ("Polski Kurczak - filet z piersi 1.2kg", 32.49, 1.0, "Żywność i Supermarket"),
+                ("Banan Bio luz 1.5kg", 14.99, 1.0, "Żywność i Supermarket"),
+                ("Woda mineralna Saguaro 1.5L zgrzewka", 11.00, 1.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Piekarnia Rzemieślnicza", 10, 8, 26.50, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Chleb na zakwasie",
+            [
+                ("Chleb żytni na zakwasie 800g", 14.50, 1.0, "Żywność i Supermarket"),
+                ("Drożdżówka z kruszonką i malinami", 6.00, 2.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Green Caffe Nero", 9, 15, 42.00, acc_checking, "expense", TransactionStatus.CLEARED, "Restauracje i Kawiarnie", "Kawa i ciasto",
+            [
+                ("Flat White duży (mleko owsiane)", 21.00, 1.0, "Restauracje i Kawiarnie"),
+                ("Sernik nowojorski z owocami leśnymi", 21.00, 1.0, "Restauracje i Kawiarnie"),
+            ],
+        ),
+        (
+            "Uber", 8, 23, 34.50, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Powrót ze spotkania",
+            [
+                ("Przejazd UberX: Centrum - Mokotów", 34.50, 1.0, "Transport i Paliwo"),
+            ],
+        ),
+        (
+            "Restauracja Manekin", 7, 19, 94.00, acc_checking, "expense", TransactionStatus.CLEARED, "Restauracje i Kawiarnie", "Obiad dla dwojga",
+            [
+                ("Naleśnik z kurczakiem i szpinakiem w sosie gorgonzola", 32.00, 1.0, "Restauracje i Kawiarnie"),
+                ("Naleśnik z łososiem wędzonym i ricottą", 36.00, 1.0, "Restauracje i Kawiarnie"),
+                ("Lemoniada cytrynowo-miętowa 0.5L", 13.00, 2.0, "Restauracje i Kawiarnie"),
+            ],
+        ),
+        (
+            "Apteka Gemini", 6, 12, 64.30, acc_checking, "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Witaminy i leki",
+            [
+                ("Witamina D3 4000 IU 120 kapsułek", 32.50, 1.0, "Drogeria i Zdrowie"),
+                ("Magnez B6 Ultra 60 tabletek", 19.80, 1.0, "Drogeria i Zdrowie"),
+                ("Plastry Viscoplast z opatrunkiem zestaw", 12.00, 1.0, "Drogeria i Zdrowie"),
+            ],
+        ),
+        (
+            "Biedronka", 5, 17, 98.70, acc_checking, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Uzupełnienie zapasów",
+            [
+                ("Mielone z szynki wieprzowej 500g", 12.99, 2.0, "Żywność i Supermarket"),
+                ("Makaron Barilla Spaghetti 500g", 6.99, 2.0, "Żywność i Supermarket"),
+                ("Sos pomidorowy Mutti Passata 700g", 8.49, 2.0, "Żywność i Supermarket"),
+                ("Ser Grana Padano tarty 100g", 13.99, 1.0, "Żywność i Supermarket"),
+                ("Cukier Biały Kryształ 1kg", 3.79, 1.0, "Żywność i Supermarket"),
+                ("Herbata Lipton Yellow Label 100 torebek", 18.99, 1.0, "Żywność i Supermarket"),
+                ("Cebula żółta 1kg", 4.99, 1.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Multikino", 4, 20, 72.00, acc_checking, "expense", TransactionStatus.CLEARED, "Rozrywka i Wyjścia", "Bilety na seans filmowy",
+            [
+                ("Bilet na seans 2D (normalny)", 26.00, 2.0, "Rozrywka i Wyjścia"),
+                ("Popcorn średni solony", 20.00, 1.0, "Rozrywka i Wyjścia"),
+            ],
+        ),
+        (
+            "Allegro", 3, 14, 119.00, acc_checking, "expense", TransactionStatus.CLEARED, "Rozrywka i Wyjścia", "Akcesoria domowe",
+            [
+                ("Filtr do wody Dafi Unimax 5+1 szt.", 69.00, 1.0, "Drogeria i Zdrowie"),
+                ("Organizer na biurko bambusowy", 50.00, 1.0, "Rozrywka i Wyjścia"),
+            ],
+        ),
+        (
+            "Żabka", 2, 12, 14.20, acc_cash, "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Kawa i kanapka",
+            [
+                ("Kawa Cappuccino mała 200ml", 7.50, 1.0, "Restauracje i Kawiarnie"),
+                ("Kanapka Tomcio Paluch z kurczakiem", 6.70, 1.0, "Żywność i Supermarket"),
+            ],
+        ),
+        (
+            "Stacja Shell", 1, 16, 180.00, acc_checking, "expense", TransactionStatus.CLEARED, "Transport i Paliwo", "Paliwo na weekend",
+            [
+                ("Paliwo Shell V-Power 95", 6.80, 25.0, "Transport i Paliwo"),
+                ("Płyn do spryskiwaczy letni 4L", 10.00, 1.0, "Transport i Paliwo"),
+            ],
+        ),
     ]
 
-    for merchant, days_ago, hours_ago, amount, acc, t_type, status, cat_name, note in transactions_data:
+    for merchant, days_ago, hours_ago, amount, acc, t_type, status, cat_name, note, items in transactions_data:
         t_date = now - timedelta(days=days_ago, hours=hours_ago)
         t = Transaction(
             merchant_name=merchant,
@@ -301,6 +449,19 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
             note=note,
         )
         session.add(t)
+        session.flush()
+
+        for line_name, unit_price, qty, c_name in items:
+            session.add(
+                TransactionLine(
+                    transaction_id=t.id,
+                    name=line_name,
+                    price=unit_price,
+                    quantity=qty,
+                    category_id=get_cat(c_name) if c_name else None,
+                    category_source="auto_categorizer" if c_name else None,
+                )
+            )
 
     session.commit()
 
@@ -345,7 +506,7 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
     session.add(scan1)
 
     t1_lines = [
-        ("Mleko Wiejskie 3.2% 1L", 7.38, 2.0, "Żywność i Supermarket"),
+        ("Mleko Wiejskie 3.2% 1L", 3.69, 2.0, "Żywność i Supermarket"),
         ("Chleb Żytni Krojony 500g", 4.50, 1.0, "Żywność i Supermarket"),
         ("Kawa Ziarnista Lavazza 1kg", 49.99, 1.0, "Żywność i Supermarket"),
         ("Jabłka Polskie Gala 1.5kg", 7.49, 1.0, "Żywność i Supermarket"),
@@ -400,7 +561,7 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
     session.add(scan2)
 
     t2_lines = [
-        ("Masło Pilos Ekstra 200g", 13.98, 2.0, "Żywność i Supermarket"),
+        ("Masło Pilos Ekstra 200g", 6.99, 2.0, "Żywność i Supermarket"),
         ("Ser Gouda w plastrach 400g", 12.49, 1.0, "Żywność i Supermarket"),
         ("Pomidory Gałązka 1kg", 15.83, 1.0, "Żywność i Supermarket"),
     ]

@@ -75,6 +75,28 @@ def test_seed_demo_environment_creates_rich_dataset(session: Session):
         ).all()
         assert len(lines) >= 3
 
+    # Check that historical store transactions also have concrete line items
+    # and their sums match transaction totals exactly
+    all_lines = session.exec(
+        select(TransactionLine)
+        .join(Transaction)
+        .where(Transaction.budget_id == budget.id)
+    ).all()
+    assert len(all_lines) >= 40
+
+    store_transactions = [
+        t for t in transactions
+        if t.merchant_name in ("Biedronka", "Lidl", "Rossmann", "Żabka", "Orlen", "Apteka Gemini")
+    ]
+    assert len(store_transactions) >= 6
+    for st in store_transactions:
+        lines = session.exec(
+            select(TransactionLine).where(TransactionLine.transaction_id == st.id)
+        ).all()
+        assert len(lines) >= 1
+        lines_sum = sum(line.price * line.quantity for line in lines)
+        assert lines_sum == pytest.approx(st.total_amount, abs=0.01)
+
 
 def test_seed_demo_environment_idempotency(session: Session):
     """Repeated calls with force_reset=False must not duplicate users, accounts, or transactions."""
