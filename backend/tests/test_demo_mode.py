@@ -331,3 +331,139 @@ async def test_demo_mode_ocr_mock(session: Session):
         assert "Mleko Świeże 3.2% 1L" in item_names
     finally:
         settings.DEMO_MODE = False
+
+
+def test_ephemeral_demo_session_isolation(client: TestClient, session: Session):
+    """Different X-Demo-Session-ID headers produce isolated users and budgets."""
+    res1 = client.post("/api/auth/demo", headers={"X-Demo-Session-ID": "session_alpha_123"})
+    assert res1.status_code == 200
+    data1 = res1.json()
+    assert data1["user"]["email"] == "demo_session_alpha_123@rachownik.app"
+
+    res2 = client.post("/api/auth/demo", headers={"X-Demo-Session-ID": "session_beta_456"})
+    assert res2.status_code == 200
+    data2 = res2.json()
+    assert data2["user"]["email"] == "demo_session_beta_456@rachownik.app"
+
+    assert data1["user"]["id"] != data2["user"]["id"]
+    assert data1["user"]["default_budget_id"] != data2["user"]["default_budget_id"]
+
+
+def test_demo_quota_endpoint_and_limit(client: TestClient, session: Session):
+    """Demo user is limited to 5 successful custom uploads per day."""
+    ephemeral_user = User(
+        email="demo_quota_test@rachownik.app",
+        hashed_password="pw",
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(ephemeral_user)
+    session.commit()
+    session.refresh(ephemeral_user)
+    seed_demo_environment(session, force_reset=False, custom_user=ephemeral_user)
+    budget = session.get(Budget, ephemeral_user.default_budget_id)
+
+    app.dependency_overrides[get_current_user] = lambda: ephemeral_user
+    app.dependency_overrides[get_current_budget] = lambda: budget
+
+    # Initially 0 used of 5
+    q_res = client.get("/api/demo/quota")
+    assert q_res.status_code == 200
+    q_data = q_res.json()
+    assert q_data["is_demo"] is True
+    assert q_data["daily_limit"] == 5
+    assert q_data["used"] == 0
+    assert q_data["remaining"] == 5
+    assert q_data["can_scan"] is True
+
+    # Add 5 scans for this user today
+    for i in range(5):
+        t = Transaction(merchant_name=f"Tx {i}", budget_id=budget.id, uploaded_by=ephemeral_user.id)
+        session.add(t)
+        session.commit()
+        session.refresh(t)
+        scan = ReceiptScan(
+            transaction_id=t.id,
+            status=ScanStatus.DONE.value,
+            content_hash=f"hash_{i}",
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(scan)
+        session.commit()
+
+    q_res2 = client.get("/api/demo/quota")
+    assert q_res2.json()["remaining"] == 0
+    assert q_res2.json()["can_scan"] is False
+
+    # Attempt 6th scan -> should return HTTP 429
+    upload_res = client.post(
+        "/api/transactions/scan",
+        files={"file": ("receipt.jpg", b"dummy image bytes", "image/jpeg")},
+    )
+    assert upload_res.status_code == 429
+    assert "Dzienny limit 5 skanów demonstracyjnych" in upload_res.text
+
+
+def test_demo_sample_scan_endpoint(client: TestClient, session: Session):
+    """POST /api/transactions/scan-sample creates transaction from curated sample."""
+    demo_user = seed_demo_environment(session, force_reset=True)
+    demo_budget = session.get(Budget, demo_user.default_budget_id)
+
+    app.dependency_overrides[get_current_user] = lambda: demo_user
+    app.dependency_overrides[get_current_budget] = lambda: demo_budget
+
+    res = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res.status_code == 200
+    tx_data = res.json()
+    assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
+
+
+def test_receipt_validator_plausibility():
+    """Verify ReceiptValidator.is_plausible_receipt_text."""
+    from app.receipt_validator import ReceiptValidator
+
+    valid_text = "BIEDRONKA SP Z O O ... NIP 779-101-13-27 ... PARAGON FISKALNY ... SUMA PLN 101,74"
+    is_valid, reason = ReceiptValidator.is_plausible_receipt_text(valid_text)
+    assert is_valid is True
+    assert reason == "OK"
+
+    dog_text = "Cute golden retriever playing in the grass with a tennis ball on Sunday afternoon"
+    is_valid, reason = ReceiptValidator.is_plausible_receipt_text(dog_text)
+    assert is_valid is False
+    assert reason in ("MISSING_RECEIPT_KEYWORDS", "MISSING_PRICE_PATTERNS")
+
+
+def test_cleanup_expired_demo_sessions(session: Session):
+    """Verify cleanup_expired_demo_sessions removes users and budgets >24h old."""
+    from app.demo_seed import cleanup_expired_demo_sessions
+    from datetime import timedelta
+
+    # 1. User created 30 hours ago (should be cleaned)
+    old_user = User(
+        email="demo_old_12345@rachownik.app",
+        hashed_password="pw",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=30),
+    )
+    session.add(old_user)
+    session.commit()
+    session.refresh(old_user)
+    seed_demo_environment(session, force_reset=False, custom_user=old_user)
+
+    # 2. User created 2 hours ago (should NOT be cleaned)
+    recent_user = User(
+        email="demo_recent_67890@rachownik.app",
+        hashed_password="pw",
+        created_at=datetime.now(timezone.utc) - timedelta(hours=2),
+    )
+    session.add(recent_user)
+    session.commit()
+    session.refresh(recent_user)
+    seed_demo_environment(session, force_reset=False, custom_user=recent_user)
+
+    removed = cleanup_expired_demo_sessions(session, max_age_hours=24)
+    assert removed >= 1
+
+    # old_user should be deleted
+    assert session.get(User, old_user.id) is None
+    # recent_user should still exist
+    assert session.get(User, recent_user.id) is not None
+

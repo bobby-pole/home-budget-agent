@@ -125,3 +125,31 @@ class ReceiptValidator:
         if issue == ValidationIssue.EMPTY_RECEIPT:
             return "RECEIPT_EMPTY"
         return "RECEIPT_UNKNOWN_ISSUE"
+
+    @staticmethod
+    def is_plausible_receipt_text(raw_text: Optional[str]) -> tuple[bool, str]:
+        """
+        Quick heuristic pre-check to determine if raw OCR text resembles a Polish receipt.
+        Guards downstream LLM calls against memes, contracts, dog photos, etc.
+        Returns (True, "OK") or (False, "REASON_CODE").
+        """
+        if not raw_text or len(raw_text.strip()) < 15:
+            return False, "TEXT_TOO_SHORT"
+
+        lower = raw_text.lower()
+        has_receipt_keyword = any(k in lower for k in [
+            "paragon", "fiskaln", "suma", "pln", "zł", "ptu", "vat",
+            "opust", "rabat", "kasjer", "kasa nr", "bdo", "sprzedaż", "razem"
+        ])
+        import re
+        has_nip = bool(re.search(r"\bnip\b|\b\d{3}[-\s]?\d{3}[-\s]?\d{2}[-\s]?\d{2}\b", lower))
+        has_price = bool(re.search(r"\b\d+[.,]\d{2}\b", raw_text))
+
+        if not (has_receipt_keyword or has_nip):
+            return False, "MISSING_RECEIPT_KEYWORDS"
+
+        if not has_price:
+            return False, "MISSING_PRICE_PATTERNS"
+
+        return True, "OK"
+

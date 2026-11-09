@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+import asyncio
 import os
 from dotenv import load_dotenv
 
@@ -45,7 +46,25 @@ def create_db_and_tables():
     import app.models  # noqa: F401
     SQLModel.metadata.create_all(identity_engine)
     SQLModel.metadata.create_all(operations_engine)
+    with operations_engine.connect() as conn:
+        try:
+            conn.exec_driver_sql("ALTER TABLE receiptscan ADD COLUMN original_date VARCHAR")
+            conn.commit()
+        except Exception:
+            pass
     print("✅ Database tables created (SQLModel.metadata.create_all).")
+
+async def _periodic_demo_cleanup():
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            with Session(operations_engine) as session:
+                from .demo_seed import cleanup_expired_demo_sessions
+                cleanup_expired_demo_sessions(session, max_age_hours=24)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logging.getLogger(__name__).error("Periodic demo cleanup error: %s", e)
 
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
@@ -53,7 +72,9 @@ async def lifespan(app: FastAPI):
     # Seeding
     if os.getenv("ENVIRONMENT") == "development":
         seed_test_user()
+    cleanup_task = asyncio.create_task(_periodic_demo_cleanup())
     yield
+    cleanup_task.cancel()
 
 app = FastAPI(
     title="Smart Budget AI API",

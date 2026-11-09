@@ -75,3 +75,12 @@ def get_current_user_optional(
 
     return session.exec(select(User).where(User.email == email)).first()
 
+
+def is_demo_user(user: Optional[User]) -> bool:
+    """Return True if user is either static demo or an ephemeral demo session user."""
+    if user is None or not user.email:
+        return False
+    from .config import settings
+    return user.email == settings.DEMO_USER_EMAIL or user.email.startswith("demo_")
+
+

@@ -16,6 +16,7 @@ Provides a rich, realistic showcase dataset for public demo mode:
 import argparse
 import calendar
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
@@ -577,9 +578,14 @@ def ensure_demo_data_for_month(
     return True
 
 
-def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
+def seed_demo_environment(
+    session: Session,
+    force_reset: bool = False,
+    custom_user: Optional[User] = None,
+) -> User:
     """
     Seed a complete, idempotent demo environment.
+    If custom_user is provided, seeds specifically for that ephemeral demo user.
     If force_reset=False and demo user already exists:
     ensures current month data is present and returns existing user.
     """
@@ -590,30 +596,44 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
     prev_year = now.year - 1 if now.month == 1 else now.year
     prev_month = 12 if now.month == 1 else now.month - 1
 
-    # 1. Ensure Demo User exists
-    demo_user = session.exec(select(User).where(User.email == settings.DEMO_USER_EMAIL)).first()
-    if not demo_user:
-        demo_user = User(
-            email=settings.DEMO_USER_EMAIL,
-            hashed_password=hash_password(DEMO_USER_PASSWORD),
-            created_at=now - timedelta(days=60),
-        )
-        session.add(demo_user)
-        session.commit()
-        session.refresh(demo_user)
-    elif force_reset:
-        clean_demo_data(session, demo_user)
-        session.refresh(demo_user)
-    else:
-        if demo_user.default_budget_id:
+    if custom_user:
+        demo_user = custom_user
+        if force_reset:
+            clean_demo_data(session, demo_user)
+            session.refresh(demo_user)
+        elif demo_user.default_budget_id:
             existing_budget = session.get(Budget, demo_user.default_budget_id)
             if existing_budget:
                 account_count = session.exec(select(Account).where(Account.budget_id == existing_budget.id)).all()
                 if account_count:
-                    # Automatically ensure current month is seeded even if previously skipped
                     ensure_demo_data_for_month(session, existing_budget.id, demo_user.id, current_year, current_month)
                     logger.info("Demo environment already seeded for %s, verified current month.", demo_user.email)
                     return demo_user
+    else:
+        # 1. Ensure Default Demo User exists
+        demo_user = session.exec(select(User).where(User.email == settings.DEMO_USER_EMAIL)).first()
+        if not demo_user:
+            demo_user = User(
+                email=settings.DEMO_USER_EMAIL,
+                hashed_password=hash_password(DEMO_USER_PASSWORD),
+                created_at=now - timedelta(days=60),
+            )
+            session.add(demo_user)
+            session.commit()
+            session.refresh(demo_user)
+        elif force_reset:
+            clean_demo_data(session, demo_user)
+            session.refresh(demo_user)
+        else:
+            if demo_user.default_budget_id:
+                existing_budget = session.get(Budget, demo_user.default_budget_id)
+                if existing_budget:
+                    account_count = session.exec(select(Account).where(Account.budget_id == existing_budget.id)).all()
+                    if account_count:
+                        # Automatically ensure current month is seeded even if previously skipped
+                        ensure_demo_data_for_month(session, existing_budget.id, demo_user.id, current_year, current_month)
+                        logger.info("Demo environment already seeded for %s, verified current month.", demo_user.email)
+                        return demo_user
 
     # 2. Create Budget & Owner Membership
     budget = Budget(name=DEMO_BUDGET_NAME, owner_id=demo_user.id)
@@ -841,6 +861,41 @@ def seed_demo_environment(session: Session, force_reset: bool = False) -> User:
     session.refresh(demo_user)
     logger.info("Demo environment successfully seeded for %s (Budget ID: %s)", demo_user.email, budget.id)
     return demo_user
+
+
+def cleanup_expired_demo_sessions(session: Session, max_age_hours: int = 24) -> int:
+    """
+    Remove ephemeral demo users and their budgets, transactions, and scan files older than max_age_hours.
+    Does not delete the static settings.DEMO_USER_EMAIL.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_hours)
+    ephemeral_users = session.exec(
+        select(User).where(
+            User.email.startswith("demo_"),
+            User.created_at < cutoff,
+        )
+    ).all()
+
+    removed_count = 0
+    for u in ephemeral_users:
+        logger.info("Cleaning expired demo user %s (created %s)", u.email, u.created_at)
+        user_scans = session.exec(
+            select(ReceiptScan).join(Transaction).where(Transaction.uploaded_by == u.id)
+        ).all()
+        for s in user_scans:
+            if s.image_path and os.path.exists(s.image_path) and not s.image_path.startswith("backend/app/static/"):
+                try:
+                    os.remove(s.image_path)
+                except OSError:
+                    pass
+
+        clean_demo_data(session, u)
+        session.delete(u)
+        removed_count += 1
+
+    session.commit()
+    logger.info("Removed %d expired demo sessions.", removed_count)
+    return removed_count
 
 
 if __name__ == "__main__":
