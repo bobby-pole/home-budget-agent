@@ -1,5 +1,7 @@
 # backend/app/database.py
 import os
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlmodel import create_engine, Session
 
 SQLITE_FILE_NAME = "database.db"
@@ -9,8 +11,8 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///./data/{SQLITE_FILE_NAME}")
 if "sqlite:///./data" in DATABASE_URL:
     os.makedirs("./data", exist_ok=True)
 
-# check_same_thread=False jest wymagane dla SQLite w FastAPI
-connect_args = {"check_same_thread": False}
+# check_same_thread=False jest wymagane dla SQLite w FastAPI, timeout zapobiega database is locked
+connect_args = {"check_same_thread": False, "timeout": 30.0}
 
 # Identity engine: User authentication and identity data.
 # Future split: point this to a separate auth DB.
@@ -22,6 +24,20 @@ operations_engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
 # Alias kept for backward compatibility (used in background tasks in api.py)
 engine = identity_engine
+
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    """Enable WAL mode and busy timeout for concurrent SQLite reads/writes."""
+    if "sqlite" in DATABASE_URL:
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL;")
+        except Exception:
+            pass
+        cursor.execute("PRAGMA busy_timeout=30000;")
+        cursor.execute("PRAGMA synchronous=NORMAL;")
+        cursor.close()
 
 
 def get_session():
