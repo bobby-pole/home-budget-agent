@@ -18,6 +18,7 @@ from app.models import (
     ScanStatus,
     Transaction,
     TransactionLine,
+    TransactionStatus,
     User,
 )
 
@@ -47,14 +48,35 @@ def test_seed_demo_environment_creates_rich_dataset(session: Session):
     allocations = session.exec(select(EnvelopeAllocation).where(EnvelopeAllocation.budget_id == budget.id)).all()
     assert len(allocations) > 0
     now = datetime.now(timezone.utc)
+    prev_month = 12 if now.month == 1 else now.month - 1
     for alloc in allocations:
-        assert alloc.year == now.year
-        assert alloc.month == now.month
+        assert alloc.month in (now.month, prev_month)
         assert alloc.amount > 0
+
+    # Current month allocations sum to 6500 PLN (leaving 500 PLN buffer from 7000 PLN income)
+    cur_allocations = [a for a in allocations if a.year == now.year and a.month == now.month]
+    assert sum(a.amount for a in cur_allocations) == 6500.00
 
     # Transactions & Inboxes
     transactions = session.exec(select(Transaction).where(Transaction.budget_id == budget.id)).all()
-    assert len(transactions) >= 20
+    assert len(transactions) >= 40
+
+    cur_txs = [
+        t for t in transactions
+        if t.date and t.date.year == now.year and t.date.month == now.month and t.status == TransactionStatus.CLEARED
+    ]
+    cur_income = sum(t.total_amount for t in cur_txs if t.type == "income")
+    cur_cleared_expenses = sum(t.total_amount for t in cur_txs if t.type == "expense")
+    assert cur_income == 7000.00
+    assert cur_cleared_expenses == 6373.20
+
+    # Including the 2 staged inbox receipts (84.50 + 42.30 = 126.80 PLN), total expenses for the month are exactly 6500 PLN
+    all_cur_expenses = sum(
+        t.total_amount for t in transactions
+        if t.date and t.date.year == now.year and t.date.month == now.month and t.type == "expense"
+    )
+    assert all_cur_expenses == 6500.00
+    assert (cur_income - all_cur_expenses) == 500.00
 
     # Check the 2 staged receipts in Inbox
     scans = session.exec(
@@ -118,6 +140,29 @@ def test_seed_demo_environment_idempotency(session: Session):
 
     assert tx_count_after == initial_tx_count
     assert acc_count_after == initial_acc_count
+
+
+def test_demo_budget_summary_auto_seeds_new_month(client: TestClient, session: Session):
+    """Accessing a future or new month summary auto-seeds fresh income and expenses for demo user."""
+    demo_user = seed_demo_environment(session, force_reset=True)
+    demo_budget = session.get(Budget, demo_user.default_budget_id)
+
+    app.dependency_overrides[get_current_user] = lambda: demo_user
+    app.dependency_overrides[get_current_user_optional] = lambda: demo_user
+    app.dependency_overrides[get_current_budget] = lambda: demo_budget
+
+    # Target a future month (e.g. month=7 of next year)
+    future_year = 2027
+    future_month = 7
+
+    response = client.get(f"/api/budget/{future_year}/{future_month}/summary")
+    assert response.status_code == 200, response.text
+    summary = response.json()
+
+    assert summary["total_income"] == 7000.00
+    assert summary["total_spent"] == 6500.00
+    assert summary["net_cash_flow"] == 500.00
+    assert summary["total_planned"] == 6500.00
 
 
 def test_auth_demo_endpoint(client: TestClient, session: Session):

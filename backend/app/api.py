@@ -1931,9 +1931,14 @@ def get_summary(
     month: int = Path(..., ge=1, le=12, description="Month of the budget (1-12)"),
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    if current_user and current_user.email == settings.DEMO_USER_EMAIL:
+        from .demo_seed import ensure_demo_data_for_month
+        ensure_demo_data_for_month(session, current_budget.id, current_user.id, year, month)
 
     source_acc = aliased(Account)
     dest_acc = aliased(Account)
