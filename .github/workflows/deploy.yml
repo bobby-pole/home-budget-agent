@@ -29,15 +29,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build and push Demo image
         uses: docker/build-push-action@v6
         with:
           context: .
+          file: Dockerfile.demo
+          target: demo-production
+          push: true
+          tags: ghcr.io/bobby-pole/home-budget-agent:demo
+          cache-from: type=gha,scope=demo
+          cache-to: type=gha,mode=max,scope=demo
+
+      - name: Build and push Production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
           target: production
           push: true
           tags: ghcr.io/bobby-pole/home-budget-agent:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=prod
+          cache-to: type=gha,mode=max,scope=prod
 
   deploy:
     name: Deploy to VPS
@@ -48,13 +60,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Copy compose file to VPS
+      - name: Copy compose files to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,docker-compose.demo.yml"
           target: "/home/deploy/home-budget-agent/"
 
       - name: Deploy via SSH
@@ -77,16 +89,19 @@ jobs:
 
             cd /home/deploy/home-budget-agent
 
-            # Ensure data directory exists and is writable by container user (UID 1001)
-            mkdir -p data && chmod 777 data
+            # Ensure data and demo directories exist and are writable by container user (UID 1001)
+            mkdir -p data data-demo && chmod 777 data data-demo
 
             # Write .env from secrets (printf handles special chars safely)
             printf 'OPENAI_API_KEY=%s\nSECRET_KEY=%s\nENVIRONMENT=production\nGOOGLE_CREDENTIALS_JSON=%s\n' \
               "$OPENAI_API_KEY" "$SECRET_KEY" "$GOOGLE_CREDENTIALS_JSON" > .env
 
-            # Pull latest image and restart
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            # For now, stop existing prod container if running so port 8080 is freed for demo showcase
+            docker compose -f docker-compose.prod.yml down || true
+
+            # Pull latest image and restart demo container
+            docker compose -f docker-compose.demo.yml pull
+            docker compose -f docker-compose.demo.yml up -d
 
             # Health check with retry (up to 60s)
             for i in $(seq 1 12); do
@@ -97,7 +112,7 @@ jobs:
               if [ "$i" -eq 12 ]; then
                 echo "Health check failed after 60s"
                 # Do not print application logs: they may contain user data.
-                docker inspect --format 'container={{.Name}} state={{.State.Status}} exit_code={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' home-budget-agent-prod || \
+                docker inspect --format 'container={{.Name}} state={{.State.Status}} exit_code={{.State.ExitCode}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' home-budget-agent-demo || \
                   echo "Container status is unavailable"
                 exit 1
               fi

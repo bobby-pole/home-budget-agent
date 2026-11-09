@@ -1,0 +1,72 @@
+# --- STAGE 1: Build Demo Frontend (React + Vite with DEMO_MODE) ---
+FROM node:22-alpine AS build-frontend
+
+WORKDIR /app
+# Copy OpenAPI schema (needed for type generation)
+COPY contracts/ ./contracts/
+
+# Copy frontend source code keeping the directory structure
+COPY frontend/ ./frontend/
+
+WORKDIR /app/frontend
+# Install pnpm
+RUN npm install -g pnpm@11
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build frontend with demo mode enabled
+ENV VITE_DEMO_MODE=true
+RUN pnpm build
+
+# --- STAGE 2: Backend Base (Python dependencies & Security) ---
+FROM python:3.11-slim AS backend-base
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+RUN addgroup --system --gid 1001 appgroup && \
+    adduser --system --uid 1001 --gid 1001 appuser
+
+# Copy backend dependencies and install using uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY backend/pyproject.toml ./
+RUN uv pip install --system --no-cache -r pyproject.toml
+
+# Copy backend source code
+COPY backend/ ./
+
+# Change ownership to non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
+
+# Environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/home/appuser/.local/bin:$PATH"
+ENV DEMO_MODE=true
+
+# Open port
+EXPOSE 8000
+
+# Default command (can be overridden)
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+
+# --- STAGE 3: Demo Production (Combine Demo Frontend & Demo Backend) ---
+FROM backend-base AS demo-production
+
+# Switch to root temporarily to copy files
+USER root
+
+# Copy the built demo frontend from Stage 1
+COPY --from=build-frontend --chown=appuser:appgroup /app/frontend/dist /app/static
+
+# Switch back to non-root user
+USER appuser

@@ -48,8 +48,8 @@ describe("LoginPage in Demo Mode", () => {
     );
 
     expect(screen.getByText(/wersja demonstracyjna/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /wypróbuj wersję demonstracyjną/i })).toBeInTheDocument();
-    expect(screen.getByText(/zaloguj się tradycyjnie/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /uruchom wersję demonstracyjną/i })).toBeInTheDocument();
+    expect(screen.getByText(/prywatne środowisko testowe/i)).toBeInTheDocument();
   });
 
   it("calls loginDemo when clicking demo button", async () => {
@@ -62,27 +62,11 @@ describe("LoginPage in Demo Mode", () => {
       </MemoryRouter>
     );
 
-    await user.click(screen.getByRole("button", { name: /wypróbuj wersję demonstracyjną/i }));
+    await user.click(screen.getByRole("button", { name: /uruchom wersję demonstracyjną/i }));
 
     await waitFor(() => {
       expect(mockLoginDemo).toHaveBeenCalled();
     });
-  });
-
-  it("toggles traditional login form on link click", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <MemoryRouter initialEntries={["/login"]}>
-        <LoginPage />
-      </MemoryRouter>
-    );
-
-    expect(screen.queryByLabelText(/hasło/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByText(/zaloguj się tradycyjnie/i));
-
-    expect(screen.getByLabelText(/hasło/i)).toBeInTheDocument();
   });
 
   it("auto-triggers loginDemo when query param demo=true is present", async () => {
@@ -97,5 +81,36 @@ describe("LoginPage in Demo Mode", () => {
     await waitFor(() => {
       expect(mockLoginDemo).toHaveBeenCalled();
     });
+  });
+
+  it("switches language between Polish and English dynamically when clicking language button", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={["/login"]}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+
+    // Initially in Polish
+    expect(screen.getByText(/wersja demonstracyjna/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /uruchom wersję demonstracyjną/i })).toBeInTheDocument();
+
+    // Click English switch button
+    const enButton = screen.getByRole("button", { name: /english/i });
+    await user.click(enButton);
+
+    // Now in English
+    expect(screen.getByText("Rachownik – Demo Showcase")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /launch demo showcase/i })).toBeInTheDocument();
+    expect(localStorage.getItem("app_locale")).toBe("en");
+
+    // Click Polish switch button
+    const plButton = screen.getByRole("button", { name: /polski/i });
+    await user.click(plButton);
+
+    // Back to Polish
+    expect(screen.getByText("Rachownik – wersja demonstracyjna")).toBeInTheDocument();
+    expect(localStorage.getItem("app_locale")).toBe("pl");
   });
 });

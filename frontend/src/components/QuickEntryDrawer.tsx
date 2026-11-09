@@ -21,6 +21,7 @@ interface QuickEntryDrawerProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onScanReceipt?: (file: File) => void
+  onOpenScanModal?: () => void
   onManualEntry?: () => void
   scanPending?: boolean
 }
@@ -29,6 +30,7 @@ export function QuickEntryDrawer({
   open,
   onOpenChange,
   onScanReceipt,
+  onOpenScanModal,
   onManualEntry,
   scanPending = false,
 }: QuickEntryDrawerProps) {
@@ -36,7 +38,12 @@ export function QuickEntryDrawer({
   const isMobile = useIsMobile()
 
   const handleScanClick = () => {
-    fileInputRef.current?.click()
+    if (onOpenScanModal) {
+      onOpenScanModal()
+      onOpenChange(false)
+    } else {
+      fileInputRef.current?.click()
+    }
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {

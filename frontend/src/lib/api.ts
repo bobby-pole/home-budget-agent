@@ -24,6 +24,7 @@ import type {
   ConnectionOAuthCallbackRequest
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
+import { getLocale } from "@/lib/i18n";
 import axios from "axios";
 
 export const apiClient = axios.create({
@@ -42,6 +43,10 @@ apiClient.interceptors.request.use((config) => {
   const budgetId = getActiveBudget();
   if (budgetId) {
     config.headers["X-Budget-Id"] = budgetId.toString();
+  }
+  const locale = getLocale();
+  if (locale) {
+    config.headers["Accept-Language"] = locale;
   }
   return config;
 });
@@ -67,8 +72,35 @@ export const api = {
     return response.data;
   },
 
-  loginDemo: async (): Promise<AuthResponse> => {
-    const response = await apiClient.post<AuthResponse>("/auth/demo");
+  loginDemo: async (sessionId?: string, locale?: string): Promise<AuthResponse> => {
+    const activeLocale = locale || getLocale();
+    const headers: Record<string, string> = {
+      ...(sessionId ? { "X-Demo-Session-ID": sessionId } : {}),
+      ...(activeLocale ? { "X-Demo-Locale": activeLocale, "Accept-Language": activeLocale } : {}),
+    };
+    const response = await apiClient.post<AuthResponse>("/auth/demo", null, { headers });
+    return response.data;
+  },
+
+  getDemoQuota: async (): Promise<{
+    is_demo: boolean;
+    daily_limit: number;
+    used: number;
+    remaining: number;
+    can_scan: boolean;
+  }> => {
+    const response = await apiClient.get<{
+      is_demo: boolean;
+      daily_limit: number;
+      used: number;
+      remaining: number;
+      can_scan: boolean;
+    }>("/demo/quota");
+    return response.data;
+  },
+
+  scanSampleReceipt: async (sampleId: "biedronka" | "lidl"): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>(`/transactions/scan-sample?sample_id=${sampleId}`);
     return response.data;
   },
 

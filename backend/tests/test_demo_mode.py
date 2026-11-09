@@ -467,3 +467,12 @@ def test_cleanup_expired_demo_sessions(session: Session):
     # recent_user should still exist
     assert session.get(User, recent_user.id) is not None
 
+
+def test_get_app_config(client: TestClient):
+    """Verify /api/config returns demo_mode and environment without authentication."""
+    response = client.get("/api/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert "demo_mode" in data
+    assert "environment" in data
+

@@ -14,7 +14,7 @@ interface AuthContextType {
   activeBudgetId: number | null;
   isDemo: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginDemo: () => Promise<void>;
+  loginDemo: (sessionId?: string, locale?: string) => Promise<void>;
   register: (email: string, password: string) => Promise<void>;
   logout: () => void;
   switchBudget: (id: number) => void;
@@ -47,8 +47,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loginDemo = async () => {
-    const data = await api.loginDemo();
+  const loginDemo = async (customSessionId?: string, customLocale?: string) => {
+    let sessionId = customSessionId || localStorage.getItem("demo_session_id");
+    if (!sessionId) {
+      sessionId = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID().slice(0, 12)
+        : `sess_${Date.now().toString(36)}`;
+      localStorage.setItem("demo_session_id", sessionId);
+    }
+    const data = await api.loginDemo(sessionId, customLocale);
     handleAuthResponse(data, setUser, setTokenState);
     if (data.user.default_budget_id) {
       setActiveBudgetId(data.user.default_budget_id);
@@ -58,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const isDemo = user?.email === "demo@rachownik.app";
+  const isDemo = Boolean(user?.email && (user.email === "demo@rachownik.app" || user.email.startsWith("demo_")));
 
   const register = async (email: string, password: string) => {
     const data = await api.register(email, password);

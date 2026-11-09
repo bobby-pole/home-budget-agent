@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from contextlib import asynccontextmanager
 import asyncio
 import os
@@ -72,6 +72,15 @@ async def lifespan(app: FastAPI):
     # Seeding
     if os.getenv("ENVIRONMENT") == "development":
         seed_test_user()
+    from .config import settings
+    if settings.DEMO_MODE:
+        try:
+            with Session(operations_engine) as session:
+                from .demo_seed import seed_demo_environment
+                seed_demo_environment(session)
+            logging.getLogger(__name__).info("Demo environment baseline auto-seeded on startup.")
+        except Exception as e:
+            logging.getLogger(__name__).error("Failed to seed baseline demo environment on startup: %s", e)
     cleanup_task = asyncio.create_task(_periodic_demo_cleanup())
     yield
     cleanup_task.cancel()
@@ -113,19 +122,19 @@ if os.path.exists(STATIC_DIR):
     async def serve_react_app(request: Request, full_path: str):
         # Skip if it looks like an API call (to return proper 404 instead of index.html)
         if full_path.startswith("api"):
-            return {"detail": "Not Found"}
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         
         # Check if the path is a file that exists in the static dir (favicon, logo, etc)
         file_path = os.path.join(STATIC_DIR, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         
-        # Otherwise, always return index.html
+        # Otherwise, return index.html
         index_path = os.path.join(STATIC_DIR, "index.html")
         if os.path.exists(index_path):
             return FileResponse(index_path)
         
-        return {"detail": "Static files not found"}
+        return JSONResponse({"detail": "Static files not found"}, status_code=404)
 else:
     # Fallback for development/API-only mode
     @app.get("/")

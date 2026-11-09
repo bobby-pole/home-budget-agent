@@ -28,7 +28,7 @@ from .models import (
     User, UserCreate, UserRead, Token,
     Category, Tag, CategoryCreate, CategoryUpdate, CategoryRead, TagCreate, TagRead, TagUpdate, TransactionTagLink,
     BudgetMemberCreate, BudgetMemberRead,
-    BudgetAlert, AppStatusRead,
+    BudgetAlert, AppStatusRead, AppConfigRead,
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
@@ -55,6 +55,14 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @router.get("/health")
 def health_check():
     return {"status": "ok", "message": "Backend is running!"}
+
+
+@router.get("/config", response_model=AppConfigRead)
+def get_app_config():
+    return AppConfigRead(
+        demo_mode=bool(settings.DEMO_MODE),
+        environment=settings.ENVIRONMENT,
+    )
 
 
 # --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
@@ -225,6 +233,8 @@ def login(user_data: UserCreate, session: Session = Depends(get_session)):
 @router.post("/auth/demo", response_model=Token)
 def login_demo(
     x_demo_session_id: Optional[str] = Header(None, alias="X-Demo-Session-ID"),
+    x_demo_locale: Optional[str] = Header(None, alias="X-Demo-Locale"),
+    accept_language: Optional[str] = Header(None, alias="Accept-Language"),
     ops_session: Session = Depends(get_ops_session),
 ):
     """
@@ -232,9 +242,14 @@ def login_demo(
     If X-Demo-Session-ID is provided, ensures an isolated ephemeral demo user
     and budget for this recruiter session.
     """
+    locale = x_demo_locale or (accept_language.split(",")[0].split("-")[0] if accept_language else "pl")
+    if locale not in ("pl", "en"):
+        locale = "pl"
+
     if x_demo_session_id:
         clean_id = re.sub(r"[^a-zA-Z0-9_-]", "", x_demo_session_id)[:32]
         if clean_id:
+            logger.info("Ephemeral demo login request: session=%s, locale=%s", clean_id, locale)
             ephemeral_email = f"demo_{clean_id}@rachownik.app"
             user = ops_session.exec(select(User).where(User.email == ephemeral_email)).first()
             if not user:

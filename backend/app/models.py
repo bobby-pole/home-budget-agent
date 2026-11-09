@@ -764,6 +764,11 @@ class AppStatusRead(SQLModel):
     inbox_items: List[TransactionRead]
     unread_alerts: List[BudgetAlertRead]
 
+
+class AppConfigRead(SQLModel):
+    demo_mode: bool
+    environment: str
+
 # ─── SQLAlchemy Events ────────────────────────────────────────────────────────
 
 def _transaction_account_ids(transaction: Transaction) -> set[int]:

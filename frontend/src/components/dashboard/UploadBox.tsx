@@ -7,6 +7,7 @@ import { api } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { t } from "@/lib/i18n"
+import { ScanReceiptModal } from "@/components/modals/ScanReceiptModal"
 
 interface UploadBoxProps {
   totalCount?: number;
@@ -16,6 +17,7 @@ interface UploadBoxProps {
 
 export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: UploadBoxProps) {
   const [isDragging, setIsDragging] = useState(false)
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 
@@ -43,9 +45,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
   })
 
   const handleBoxClick = () => {
-    if (!scanMutation.isPending) {
-      fileInputRef.current?.click()
-    }
+    setIsScanModalOpen(true)
   }
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -201,6 +201,7 @@ export function UploadBox({ totalCount = 0, processingCount = 0, onAddManual }: 
             </div>
         </div>
       </div>
+      <ScanReceiptModal open={isScanModalOpen} onOpenChange={setIsScanModalOpen} />
     </Card>
   )
 }

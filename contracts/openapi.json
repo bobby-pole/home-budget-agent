@@ -21,6 +21,24 @@
         }
       }
     },
+    "/api/config": {
+      "get": {
+        "summary": "Get App Config",
+        "operationId": "get_app_config_api_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppConfigRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/register": {
       "post": {
         "summary": "Register",
@@ -95,6 +113,107 @@
             }
           }
         }
+      }
+    },
+    "/api/auth/demo": {
+      "post": {
+        "summary": "Login Demo",
+        "description": "Authenticate as the demo user for showcase/recruitment evaluation.\nIf X-Demo-Session-ID is provided, ensures an isolated ephemeral demo user\nand budget for this recruiter session.",
+        "operationId": "login_demo_api_auth_demo_post",
+        "parameters": [
+          {
+            "name": "X-Demo-Session-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Demo-Session-Id"
+            }
+          },
+          {
+            "name": "X-Demo-Locale",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Demo-Locale"
+            }
+          },
+          {
+            "name": "Accept-Language",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept-Language"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Token"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/demo/reset": {
+      "post": {
+        "summary": "Reset Demo",
+        "description": "Reset demo environment back to baseline state.\nAllowed for authenticated demo user or when DEMO_MODE=True.",
+        "operationId": "reset_demo_api_auth_demo_reset_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/auth/me": {
@@ -590,6 +709,90 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/demo/quota": {
+      "get": {
+        "summary": "Get Demo Quota",
+        "description": "Return remaining scan quota for the current demo user/session.",
+        "operationId": "get_demo_quota_api_demo_quota_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/transactions/scan-sample": {
+      "post": {
+        "summary": "Scan Sample Transaction",
+        "description": "Instantly trigger processing of a curated sample receipt (Biedronka or Lidl)\nwithout requiring file upload from client or consuming custom upload quota.",
+        "operationId": "scan_sample_transaction_api_transactions_scan_sample_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sample_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^(biedronka|lidl)$",
+              "title": "Sample Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -3250,6 +3453,24 @@
         "type": "object",
         "title": "AccountUpdate"
       },
+      "AppConfigRead": {
+        "properties": {
+          "demo_mode": {
+            "type": "boolean",
+            "title": "Demo Mode"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          }
+        },
+        "type": "object",
+        "required": [
+          "demo_mode",
+          "environment"
+        ],
+        "title": "AppConfigRead"
+      },
       "AppStatusRead": {
         "properties": {
           "inbox_items": {
@@ -4203,6 +4424,17 @@
               }
             ],
             "title": "Validation Message"
+          },
+          "original_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Date"
           },
           "error_message": {
             "anyOf": [

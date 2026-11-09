@@ -12,6 +12,7 @@ import { QuickEntryDrawer } from "./QuickEntryDrawer"
 import { useScanReceipt } from "@/hooks/use-scan-receipt"
 import { useAddTransaction } from "@/hooks/use-add-transaction"
 import { AddTransactionModal } from "@/components/dashboard/AddTransactionModal"
+import { ScanReceiptModal } from "@/components/modals/ScanReceiptModal"
 
 const leftNavItems = [
   {
@@ -43,6 +44,7 @@ export function BottomNav() {
   const location = useLocation()
   const pathname = location.pathname
   const [isQuickEntryOpen, setIsQuickEntryOpen] = useState(false)
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false)
   const { scanReceipt, isScanning } = useScanReceipt()
   const { isAddTxOpen, setIsAddTxOpen, openAddTransaction } = useAddTransaction()
 
@@ -106,9 +108,11 @@ export function BottomNav() {
         open={isQuickEntryOpen}
         onOpenChange={setIsQuickEntryOpen}
         onScanReceipt={scanReceipt}
+        onOpenScanModal={() => setIsScanModalOpen(true)}
         onManualEntry={openAddTransaction}
         scanPending={isScanning}
       />
+      <ScanReceiptModal open={isScanModalOpen} onOpenChange={setIsScanModalOpen} />
       <AddTransactionModal open={isAddTxOpen} onOpenChange={setIsAddTxOpen} />
     </>
   )

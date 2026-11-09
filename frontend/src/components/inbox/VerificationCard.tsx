@@ -17,6 +17,7 @@ import {
   FileText,
   FileJson,
   RefreshCw,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -570,6 +571,28 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                         <FormControl>
                           <Input type="date" {...field} className="bg-background/80 border-border/50 focus:border-primary/50" />
                         </FormControl>
+                        {transaction.receipt_scan?.original_date &&
+                          transaction.receipt_scan.original_date !== field.value && (
+                            <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-400">
+                              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                              <div className="flex-1 leading-snug">
+                                {t("demo.date_adjusted.badge", { originalDate: transaction.receipt_scan.original_date })}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="link"
+                                size="sm"
+                                className="h-auto p-0 text-xs font-semibold text-amber-800 dark:text-amber-300 underline underline-offset-2 shrink-0 ml-1"
+                                onClick={() => {
+                                  if (transaction.receipt_scan?.original_date) {
+                                    field.onChange(transaction.receipt_scan.original_date);
+                                  }
+                                }}
+                              >
+                                {t("demo.date_adjusted.restore_btn")}
+                              </Button>
+                            </div>
+                          )}
                         <FormMessage />
                       </FormItem>
                     )}
