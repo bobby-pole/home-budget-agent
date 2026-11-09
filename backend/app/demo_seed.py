@@ -414,26 +414,26 @@ def clean_demo_data(session: Session, user: User) -> None:
             budget_ids.append(b.id)
 
     for budget_id in budget_ids:
-        transactions = session.exec(select(Transaction).where(Transaction.budget_id == budget_id)).all()
+        transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
         t_ids = [t.id for t in transactions if t.id is not None]
         if t_ids:
             session.exec(delete(TransactionLine).where(col(TransactionLine.transaction_id).in_(t_ids)))
             session.exec(delete(ReceiptScan).where(col(ReceiptScan.transaction_id).in_(t_ids)))
             session.exec(delete(Transaction).where(col(Transaction.id).in_(t_ids)))
 
-        session.exec(delete(EnvelopeAllocation).where(EnvelopeAllocation.budget_id == budget_id))
-        session.exec(delete(Account).where(Account.budget_id == budget_id))
+        session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
+        session.exec(delete(Account).where(col(Account.budget_id) == budget_id))
 
         session.exec(
             delete(Category).where(
-                Category.budget_id == budget_id,
-                Category.parent_id != None  # noqa: E711
+                col(Category.budget_id) == budget_id,
+                col(Category.parent_id).is_not(None)
             )
         )
-        session.exec(delete(Category).where(Category.budget_id == budget_id))
+        session.exec(delete(Category).where(col(Category.budget_id) == budget_id))
 
-        session.exec(delete(BudgetMember).where(BudgetMember.budget_id == budget_id))
-        session.exec(delete(Budget).where(Budget.id == budget_id))
+        session.exec(delete(BudgetMember).where(col(BudgetMember.budget_id) == budget_id))
+        session.exec(delete(Budget).where(col(Budget.id) == budget_id))
 
     user.default_budget_id = None
     session.add(user)
@@ -452,6 +452,7 @@ def seed_demo_month(
 ) -> None:
     """Seed envelope allocations and 25 realistic transactions for the specified year/month."""
     logger.info("Seeding demo month %04d-%02d for budget %s", year, month, budget.name)
+    assert budget.id is not None
 
     def get_cat(name: Optional[str]) -> Optional[int]:
         if not name:
@@ -604,14 +605,16 @@ def seed_demo_environment(
         elif demo_user.default_budget_id:
             existing_budget = session.get(Budget, demo_user.default_budget_id)
             if existing_budget:
-                account_count = session.exec(select(Account).where(Account.budget_id == existing_budget.id)).all()
+                assert existing_budget.id is not None
+                assert demo_user.id is not None
+                account_count = session.exec(select(Account).where(col(Account.budget_id) == existing_budget.id)).all()
                 if account_count:
                     ensure_demo_data_for_month(session, existing_budget.id, demo_user.id, current_year, current_month)
                     logger.info("Demo environment already seeded for %s, verified current month.", demo_user.email)
                     return demo_user
     else:
         # 1. Ensure Default Demo User exists
-        demo_user = session.exec(select(User).where(User.email == settings.DEMO_USER_EMAIL)).first()
+        demo_user = session.exec(select(User).where(col(User.email) == settings.DEMO_USER_EMAIL)).first()
         if not demo_user:
             demo_user = User(
                 email=settings.DEMO_USER_EMAIL,
@@ -628,7 +631,9 @@ def seed_demo_environment(
             if demo_user.default_budget_id:
                 existing_budget = session.get(Budget, demo_user.default_budget_id)
                 if existing_budget:
-                    account_count = session.exec(select(Account).where(Account.budget_id == existing_budget.id)).all()
+                    assert existing_budget.id is not None
+                    assert demo_user.id is not None
+                    account_count = session.exec(select(Account).where(col(Account.budget_id) == existing_budget.id)).all()
                     if account_count:
                         # Automatically ensure current month is seeded even if previously skipped
                         ensure_demo_data_for_month(session, existing_budget.id, demo_user.id, current_year, current_month)
@@ -636,6 +641,7 @@ def seed_demo_environment(
                         return demo_user
 
     # 2. Create Budget & Owner Membership
+    assert demo_user.id is not None
     budget = Budget(name=DEMO_BUDGET_NAME, owner_id=demo_user.id)
     session.add(budget)
     session.commit()
@@ -763,6 +769,7 @@ def seed_demo_environment(
     session.add(t1)
     session.commit()
     session.refresh(t1)
+    assert t1.id is not None
 
     scan1 = ReceiptScan(
         transaction_id=t1.id,
@@ -821,6 +828,7 @@ def seed_demo_environment(
     session.add(t2)
     session.commit()
     session.refresh(t2)
+    assert t2.id is not None
 
     scan2 = ReceiptScan(
         transaction_id=t2.id,

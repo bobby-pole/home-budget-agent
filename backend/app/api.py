@@ -266,6 +266,7 @@ def login_demo(
             else:
                 demo_user = seed_demo_environment(ops_session, force_reset=False, custom_user=user)
             token = create_access_token({"sub": demo_user.email})
+            assert demo_user.id is not None
             return Token(
                 access_token=token,
                 user=UserRead(
@@ -278,6 +279,7 @@ def login_demo(
 
     demo_user = seed_demo_environment(ops_session, force_reset=False)
     token = create_access_token({"sub": demo_user.email})
+    assert demo_user.id is not None
     return Token(
         access_token=token,
         user=UserRead(
@@ -1061,12 +1063,12 @@ async def scan_transaction(
         # 1. Quota check: max 5 custom scans today (only non-failed, non-sample scans count)
         start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         daily_scans_used = session.exec(
-            select(func.count(ReceiptScan.id))
-            .join(Transaction, ReceiptScan.transaction_id == Transaction.id)
+            select(func.count(col(ReceiptScan.id)))
+            .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
             .where(
-                Transaction.uploaded_by == current_user.id,
-                ReceiptScan.created_at >= start_of_day,
-                ReceiptScan.status != ScanStatus.FAILED.value,
+                col(Transaction.uploaded_by) == current_user.id,
+                col(ReceiptScan.created_at) >= start_of_day,
+                col(ReceiptScan.status) != ScanStatus.FAILED.value,
                 ~col(ReceiptScan.content_hash).startswith("sample_"),
             )
         ).one()
@@ -1165,12 +1167,12 @@ def get_demo_quota(
 
     start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     scans_used = session.exec(
-        select(func.count(ReceiptScan.id))
-        .join(Transaction, ReceiptScan.transaction_id == Transaction.id)
+        select(func.count(col(ReceiptScan.id)))
+        .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
         .where(
-            Transaction.uploaded_by == current_user.id,
-            ReceiptScan.created_at >= start_of_day,
-            ReceiptScan.status != ScanStatus.FAILED.value,
+            col(Transaction.uploaded_by) == current_user.id,
+            col(ReceiptScan.created_at) >= start_of_day,
+            col(ReceiptScan.status) != ScanStatus.FAILED.value,
             ~col(ReceiptScan.content_hash).startswith("sample_"),
         )
     ).one()
@@ -1227,6 +1229,7 @@ async def scan_sample_transaction(
     session.add(new_transaction)
     session.commit()
     session.refresh(new_transaction)
+    assert new_transaction.id is not None
 
     scan = ReceiptScan(
         transaction_id=new_transaction.id,
@@ -1237,6 +1240,7 @@ async def scan_sample_transaction(
     session.add(scan)
     session.commit()
     session.refresh(scan)
+    assert scan.id is not None
 
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
     session.refresh(new_transaction)
@@ -2190,6 +2194,8 @@ def get_summary(
 
     if current_user and is_demo_user(current_user):
         from .demo_seed import ensure_demo_data_for_month
+        assert current_budget.id is not None
+        assert current_user.id is not None
         ensure_demo_data_for_month(session, current_budget.id, current_user.id, year, month)
 
     source_acc = aliased(Account)

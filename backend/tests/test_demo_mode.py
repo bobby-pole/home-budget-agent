@@ -2,7 +2,7 @@
 import pytest
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.api import get_current_budget
 from app.auth import get_current_user, get_current_user_optional
@@ -201,7 +201,10 @@ def test_demo_inbox_staging_receipts(client: TestClient, session: Session):
 def test_demo_security_guards(client: TestClient, session: Session):
     """Demo user cannot modify profile, change password, or delete their budget."""
     demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
     demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
+    assert demo_budget.id is not None
 
     app.dependency_overrides[get_current_user] = lambda: demo_user
     app.dependency_overrides[get_current_budget] = lambda: demo_budget
@@ -290,7 +293,11 @@ async def test_demo_mode_ocr_mock(session: Session):
     from app.api import _process_scan
 
     demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
+    assert demo_user.id is not None
     demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
+    assert demo_budget.id is not None
 
     # Create dummy transaction and queued scan
     tx = Transaction(
@@ -301,6 +308,7 @@ async def test_demo_mode_ocr_mock(session: Session):
     session.add(tx)
     session.commit()
     session.refresh(tx)
+    assert tx.id is not None
 
     scan = ReceiptScan(
         transaction_id=tx.id,
@@ -310,6 +318,7 @@ async def test_demo_mode_ocr_mock(session: Session):
     session.add(scan)
     session.commit()
     session.refresh(scan)
+    assert scan.id is not None
 
     # Enable DEMO_MODE and bind operations_engine to test session
     settings.DEMO_MODE = True
@@ -325,7 +334,7 @@ async def test_demo_mode_ocr_mock(session: Session):
         assert tx.total_amount == 47.90
         assert scan.status in (ScanStatus.CATEGORIZATION_OK.value, ScanStatus.NEEDS_REVIEW.value, ScanStatus.PARSING_OK.value)
 
-        lines = session.exec(select(TransactionLine).where(TransactionLine.transaction_id == tx.id)).all()
+        lines = session.exec(select(TransactionLine).where(col(TransactionLine.transaction_id) == tx.id)).all()
         assert len(lines) == 4
         item_names = [line.name for line in lines]
         assert "Mleko Świeże 3.2% 1L" in item_names
@@ -360,7 +369,11 @@ def test_demo_quota_endpoint_and_limit(client: TestClient, session: Session):
     session.commit()
     session.refresh(ephemeral_user)
     seed_demo_environment(session, force_reset=False, custom_user=ephemeral_user)
+    assert ephemeral_user.default_budget_id is not None
+    assert ephemeral_user.id is not None
     budget = session.get(Budget, ephemeral_user.default_budget_id)
+    assert budget is not None
+    assert budget.id is not None
 
     app.dependency_overrides[get_current_user] = lambda: ephemeral_user
     app.dependency_overrides[get_current_budget] = lambda: budget
@@ -381,6 +394,7 @@ def test_demo_quota_endpoint_and_limit(client: TestClient, session: Session):
         session.add(t)
         session.commit()
         session.refresh(t)
+        assert t.id is not None
         scan = ReceiptScan(
             transaction_id=t.id,
             status=ScanStatus.DONE.value,
