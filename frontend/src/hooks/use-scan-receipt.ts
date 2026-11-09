@@ -12,6 +12,8 @@ export function useScanReceipt() {
       api.scanTransaction(file, force),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["demo-quota"] });
       toast.success(t("scan_receipt.toast_uploaded"), { description: t("scan_receipt.toast_uploaded_description") });
     },
     onError: (error: AxiosError) => {
