@@ -5,6 +5,10 @@ from sqlmodel import create_engine, Session
 SQLITE_FILE_NAME = "database.db"
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///./data/{SQLITE_FILE_NAME}")
 
+# Ensure local data directory exists if SQLite database is placed in a subfolder
+if "sqlite:///./data" in DATABASE_URL:
+    os.makedirs("./data", exist_ok=True)
+
 # check_same_thread=False jest wymagane dla SQLite w FastAPI
 connect_args = {"check_same_thread": False}
 

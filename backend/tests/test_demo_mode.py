@@ -1,5 +1,6 @@
 # backend/tests/test_demo_mode.py
 import pytest
+from unittest.mock import patch
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
@@ -417,10 +418,13 @@ def test_demo_quota_endpoint_and_limit(client: TestClient, session: Session):
     assert "Dzienny limit 5 skanów demonstracyjnych" in upload_res.text
 
 
-def test_demo_sample_scan_endpoint(client: TestClient, session: Session):
+@patch("app.api.process_transaction_in_background")
+def test_demo_sample_scan_endpoint(mock_bg, client: TestClient, session: Session):
     """POST /api/transactions/scan-sample creates transaction from curated sample."""
     demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
     demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
 
     app.dependency_overrides[get_current_user] = lambda: demo_user
     app.dependency_overrides[get_current_budget] = lambda: demo_budget
@@ -429,6 +433,7 @@ def test_demo_sample_scan_endpoint(client: TestClient, session: Session):
     assert res.status_code == 200
     tx_data = res.json()
     assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
+    mock_bg.assert_called_once()
 
 
 def test_receipt_validator_plausibility():
