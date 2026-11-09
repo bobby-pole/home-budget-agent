@@ -69,9 +69,8 @@ def test_seed_demo_environment_creates_rich_dataset(session: Session):
     cur_income = sum(t.total_amount for t in cur_txs if t.type == "income")
     cur_cleared_expenses = sum(t.total_amount for t in cur_txs if t.type == "expense")
     assert cur_income == 7000.00
-    assert cur_cleared_expenses == 6373.20
+    assert cur_cleared_expenses == 6500.00
 
-    # Including the 2 staged inbox receipts (84.50 + 42.30 = 126.80 PLN), total expenses for the month are exactly 6500 PLN
     all_cur_expenses = sum(
         t.total_amount for t in transactions
         if t.date and t.date.year == now.year and t.date.month == now.month and t.type == "expense"
@@ -79,24 +78,13 @@ def test_seed_demo_environment_creates_rich_dataset(session: Session):
     assert all_cur_expenses == 6500.00
     assert (cur_income - all_cur_expenses) == 500.00
 
-    # Check the 2 staged receipts in Inbox
+    # Initial inbox has 0 staged receipts (user chooses sample or uploads photo from modal)
     scans = session.exec(
         select(ReceiptScan)
         .join(Transaction)
         .where(Transaction.budget_id == budget.id)
     ).all()
-    assert len(scans) == 2
-    for scan in scans:
-        assert scan.status == ScanStatus.NEEDS_REVIEW.value
-        assert scan.needs_review is True
-        assert scan.reconstructed_lines is not None
-
-    # Check lines of the staged transactions
-    for scan in scans:
-        lines = session.exec(
-            select(TransactionLine).where(TransactionLine.transaction_id == scan.transaction_id)
-        ).all()
-        assert len(lines) >= 3
+    assert len(scans) == 0
 
     # Check that historical store transactions also have concrete line items
     # and their sums match transaction totals exactly
@@ -181,22 +169,42 @@ def test_auth_demo_endpoint(client: TestClient, session: Session):
     assert data["user"]["default_budget_id"] is not None
 
 
-def test_demo_inbox_staging_receipts(client: TestClient, session: Session):
-    """Demo user can fetch staged receipts from /api/transactions/inbox."""
+@patch("app.api.process_transaction_in_background")
+def test_demo_inbox_staging_receipts(mock_bg, client: TestClient, session: Session):
+    """Demo user starts with clean empty inbox and can scan sample receipts to inbox."""
     demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
     demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
 
     app.dependency_overrides[get_current_user] = lambda: demo_user
     app.dependency_overrides[get_current_budget] = lambda: demo_budget
 
+    # 1. Initial inbox is empty
     response = client.get("/api/transactions/inbox")
     assert response.status_code == 200, response.text
     inbox_items = response.json()
+    assert len(inbox_items) == 0
 
-    assert len(inbox_items) == 2
-    merchants = {item["merchant_name"] for item in inbox_items}
-    assert "Biedronka" in merchants
-    assert "Lidl" in merchants
+    # 2. Scanning sample receipt adds transaction and queues background processing
+    res_sample = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res_sample.status_code == 200
+    tx_data = res_sample.json()
+    assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
+    mock_bg.assert_called_once()
+
+    # 3. When scan reaches review status, it appears in inbox
+    scan = session.exec(select(ReceiptScan).where(ReceiptScan.transaction_id == tx_data["id"])).first()
+    assert scan is not None
+    scan.status = ScanStatus.NEEDS_REVIEW.value
+    session.add(scan)
+    session.commit()
+
+    response2 = client.get("/api/transactions/inbox")
+    assert response2.status_code == 200
+    inbox_items2 = response2.json()
+    assert len(inbox_items2) == 1
+    assert "Biedronka (Wzorzec)" in inbox_items2[0]["merchant_name"]
 
 
 def test_demo_security_guards(client: TestClient, session: Session):

@@ -31,7 +31,6 @@ from .models import (
     Category,
     EnvelopeAllocation,
     ReceiptScan,
-    ScanStatus,
     Transaction,
     TransactionLine,
     TransactionStatus,
@@ -164,26 +163,26 @@ TRANSACTIONS_TEMPLATE = [
         ],
     ),
     (
-        "Biedronka", 368.34, "checking", "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Uzupełnienie zapasów domowych",
+        "Biedronka", 480.00, "checking", "expense", TransactionStatus.CLEARED, "Żywność i Supermarket", "Uzupełnienie zapasów domowych",
         [
-            ("Polędwiczki z piersi kurczaka 400g", 14.99, 2.0, "Żywność i Supermarket"),
-            ("Stek z rostbefu wołowego 250g", 26.99, 1.0, "Żywność i Supermarket"),
-            ("Krewetki mrożone 450g", 36.99, 1.0, "Żywność i Supermarket"),
+            ("Polędwiczki z piersi kurczaka 400g", 14.99, 3.0, "Żywność i Supermarket"),
+            ("Stek z rostbefu wołowego 250g", 26.99, 2.0, "Żywność i Supermarket"),
+            ("Krewetki mrożone 450g", 36.99, 2.0, "Żywność i Supermarket"),
             ("Twaróg półtłusty 250g", 4.49, 2.0, "Żywność i Supermarket"),
             ("Jogurt grecki 400g", 4.29, 2.0, "Żywność i Supermarket"),
-            ("Ser Camembert President 120g", 6.99, 2.0, "Żywność i Supermarket"),
+            ("Ser Camembert President 120g", 6.99, 3.0, "Żywność i Supermarket"),
             ("Pomidorki koktajlowe 500g", 11.99, 2.0, "Żywność i Supermarket"),
-            ("Sałata rzymska 2szt", 7.99, 1.0, "Żywność i Supermarket"),
+            ("Sałata rzymska 2szt", 7.99, 2.0, "Żywność i Supermarket"),
             ("Winogrona jasne bezpestkowe 500g", 12.99, 2.0, "Żywność i Supermarket"),
             ("Czosnek polski 3szt", 5.99, 1.0, "Żywność i Supermarket"),
             ("Kasza jaglana 1kg", 6.49, 2.0, "Żywność i Supermarket"),
             ("Oliwa z pestek winogron 750ml", 29.99, 1.0, "Żywność i Supermarket"),
             ("Musli owocowe 500g", 10.99, 2.0, "Żywność i Supermarket"),
             ("Kawa rozpuszczalna Jacobs 200g", 32.99, 1.0, "Żywność i Supermarket"),
-            ("Herbata czarna Earl Grey 100szt", 18.99, 1.0, "Żywność i Supermarket"),
+            ("Herbata czarna Earl Grey 100szt", 18.99, 2.0, "Żywność i Supermarket"),
             ("Sok pomarańczowy 100% 1L", 6.99, 4.0, "Żywność i Supermarket"),
             ("Cukier trzcinowy 1kg", 8.99, 1.0, "Żywność i Supermarket"),
-            ("Pistacje prażone solone 250g", 25.02, 1.0, "Żywność i Supermarket"),
+            ("Pistacje prażone solone 250g", 23.74, 1.0, "Żywność i Supermarket"),
         ],
     ),
     (
@@ -272,11 +271,11 @@ TRANSACTIONS_TEMPLATE = [
         ],
     ),
     (
-        "Allegro", 92.16, "checking", "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Wkłady filtrujące i kosmetyki",
+        "Allegro", 107.30, "checking", "expense", TransactionStatus.CLEARED, "Drogeria i Zdrowie", "Wkłady filtrujące i kosmetyki",
         [
             ("Wkłady filtrujące Dafi Unimax 5+1 szt.", 69.00, 1.0, "Drogeria i Zdrowie"),
+            ("Płyn micelarny Garnier 400ml", 21.90, 1.0, "Drogeria i Zdrowie"),
             ("Szampon wzmacniający do włosów 400ml", 16.40, 1.0, "Drogeria i Zdrowie"),
-            ("Mydło w kostce Dove 100g", 6.76, 1.0, "Drogeria i Zdrowie"),
         ],
     ),
     (
@@ -328,34 +327,6 @@ TRANSACTIONS_TEMPLATE = [
             ("Zestaw Popcorn duży + 2 napoje", 30.01, 1.0, "Rozrywka i Subskrypcje"),
         ],
     ),
-]
-
-
-B2_FULL_ITEMS = [
-    ("Polędwiczki z piersi kurczaka 400g", 14.99, 3.0, "Żywność i Supermarket"),
-    ("Stek z rostbefu wołowego 250g", 26.99, 2.0, "Żywność i Supermarket"),
-    ("Krewetki mrożone 450g", 36.99, 2.0, "Żywność i Supermarket"),
-    ("Twaróg półtłusty 250g", 4.49, 2.0, "Żywność i Supermarket"),
-    ("Jogurt grecki 400g", 4.29, 2.0, "Żywność i Supermarket"),
-    ("Ser Camembert President 120g", 6.99, 3.0, "Żywność i Supermarket"),
-    ("Pomidorki koktajlowe 500g", 11.99, 2.0, "Żywność i Supermarket"),
-    ("Sałata rzymska 2szt", 7.99, 2.0, "Żywność i Supermarket"),
-    ("Winogrona jasne bezpestkowe 500g", 12.99, 2.0, "Żywność i Supermarket"),
-    ("Czosnek polski 3szt", 5.99, 1.0, "Żywność i Supermarket"),
-    ("Kasza jaglana 1kg", 6.49, 2.0, "Żywność i Supermarket"),
-    ("Oliwa z pestek winogron 750ml", 29.99, 1.0, "Żywność i Supermarket"),
-    ("Musli owocowe 500g", 10.99, 2.0, "Żywność i Supermarket"),
-    ("Kawa rozpuszczalna Jacobs 200g", 32.99, 1.0, "Żywność i Supermarket"),
-    ("Herbata czarna Earl Grey 100szt", 18.99, 2.0, "Żywność i Supermarket"),
-    ("Sok pomarańczowy 100% 1L", 6.99, 4.0, "Żywność i Supermarket"),
-    ("Cukier trzcinowy 1kg", 8.99, 1.0, "Żywność i Supermarket"),
-    ("Pistacje prażone solone 250g", 23.74, 1.0, "Żywność i Supermarket"),
-]
-
-ALLG_FULL_ITEMS = [
-    ("Wkłady filtrujące Dafi Unimax 5+1 szt.", 69.00, 1.0, "Drogeria i Zdrowie"),
-    ("Płyn micelarny Garnier 400ml", 21.90, 1.0, "Drogeria i Zdrowie"),
-    ("Szampon wzmacniający do włosów 400ml", 16.40, 1.0, "Drogeria i Zdrowie"),
 ]
 
 
@@ -478,30 +449,16 @@ def seed_demo_month(
     session.flush()
 
     # 2. Transactions & Lines
-    now = datetime.now(timezone.utc)
-    is_current = (year == now.year and month == now.month)
     dates = get_transaction_dates(year, month, daily_count=20)
 
     for idx, (merchant, amount, acc_type, t_type, status, cat_name, note, items) in enumerate(TRANSACTIONS_TEMPLATE):
         acc = acc_checking if acc_type == "checking" else acc_cash
         t_date = dates[idx]
 
-        # In non-current months (which do not have staging inbox receipts),
-        # use full Biedronka (480.00) and Allegro (107.30) values so every month sums to 6500.00 PLN.
-        actual_amount = amount
-        actual_items = items
-        if not is_current:
-            if merchant == "Biedronka" and amount == 368.34:
-                actual_amount = 480.00
-                actual_items = B2_FULL_ITEMS
-            elif merchant == "Allegro" and amount == 92.16:
-                actual_amount = 107.30
-                actual_items = ALLG_FULL_ITEMS
-
         t = Transaction(
             merchant_name=merchant,
             date=t_date,
-            total_amount=actual_amount,
+            total_amount=amount,
             currency="PLN",
             type=t_type,
             status=status,
@@ -514,7 +471,7 @@ def seed_demo_month(
         session.add(t)
         session.flush()
 
-        for line_name, unit_price, qty, c_name in actual_items:
+        for line_name, unit_price, qty, c_name in items:
             session.add(
                 TransactionLine(
                     transaction_id=t.id,
@@ -751,121 +708,6 @@ def seed_demo_environment(
         month=current_month,
     )
 
-    # 6. Showcase Staging Receipts in /inbox (Awaiting Verification)
-    t1_date = now - timedelta(hours=3)
-    t1 = Transaction(
-        merchant_name="Biedronka",
-        date=t1_date,
-        total_amount=84.50,
-        currency="PLN",
-        type="expense",
-        status=TransactionStatus.UNCLEARED,
-        account_id=acc_checking.id,
-        budget_id=budget.id,
-        uploaded_by=demo_user.id,
-        category_id=cat_map["Żywność i Supermarket"].id if "Żywność i Supermarket" in cat_map else None,
-        note="Paragon ze skanera OCR (oczekuje na potwierdzenie)",
-    )
-    session.add(t1)
-    session.commit()
-    session.refresh(t1)
-    assert t1.id is not None
-
-    scan1 = ReceiptScan(
-        transaction_id=t1.id,
-        status=ScanStatus.NEEDS_REVIEW.value,
-        needs_review=True,
-        validation_message="Sprawdź przypisane kategorie przed zatwierdzeniem",
-        raw_ocr_text="Jeronimo Martins Polska S.A. Biedronka... SUMA PLN 84.50",
-        reconstructed_lines=[
-            "Jeronimo Martins Polska S.A.",
-            "BIEDRONKA UL. PROSTA 12",
-            "Mleko Wiejskie 3.2% 1L   2 x 3.69 = 7.38 A",
-            "Chleb Żytni Krojony 500g 1 x 4.50 = 4.50 A",
-            "Kawa Ziarnista Lavazza 1kg 1 x 49.99 = 49.99 A",
-            "Jabłka Polskie Gala 1.5kg  1 x 7.49 = 7.49 A",
-            "Płyn do naczyń Pur 750ml   1 x 15.14 = 15.14 B",
-            "SUMA PLN: 84.50",
-        ],
-        created_at=t1_date,
-    )
-    session.add(scan1)
-
-    t1_lines = [
-        ("Mleko Wiejskie 3.2% 1L", 3.69, 2.0, "Żywność i Supermarket"),
-        ("Chleb Żytni Krojony 500g", 4.50, 1.0, "Żywność i Supermarket"),
-        ("Kawa Ziarnista Lavazza 1kg", 49.99, 1.0, "Żywność i Supermarket"),
-        ("Jabłka Polskie Gala 1.5kg", 7.49, 1.0, "Żywność i Supermarket"),
-        ("Płyn do naczyń Pur 750ml", 15.14, 1.0, "Drogeria i Zdrowie"),
-    ]
-    for line_name, price, qty, c_name in t1_lines:
-        c_id = cat_map[c_name].id if c_name in cat_map else None
-        session.add(
-            TransactionLine(
-                transaction_id=t1.id,
-                name=line_name,
-                price=price,
-                quantity=qty,
-                category_id=c_id,
-                category_source="auto_categorizer",
-            )
-        )
-
-    t2_date = now - timedelta(days=1, hours=2)
-    t2 = Transaction(
-        merchant_name="Lidl",
-        date=t2_date,
-        total_amount=42.30,
-        currency="PLN",
-        type="expense",
-        status=TransactionStatus.UNCLEARED,
-        account_id=acc_checking.id,
-        budget_id=budget.id,
-        uploaded_by=demo_user.id,
-        category_id=cat_map["Żywność i Supermarket"].id if "Żywność i Supermarket" in cat_map else None,
-        note="Paragon ze skanera OCR (oczekuje na potwierdzenie)",
-    )
-    session.add(t2)
-    session.commit()
-    session.refresh(t2)
-    assert t2.id is not None
-
-    scan2 = ReceiptScan(
-        transaction_id=t2.id,
-        status=ScanStatus.NEEDS_REVIEW.value,
-        needs_review=True,
-        validation_message="Sprawdź przypisane kategorie przed zatwierdzeniem",
-        raw_ocr_text="LIDL SP Z O O SP K... SUMA PLN 42.30",
-        reconstructed_lines=[
-            "LIDL POLSKA",
-            "Masło Pilos Ekstra 200g 2 x 6.99 = 13.98 A",
-            "Ser Gouda w plastrach 400g 1 x 12.49 = 12.49 A",
-            "Pomidory Gałązka 1kg 1 x 15.83 = 15.83 A",
-            "SUMA PLN: 42.30",
-        ],
-        created_at=t2_date,
-    )
-    session.add(scan2)
-
-    t2_lines = [
-        ("Masło Pilos Ekstra 200g", 6.99, 2.0, "Żywność i Supermarket"),
-        ("Ser Gouda w plastrach 400g", 12.49, 1.0, "Żywność i Supermarket"),
-        ("Pomidory Gałązka 1kg", 15.83, 1.0, "Żywność i Supermarket"),
-    ]
-    for line_name, price, qty, c_name in t2_lines:
-        c_id = cat_map[c_name].id if c_name in cat_map else None
-        session.add(
-            TransactionLine(
-                transaction_id=t2.id,
-                name=line_name,
-                price=price,
-                quantity=qty,
-                category_id=c_id,
-                category_source="auto_categorizer",
-            )
-        )
-
-    session.commit()
     session.refresh(demo_user)
     logger.info("Demo environment successfully seeded for %s (Budget ID: %s)", demo_user.email, budget.id)
     return demo_user
