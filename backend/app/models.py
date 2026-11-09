@@ -256,12 +256,22 @@ class Transaction(TransactionBase, table=True):
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
 
-    lines: List["TransactionLine"] = Relationship(back_populates="transaction")
-    receipt_scan: Optional["ReceiptScan"] = Relationship(back_populates="transaction")
+    lines: List["TransactionLine"] = Relationship(
+        back_populates="transaction",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
+    receipt_scan: Optional["ReceiptScan"] = Relationship(
+        back_populates="transaction",
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     budget: Optional[Budget] = Relationship(back_populates="transactions")
     uploader: Optional[User] = Relationship(back_populates="transactions")
     category: Optional["Category"] = Relationship(back_populates="transactions")
-    tags: List["Tag"] = Relationship(back_populates="transactions", link_model=TransactionTagLink)
+    tags: List["Tag"] = Relationship(
+        back_populates="transactions",
+        link_model=TransactionTagLink,
+        sa_relationship_kwargs={"lazy": "selectin"},
+    )
     account: Optional[Account] = Relationship(
         back_populates="transactions",
         sa_relationship_kwargs={"foreign_keys": "[Transaction.account_id]"}

@@ -709,8 +709,7 @@ def seed_demo_environment(
             order_index=order_idx,
         )
         session.add(group_cat)
-        session.commit()
-        session.refresh(group_cat)
+        session.flush()
         order_idx += 1
 
         for sub_name, s_icon, s_color, _ in subcats:
@@ -724,10 +723,11 @@ def seed_demo_environment(
                 order_index=order_idx,
             )
             session.add(sub_cat)
-            session.commit()
-            session.refresh(sub_cat)
+            session.flush()
             order_idx += 1
             cat_map[sub_name] = sub_cat
+
+    session.commit()
 
     # 5. Seed Previous and Current Month
     seed_demo_month(

@@ -754,3 +754,84 @@ def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: 
     alert_details = json.loads(alerts[0].message)
     assert alert_details["type"] == "zeroed_envelope"
     assert alert_details["remaining"] == -10.0
+
+
+def test_get_transactions_with_detached_session(client, session):
+    """
+    Ensure transactions, lines, tags, and receipt scans serialize cleanly
+    even when get_ops_session closes the session before response validation.
+    """
+    from app.main import app
+    from app.database import get_ops_session
+    from app.models import Transaction, TransactionLine, ReceiptScan, Tag, TransactionTagLink
+
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    test_budget = session.exec(select(Budget).where(Budget.owner_id == test_user.id)).first()
+
+    tx = Transaction(
+        merchant_name="Biedronka Test",
+        total_amount=50.0,
+        budget_id=test_budget.id,
+        uploaded_by=test_user.id,
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    assert tx.id is not None
+
+    line = TransactionLine(
+        transaction_id=tx.id,
+        name="Chleb",
+        price=5.0,
+        quantity=1.0,
+    )
+    session.add(line)
+
+    scan = ReceiptScan(
+        transaction_id=tx.id,
+        status="needs_review",
+        needs_review=True,
+    )
+    session.add(scan)
+
+    tag = Tag(name="Jedzenie", budget_id=test_budget.id)
+    session.add(tag)
+    session.commit()
+    session.refresh(tag)
+
+    session.add(TransactionTagLink(transaction_id=tx.id, tag_id=tag.id))
+    session.commit()
+
+    # Generator dependency: closes session immediately when route finishes
+    def generator_ops_session():
+        with Session(session.get_bind()) as s:
+            yield s
+
+    app.dependency_overrides[get_ops_session] = generator_ops_session
+
+    try:
+        res = client.get("/api/transactions")
+        assert res.status_code == 200, res.text
+        data = res.json()
+        assert len(data) >= 1
+        found = next(t for t in data if t["id"] == tx.id)
+        assert len(found["lines"]) == 1
+        assert found["lines"][0]["name"] == "Chleb"
+        assert found["receipt_scan"]["status"] == "needs_review"
+        assert len(found["tags"]) == 1
+        assert found["tags"][0]["name"] == "Jedzenie"
+
+        # Also test /api/status (inbox items)
+        status_res = client.get("/api/status")
+        assert status_res.status_code == 200, status_res.text
+        status_data = status_res.json()
+        assert any(t["id"] == tx.id for t in status_data["inbox_items"])
+
+        # Also test /api/transactions/inbox
+        inbox_res = client.get("/api/transactions/inbox")
+        assert inbox_res.status_code == 200, inbox_res.text
+        inbox_data = inbox_res.json()
+        assert any(t["id"] == tx.id for t in inbox_data)
+    finally:
+        # restore default override
+        app.dependency_overrides[get_ops_session] = lambda: session

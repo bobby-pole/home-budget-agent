@@ -38,13 +38,11 @@ export function Dashboard() {
   } = useQuery({
     queryKey: ["transactions"],
     queryFn: () => api.getTransactions(),
-    refetchInterval: 10000,
   });
 
   const { data: accounts = [], isLoading: isAccountsLoading } = useQuery({
     queryKey: ["accounts"],
     queryFn: api.getAccounts,
-    refetchInterval: 10000,
   });
 
   const { data: categories = [], isLoading: isCategoriesLoading } = useQuery({
@@ -101,7 +99,9 @@ export function Dashboard() {
     ? transactions.filter((t) => t.account_id === selectedAccountId || (t.type === "transfer" && t.transfer_id === selectedAccountId))
     : transactions;
 
-  if (isTransactionsLoading || isBudgetLoading || isCategoriesLoading || isAccountsLoading) {
+  const isInitialLoading = (isCategoriesLoading && categories.length === 0) || (isBudgetLoading && !budgetSummary);
+
+  if (isInitialLoading) {
     return (
       <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
         <div className="flex flex-col items-center gap-4">
