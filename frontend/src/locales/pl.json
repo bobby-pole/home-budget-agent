@@ -42,7 +42,7 @@
       "sample_biedronka_title": "Biedronka (Katowice)",
       "sample_biedronka_desc": "Zakupy spożywcze • 13 pozycji • 101,74 PLN",
       "sample_lidl_title": "Lidl Plus (Rybnik)",
-      "sample_lidl_desc": "E-paragon z rabatami • 5 pozycji • 84,45 PLN",
+      "sample_lidl_desc": "E-paragon z rabatami • 26 pozycji • 138,75 PLN",
       "btn_test_sample": "Przetestuj ten paragon",
       "accuracy_badge": "Wzorcowa jakość OCR",
       "custom_section_title": "Prześlij własny paragon",
@@ -664,7 +664,7 @@
     "sample_biedronka_title": "Biedronka (Katowice)",
     "sample_biedronka_desc": "Zakupy spożywcze • 13 pozycji • 101,74 PLN",
     "sample_lidl_title": "Lidl Plus (Rybnik)",
-    "sample_lidl_desc": "E-paragon z rabatami • 5 pozycji • 84,45 PLN",
+    "sample_lidl_desc": "E-paragon z rabatami • 26 pozycji • 138,75 PLN",
     "badge_biedronka": "Biedronka",
     "badge_lidl": "Lidl Plus"
   },

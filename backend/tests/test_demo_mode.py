@@ -503,3 +503,62 @@ def test_get_app_config(client: TestClient):
     assert "demo_mode" in data
     assert "environment" in data
 
+
+@pytest.mark.asyncio
+async def test_process_scan_sample_receipts_exact_totals_and_lines_sum(session: Session):
+    """Verify that sample receipts have mathematically identical receipt total and lines sum."""
+    from app.api import _process_scan
+    from unittest.mock import patch
+
+    demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
+    demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
+
+    with patch("app.api.operations_engine", session.get_bind()):
+        for sample_id, expected_total, expected_count in [
+            ("biedronka", 101.74, 13),
+            ("lidl", 138.75, 26),
+        ]:
+            tx = Transaction(
+                merchant_name=f"Sample {sample_id}",
+                uploaded_by=demo_user.id,
+                budget_id=demo_budget.id,
+            )
+            session.add(tx)
+            session.commit()
+            session.refresh(tx)
+            assert tx.id is not None
+
+            scan = ReceiptScan(
+                transaction_id=tx.id,
+                status=ScanStatus.QUEUED.value,
+                content_hash=f"sample_{sample_id}_test_hash",
+                image_path=f"/dummy/{sample_id}.png",
+            )
+            session.add(scan)
+            session.commit()
+            session.refresh(scan)
+            assert scan.id is not None
+            assert scan.image_path is not None
+
+            await _process_scan(scan.id, tx.id, scan.image_path)
+
+            session.refresh(tx)
+            assert tx.total_amount == pytest.approx(expected_total, abs=0.01)
+
+            lines = session.exec(select(TransactionLine).where(TransactionLine.transaction_id == tx.id)).all()
+            assert len(lines) == expected_count
+
+            calculated_sum = 0.0
+            for line in lines:
+                assert line.discount_total <= 0.0
+                if line.is_adjustment:
+                    calculated_sum += (line.original_price or line.price)
+                else:
+                    unit = line.original_price or line.price
+                    calculated_sum += (unit * line.quantity + line.discount_total)
+
+            assert calculated_sum == pytest.approx(expected_total, abs=0.01)
+
+

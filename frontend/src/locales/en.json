@@ -42,7 +42,7 @@
       "sample_biedronka_title": "Biedronka (Katowice)",
       "sample_biedronka_desc": "Grocery shopping • 13 items • 101.74 PLN",
       "sample_lidl_title": "Lidl Plus (Rybnik)",
-      "sample_lidl_desc": "E-receipt with discounts • 5 items • 84.45 PLN",
+      "sample_lidl_desc": "E-receipt with discounts • 26 items • 138.75 PLN",
       "btn_test_sample": "Test this receipt",
       "accuracy_badge": "100% OCR Accuracy",
       "custom_section_title": "Upload your own receipt",
@@ -664,7 +664,7 @@
     "sample_biedronka_title": "Biedronka (Katowice)",
     "sample_biedronka_desc": "Grocery shopping • 13 items • 101.74 PLN",
     "sample_lidl_title": "Lidl Plus (Rybnik)",
-    "sample_lidl_desc": "E-receipt with discounts • 5 items • 84.45 PLN",
+    "sample_lidl_desc": "E-receipt with discounts • 26 items • 138.75 PLN",
     "badge_biedronka": "Biedronka",
     "badge_lidl": "Lidl Plus"
   },

@@ -248,7 +248,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         // (which equals unit price when there is no discount).
         unit_price: l.original_price ?? l.price ?? 0,
         quantity: l.quantity || 1,
-        discount_total: l.discount_total ?? 0,
+        discount_total: (l.discount_total ?? 0) > 0 ? -(l.discount_total ?? 0) : (l.discount_total ?? 0),
         category_id: l.category_id?.toString() || "",
         category_source: l.category_source || "",
         is_adjustment: l.is_adjustment ?? false,

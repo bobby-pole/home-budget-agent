@@ -39,6 +39,7 @@ from .database import get_session, get_ops_session, operations_engine
 from .services import AIService
 from .auth import get_current_user, get_current_user_optional, hash_password, verify_password, create_access_token, is_demo_user
 from .demo_seed import seed_demo_environment
+from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
 from .config import settings
 from typing import List, Optional
 
@@ -521,64 +522,10 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
 
         if is_sample_biedronka:
             logger.info("DEMO: Processing sample Biedronka receipt", extra={"scan_id": scan_id})
-            data = {
-                "merchant_name": "BIEDRONKA (Katowice)",
-                "total_amount": 101.74,
-                "currency": "PLN",
-                "date": "2024-06-13",
-                "items": [
-                    {"name": "Torba T-SHIRT", "price": 0.79, "quantity": 1.0, "category": "Inne", "category_source": "demo_fixture"},
-                    {"name": "Pomidor Paprycz 500g", "price": 11.98, "quantity": 1.0, "original_price": 29.98, "discount_total": 18.00, "final_price": 11.98, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Cukierki Krówka Mix Luz", "price": 0.76, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Bułka Kajzerka 55g", "price": 1.02, "quantity": 3.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Bułka Całoroczna 80g", "price": 1.19, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Pieczarki 500g opakowanie", "price": 7.99, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Kotlet De Volaille 400g", "price": 10.99, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Ogórek Szklarniowy Luz", "price": 1.39, "quantity": 1.0, "original_price": 2.78, "discount_total": 1.39, "final_price": 1.39, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Pesto Świeża Bazylia 120g", "price": 6.49, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Półbagietka Pełnoziarnista 100g", "price": 5.16, "quantity": 1.0, "original_price": 5.96, "discount_total": 0.80, "final_price": 5.16, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Papier Toaletowy Queen 10 rolek", "price": 26.98, "quantity": 1.0, "original_price": 35.98, "discount_total": 9.00, "final_price": 26.98, "category": "Drogeria i Zdrowie", "category_source": "demo_fixture"},
-                    {"name": "Chłodnik Z Buraczkami VF 250g", "price": 7.02, "quantity": 1.0, "original_price": 9.38, "discount_total": 2.36, "final_price": 7.02, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Polędwica Drobiowa 250g", "price": 19.98, "quantity": 2.0, "original_price": 29.97, "discount_total": 9.99, "final_price": 19.98, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                ],
-                "_validation": {"is_valid": True, "issues": [], "confidence": 0.99},
-                "_raw_ocr_text": "BIEDRONKA CODZIENNIE NISKIE CENY ... JERONIMO MARTINS POLSKA S.A. ... SUMA PLN: 101.74",
-                "_reconstructed_lines": [
-                    "JERONIMO MARTINS POLSKA S.A. KATOWICE",
-                    "PARAGON FISKALNY nr 262307",
-                    "Pomidor Paprycz 500g      11.98 C (Rabat: -18.00)",
-                    "Kotlet De Volaille 400g   10.99 C",
-                    "Papier Queen 10r          26.98 A (Rabat: -9.00)",
-                    "Polędwica Drobiowa 250g   19.98 C (Rabat: -9.99)",
-                    "SUMA PLN: 101.74",
-                ],
-            }
+            data = dict(SAMPLE_BIEDRONKA_DATA)
         elif is_sample_lidl:
             logger.info("DEMO: Processing sample Lidl Plus receipt", extra={"scan_id": scan_id})
-            data = {
-                "merchant_name": "Lidl (Rybnik)",
-                "total_amount": 84.45,
-                "currency": "PLN",
-                "date": "2024-06-14",
-                "items": [
-                    {"name": "Ser Edam Rycki Kawałek XXL", "price": 28.13, "quantity": 1.0, "original_price": 29.89, "discount_total": 1.76, "final_price": 28.13, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Halibut wędzony na gorąco", "price": 16.81, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Kajzerka pszenna", "price": 4.47, "quantity": 6.0, "original_price": 4.74, "discount_total": 0.27, "final_price": 4.47, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Banany luz", "price": 2.80, "quantity": 1.0, "original_price": 3.06, "discount_total": 0.26, "final_price": 2.80, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                    {"name": "Szynka Wieprzowa XXL", "price": 32.24, "quantity": 1.0, "category": "Żywność i Supermarket", "category_source": "demo_fixture"},
-                ],
-                "_validation": {"is_valid": True, "issues": [], "confidence": 0.98},
-                "_raw_ocr_text": "LIDL SP Z O.O. RYBNIK UL. ORZEPOWICKA 29A ... LIDL PLUS ... SUMA PLN: 84.45",
-                "_reconstructed_lines": [
-                    "LIDL RYBNIK UL. ORZEPOWICKA 29A",
-                    "Ser Edam Rycki XXL 1 x 28.13 C",
-                    "Halibut wędzony 1 x 16.81 C",
-                    "Kajzerka 6 x 0.79 = 4.47 C",
-                    "Banany luz 1 x 2.80 C",
-                    "Szynka Wieprzowa XXL 1 x 32.24 C",
-                    "SUMA PLN: 84.45",
-                ],
-            }
+            data = dict(SAMPLE_LIDL_DATA)
         elif settings.DEMO_MODE:
             logger.info("DEMO_MODE active: simulating parsed receipt with mock fixtures", extra={"scan_id": scan_id})
             data = {
@@ -594,8 +541,8 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                         "category": "Żywność i Supermarket",
                         "category_source": "demo_fixture",
                         "original_price": 3.99,
-                        "discount_total": 1.0,
-                        "final_price": 6.98,
+                        "discount_total": -1.0,
+                        "final_price": 3.49,
                         "confidence": 0.98,
                     },
                     {
@@ -627,7 +574,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                 "_raw_ocr_text": "BIEDRONKA SP Z O O ... RAZEM PLN: 47.90",
                 "_reconstructed_lines": [
                     "BIEDRONKA UL. TESTOWA 1",
-                    "Mleko Świeże 3.2% 1L   2 x 3.49 = 6.98 A",
+                    "Mleko Świeże 3.2% 1L   2 x 3.99 = 7.98 A (Rabat: -1.00)",
                     "Chleb Graham 500g      1 x 4.29 = 4.29 A",
                     "Kawa Mielona Tchibo    1 x 18.99 = 18.99 A",
                     "Płyn do naczyń Fairy   1 x 17.64 = 17.64 B",
@@ -745,6 +692,8 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             cat_source = item_raw.get("category_source")
             orig = item_raw.get("original_price")
             fin = item_raw.get("final_price")
+            raw_disc = float(item_raw.get("discount_total", 0.0))
+            discount_val = -abs(raw_disc) if raw_disc != 0.0 else 0.0
             session.add(TransactionLine(
                 name=item_raw.get("name", "Unknown item"),
                 price=float(item_raw.get("price", 0.0)),
@@ -753,7 +702,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                 category_source=cat_source,
                 transaction_id=transaction.id,
                 original_price=float(orig) if orig is not None else None,
-                discount_total=float(item_raw.get("discount_total", 0.0)),
+                discount_total=discount_val,
                 final_price=float(fin) if fin is not None else None,
                 is_adjustment=bool(item_raw.get("is_adjustment", False)),
             ))
