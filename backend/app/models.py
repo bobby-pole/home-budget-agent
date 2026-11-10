@@ -309,6 +309,21 @@ class ReceiptScan(SQLModel, table=True):
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
 
 
+# ─── ScanUsageLog (Demo Rate Limiting & Abuse Prevention) ─────────────────────
+
+class ScanUsageLog(SQLModel, table=True):
+    __tablename__: str = "scan_usage_log"  # type: ignore
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True)
+    scan_type: str = Field(index=True)  # 'custom', 'sample_biedronka', 'sample_lidl'
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
+
+
+
 # ─── TransactionLine ──────────────────────────────────────────────────────────
 
 class TransactionLineBase(SQLModel):

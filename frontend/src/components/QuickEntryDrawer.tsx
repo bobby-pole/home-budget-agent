@@ -78,6 +78,10 @@ export function QuickEntryDrawer({
   })
 
   const canScan = !isDemo || (quota?.can_scan ?? true)
+  const biedronkaQuota = quota?.samples?.biedronka
+  const lidlQuota = quota?.samples?.lidl
+  const canScanBiedronka = isDemo ? (biedronkaQuota?.can_scan ?? true) : true
+  const canScanLidl = isDemo ? (lidlQuota?.can_scan ?? true) : true
 
   const handleScanClick = () => {
     if (!canScan) return
@@ -150,6 +154,21 @@ export function QuickEntryDrawer({
                       {t("quick_entry.badge_biedronka")}
                     </Badge>
                   </div>
+                  {isDemo && biedronkaQuota && (
+                    <div className="absolute top-2 right-2">
+                      <Badge
+                        variant={canScanBiedronka ? "secondary" : "destructive"}
+                        className="text-[10px] px-1.5 py-0.5 shadow-xs"
+                      >
+                        {canScanBiedronka
+                          ? t("quick_entry.sample_quota_badge", {
+                              remaining: biedronkaQuota.remaining,
+                              total: biedronkaQuota.daily_limit,
+                            })
+                          : t("quick_entry.sample_quota_exhausted")}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 <CardContent className="p-3.5 flex flex-col justify-between gap-3 flex-1">
                   <div>
@@ -164,7 +183,7 @@ export function QuickEntryDrawer({
                     type="button"
                     size="sm"
                     className="w-full text-xs font-semibold"
-                    disabled={sampleMutation.isPending}
+                    disabled={sampleMutation.isPending || !canScanBiedronka}
                     onClick={() => {
                       setActiveSample("biedronka")
                       sampleMutation.mutate("biedronka")
@@ -175,6 +194,8 @@ export function QuickEntryDrawer({
                         <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                         {t("quick_entry.processing_sample")}
                       </>
+                    ) : !canScanBiedronka ? (
+                      t("quick_entry.sample_quota_exhausted")
                     ) : (
                       t("quick_entry.btn_test_sample")
                     )}
@@ -196,6 +217,21 @@ export function QuickEntryDrawer({
                       {t("quick_entry.badge_lidl")}
                     </Badge>
                   </div>
+                  {isDemo && lidlQuota && (
+                    <div className="absolute top-2 right-2">
+                      <Badge
+                        variant={canScanLidl ? "secondary" : "destructive"}
+                        className="text-[10px] px-1.5 py-0.5 shadow-xs"
+                      >
+                        {canScanLidl
+                          ? t("quick_entry.sample_quota_badge", {
+                              remaining: lidlQuota.remaining,
+                              total: lidlQuota.daily_limit,
+                            })
+                          : t("quick_entry.sample_quota_exhausted")}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
                 <CardContent className="p-3.5 flex flex-col justify-between gap-3 flex-1">
                   <div>
@@ -210,7 +246,7 @@ export function QuickEntryDrawer({
                     type="button"
                     size="sm"
                     className="w-full text-xs font-semibold"
-                    disabled={sampleMutation.isPending}
+                    disabled={sampleMutation.isPending || !canScanLidl}
                     onClick={() => {
                       setActiveSample("lidl")
                       sampleMutation.mutate("lidl")
@@ -221,6 +257,8 @@ export function QuickEntryDrawer({
                         <Loader2 className="mr-1.5 size-3.5 animate-spin" />
                         {t("quick_entry.processing_sample")}
                       </>
+                    ) : !canScanLidl ? (
+                      t("quick_entry.sample_quota_exhausted")
                     ) : (
                       t("quick_entry.btn_test_sample")
                     )}

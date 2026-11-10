@@ -110,6 +110,10 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
   };
 
   const canScan = quota?.can_scan ?? true;
+  const biedronkaQuota = quota?.samples?.biedronka;
+  const lidlQuota = quota?.samples?.lidl;
+  const canScanBiedronka = quota?.is_demo ? (biedronkaQuota?.can_scan ?? true) : true;
+  const canScanLidl = quota?.is_demo ? (lidlQuota?.can_scan ?? true) : true;
   const isBusy = sampleMutation.isPending || uploadMutation.isPending;
 
   return (
@@ -143,11 +147,26 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
               <Card className="border border-border/70 hover:border-primary/50 transition-all bg-card/80 shadow-xs">
                 <CardContent className="p-4 flex flex-col justify-between h-full gap-3">
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <div className="size-7 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
-                        <ShoppingCart className="h-4 w-4" />
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <div className="size-7 rounded-lg bg-red-500/10 text-red-600 flex items-center justify-center shrink-0">
+                          <ShoppingCart className="h-4 w-4" />
+                        </div>
+                        <span>{t("demo.scan_modal.sample_biedronka_title")}</span>
                       </div>
-                      <span>{t("demo.scan_modal.sample_biedronka_title")}</span>
+                      {quota?.is_demo && biedronkaQuota && (
+                        <Badge
+                          variant={canScanBiedronka ? "outline" : "destructive"}
+                          className="text-[10px] px-1.5 py-0 font-normal shrink-0"
+                        >
+                          {canScanBiedronka
+                            ? t("demo.scan_modal.sample_quota_badge", {
+                                remaining: biedronkaQuota.remaining,
+                                total: biedronkaQuota.daily_limit,
+                              })
+                            : t("demo.scan_modal.sample_quota_exhausted")}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-snug">
                       {t("demo.scan_modal.sample_biedronka_desc")}
@@ -159,7 +178,7 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
                     variant="outline"
                     size="sm"
                     className="w-full text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                    disabled={isBusy}
+                    disabled={isBusy || !canScanBiedronka}
                     onClick={() => handleSampleClick("biedronka")}
                   >
                     {sampleMutation.isPending && activeSample === "biedronka" ? (
@@ -167,6 +186,8 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         {t("demo.scan_modal.processing_sample")}
                       </>
+                    ) : !canScanBiedronka ? (
+                      t("demo.scan_modal.sample_quota_exhausted")
                     ) : (
                       t("demo.scan_modal.btn_test_sample")
                     )}
@@ -178,11 +199,26 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
               <Card className="border border-border/70 hover:border-primary/50 transition-all bg-card/80 shadow-xs">
                 <CardContent className="p-4 flex flex-col justify-between h-full gap-3">
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                      <div className="size-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
-                        <ShoppingBag className="h-4 w-4" />
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                        <div className="size-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+                          <ShoppingBag className="h-4 w-4" />
+                        </div>
+                        <span>{t("demo.scan_modal.sample_lidl_title")}</span>
                       </div>
-                      <span>{t("demo.scan_modal.sample_lidl_title")}</span>
+                      {quota?.is_demo && lidlQuota && (
+                        <Badge
+                          variant={canScanLidl ? "outline" : "destructive"}
+                          className="text-[10px] px-1.5 py-0 font-normal shrink-0"
+                        >
+                          {canScanLidl
+                            ? t("demo.scan_modal.sample_quota_badge", {
+                                remaining: lidlQuota.remaining,
+                                total: lidlQuota.daily_limit,
+                              })
+                            : t("demo.scan_modal.sample_quota_exhausted")}
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-snug">
                       {t("demo.scan_modal.sample_lidl_desc")}
@@ -194,7 +230,7 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
                     variant="outline"
                     size="sm"
                     className="w-full text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-colors"
-                    disabled={isBusy}
+                    disabled={isBusy || !canScanLidl}
                     onClick={() => handleSampleClick("lidl")}
                   >
                     {sampleMutation.isPending && activeSample === "lidl" ? (
@@ -202,6 +238,8 @@ export function ScanReceiptModal({ open, onOpenChange }: ScanReceiptModalProps) 
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         {t("demo.scan_modal.processing_sample")}
                       </>
+                    ) : !canScanLidl ? (
+                      t("demo.scan_modal.sample_quota_exhausted")
                     ) : (
                       t("demo.scan_modal.btn_test_sample")
                     )}

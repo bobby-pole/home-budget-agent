@@ -31,6 +31,7 @@ from .models import (
     Category,
     EnvelopeAllocation,
     ReceiptScan,
+    ScanUsageLog,
     Transaction,
     TransactionLine,
     TransactionStatus,
@@ -740,6 +741,8 @@ def cleanup_expired_demo_sessions(session: Session, max_age_hours: int = 24) -> 
                     pass
 
         clean_demo_data(session, u)
+        if u.id is not None:
+            session.exec(delete(ScanUsageLog).where(col(ScanUsageLog.user_id) == u.id))
         session.delete(u)
         removed_count += 1
 

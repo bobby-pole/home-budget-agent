@@ -64,6 +64,25 @@ apiClient.interceptors.response.use(
   }
 );
 
+export interface SampleQuota {
+  daily_limit: number;
+  used: number;
+  remaining: number;
+  can_scan: boolean;
+}
+
+export interface DemoQuotaResponse {
+  is_demo: boolean;
+  daily_limit: number;
+  used: number;
+  remaining: number;
+  can_scan: boolean;
+  samples?: {
+    biedronka: SampleQuota;
+    lidl: SampleQuota;
+  };
+}
+
 export const api = {
   // --- AUTH ---
 
@@ -82,20 +101,8 @@ export const api = {
     return response.data;
   },
 
-  getDemoQuota: async (): Promise<{
-    is_demo: boolean;
-    daily_limit: number;
-    used: number;
-    remaining: number;
-    can_scan: boolean;
-  }> => {
-    const response = await apiClient.get<{
-      is_demo: boolean;
-      daily_limit: number;
-      used: number;
-      remaining: number;
-      can_scan: boolean;
-    }>("/demo/quota");
+  getDemoQuota: async (): Promise<DemoQuotaResponse> => {
+    const response = await apiClient.get<DemoQuotaResponse>("/demo/quota");
     return response.data;
   },
 

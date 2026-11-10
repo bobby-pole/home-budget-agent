@@ -1,5 +1,6 @@
 # backend/app/api.py
 import asyncio
+import copy
 import logging
 import shutil
 import os
@@ -22,6 +23,7 @@ from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
     ReceiptScan, ScanStatus, TransactionStatus, VerifyRequest,
+    ScanUsageLog,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     Account, AccountCreate, AccountUpdate, AccountRead,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
@@ -515,76 +517,25 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
         stage_start = time.monotonic()
-        data = None
-
         is_sample_biedronka = bool(scan.content_hash and "sample_biedronka" in scan.content_hash)
         is_sample_lidl = bool(scan.content_hash and "sample_lidl" in scan.content_hash)
 
-        if is_sample_biedronka:
-            logger.info("DEMO: Processing sample Biedronka receipt", extra={"scan_id": scan_id})
-            data = dict(SAMPLE_BIEDRONKA_DATA)
-        elif is_sample_lidl:
-            logger.info("DEMO: Processing sample Lidl Plus receipt", extra={"scan_id": scan_id})
-            data = dict(SAMPLE_LIDL_DATA)
-        elif settings.DEMO_MODE:
-            logger.info("DEMO_MODE active: simulating parsed receipt with mock fixtures", extra={"scan_id": scan_id})
-            data = {
-                "merchant_name": "Biedronka (Demo)",
-                "total_amount": 47.90,
-                "currency": "PLN",
-                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-                "items": [
-                    {
-                        "name": "Mleko Świeże 3.2% 1L",
-                        "price": 3.49,
-                        "quantity": 2.0,
-                        "category": "Żywność i Supermarket",
-                        "category_source": "demo_fixture",
-                        "original_price": 3.99,
-                        "discount_total": -1.0,
-                        "final_price": 3.49,
-                        "confidence": 0.98,
-                    },
-                    {
-                        "name": "Chleb Graham Krojony 500g",
-                        "price": 4.29,
-                        "quantity": 1.0,
-                        "category": "Żywność i Supermarket",
-                        "category_source": "demo_fixture",
-                        "confidence": 0.95,
-                    },
-                    {
-                        "name": "Kawa Mielona Tchibo 250g",
-                        "price": 18.99,
-                        "quantity": 1.0,
-                        "category": "Żywność i Supermarket",
-                        "category_source": "demo_fixture",
-                        "confidence": 0.92,
-                    },
-                    {
-                        "name": "Płyn do naczyń Fairy 900ml",
-                        "price": 17.64,
-                        "quantity": 1.0,
-                        "category": "Drogeria i Zdrowie",
-                        "category_source": "demo_fixture",
-                        "confidence": 0.91,
-                    },
-                ],
-                "_validation": {"is_valid": True, "issues": [], "confidence": 0.95},
-                "_raw_ocr_text": "BIEDRONKA SP Z O O ... RAZEM PLN: 47.90",
-                "_reconstructed_lines": [
-                    "BIEDRONKA UL. TESTOWA 1",
-                    "Mleko Świeże 3.2% 1L   2 x 3.99 = 7.98 A (Rabat: -1.00)",
-                    "Chleb Graham 500g      1 x 4.29 = 4.29 A",
-                    "Kawa Mielona Tchibo    1 x 18.99 = 18.99 A",
-                    "Płyn do naczyń Fairy   1 x 17.64 = 17.64 B",
-                    "SUMA PLN: 47.90",
-                ],
-            }
-        else:
-            data = await asyncio.get_running_loop().run_in_executor(
-                None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
+        # Real OCR pipeline: always parse via AIService for both custom uploads and sample receipts
+        data = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
+        )
+
+        # Resilient fallback ONLY for sample receipts if real pipeline returned no data
+        # (e.g. offline unit testing or CI without Vision / OpenAI credentials)
+        if not data and (is_sample_biedronka or is_sample_lidl):
+            logger.warning(
+                "Real OCR pipeline returned no data for sample receipt; falling back to curated sample data",
+                extra={"scan_id": scan_id},
             )
+            if is_sample_biedronka:
+                data = copy.deepcopy(SAMPLE_BIEDRONKA_DATA)
+            else:
+                data = copy.deepcopy(SAMPLE_LIDL_DATA)
         logger.info(
             "OCR completed",
             extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
@@ -1009,9 +960,16 @@ async def scan_transaction(
     await file.seek(0)
 
     if is_demo_user(current_user):
-        # 1. Quota check: max 5 custom scans today (only non-failed, non-sample scans count)
+        # 1. Quota check: max 5 custom scans today (persistent + legacy fallback)
         start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        daily_scans_used = session.exec(
+        custom_logs_used = session.exec(
+            select(func.count(col(ScanUsageLog.id))).where(
+                col(ScanUsageLog.user_id) == current_user.id,
+                col(ScanUsageLog.scan_type) == "custom",
+                col(ScanUsageLog.created_at) >= start_of_day,
+            )
+        ).one()
+        legacy_custom_used = session.exec(
             select(func.count(col(ReceiptScan.id)))
             .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
             .where(
@@ -1021,6 +979,7 @@ async def scan_transaction(
                 ~col(ReceiptScan.content_hash).startswith("sample_"),
             )
         ).one()
+        daily_scans_used = max(custom_logs_used, legacy_custom_used)
         if daily_scans_used >= 5:
             raise HTTPException(
                 status_code=429,
@@ -1087,6 +1046,8 @@ async def scan_transaction(
         # keep_image defaults to False; final decision is made by user at verify time
     )
     session.add(scan)
+    if is_demo_user(current_user) and current_user.id is not None:
+        session.add(ScanUsageLog(user_id=current_user.id, scan_type="custom"))
     session.commit()
     session.refresh(scan)
 
@@ -1112,10 +1073,33 @@ def get_demo_quota(
             "used": 0,
             "remaining": 9999,
             "can_scan": True,
+            "samples": {
+                "biedronka": {
+                    "daily_limit": 9999,
+                    "used": 0,
+                    "remaining": 9999,
+                    "can_scan": True,
+                },
+                "lidl": {
+                    "daily_limit": 9999,
+                    "used": 0,
+                    "remaining": 9999,
+                    "can_scan": True,
+                },
+            },
         }
 
     start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    scans_used = session.exec(
+
+    # 1. Custom scans quota (max 5/day)
+    custom_logs_used = session.exec(
+        select(func.count(col(ScanUsageLog.id))).where(
+            col(ScanUsageLog.user_id) == current_user.id,
+            col(ScanUsageLog.scan_type) == "custom",
+            col(ScanUsageLog.created_at) >= start_of_day,
+        )
+    ).one()
+    legacy_custom_used = session.exec(
         select(func.count(col(ReceiptScan.id)))
         .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
         .where(
@@ -1125,15 +1109,73 @@ def get_demo_quota(
             ~col(ReceiptScan.content_hash).startswith("sample_"),
         )
     ).one()
-
+    scans_used = max(custom_logs_used, legacy_custom_used)
     daily_limit = 5
     remaining = max(0, daily_limit - scans_used)
+
+    # 2. Sample receipts quota (max 2/day per sample)
+    sample_limit = 2
+
+    biedronka_logs = session.exec(
+        select(func.count(col(ScanUsageLog.id))).where(
+            col(ScanUsageLog.user_id) == current_user.id,
+            col(ScanUsageLog.scan_type) == "sample_biedronka",
+            col(ScanUsageLog.created_at) >= start_of_day,
+        )
+    ).one()
+    biedronka_legacy = session.exec(
+        select(func.count(col(ReceiptScan.id)))
+        .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
+        .where(
+            col(Transaction.uploaded_by) == current_user.id,
+            col(ReceiptScan.created_at) >= start_of_day,
+            col(ReceiptScan.status) != ScanStatus.FAILED.value,
+            col(ReceiptScan.content_hash).startswith("sample_biedronka"),
+        )
+    ).one()
+    biedronka_used = max(biedronka_logs, biedronka_legacy)
+    biedronka_remaining = max(0, sample_limit - biedronka_used)
+
+    lidl_logs = session.exec(
+        select(func.count(col(ScanUsageLog.id))).where(
+            col(ScanUsageLog.user_id) == current_user.id,
+            col(ScanUsageLog.scan_type) == "sample_lidl",
+            col(ScanUsageLog.created_at) >= start_of_day,
+        )
+    ).one()
+    lidl_legacy = session.exec(
+        select(func.count(col(ReceiptScan.id)))
+        .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
+        .where(
+            col(Transaction.uploaded_by) == current_user.id,
+            col(ReceiptScan.created_at) >= start_of_day,
+            col(ReceiptScan.status) != ScanStatus.FAILED.value,
+            col(ReceiptScan.content_hash).startswith("sample_lidl"),
+        )
+    ).one()
+    lidl_used = max(lidl_logs, lidl_legacy)
+    lidl_remaining = max(0, sample_limit - lidl_used)
+
     return {
         "is_demo": True,
         "daily_limit": daily_limit,
         "used": scans_used,
         "remaining": remaining,
         "can_scan": remaining > 0,
+        "samples": {
+            "biedronka": {
+                "daily_limit": sample_limit,
+                "used": biedronka_used,
+                "remaining": biedronka_remaining,
+                "can_scan": biedronka_remaining > 0,
+            },
+            "lidl": {
+                "daily_limit": sample_limit,
+                "used": lidl_used,
+                "remaining": lidl_remaining,
+                "can_scan": lidl_remaining > 0,
+            },
+        },
     }
 
 
@@ -1151,6 +1193,33 @@ async def scan_sample_transaction(
     """
     if not current_budget:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    if is_demo_user(current_user):
+        start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        sample_key = f"sample_{sample_id}"
+        sample_logs_used = session.exec(
+            select(func.count(col(ScanUsageLog.id))).where(
+                col(ScanUsageLog.user_id) == current_user.id,
+                col(ScanUsageLog.scan_type) == sample_key,
+                col(ScanUsageLog.created_at) >= start_of_day,
+            )
+        ).one()
+        legacy_used = session.exec(
+            select(func.count(col(ReceiptScan.id)))
+            .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
+            .where(
+                col(Transaction.uploaded_by) == current_user.id,
+                col(ReceiptScan.created_at) >= start_of_day,
+                col(ReceiptScan.status) != ScanStatus.FAILED.value,
+                col(ReceiptScan.content_hash).startswith(f"sample_{sample_id}"),
+            )
+        ).one()
+        if max(sample_logs_used, legacy_used) >= 2:
+            merchant_name = "Biedronka" if sample_id == "biedronka" else "Lidl"
+            raise HTTPException(
+                status_code=429,
+                detail=f"Dzienny limit 2 skanów dla przykładowego paragonu {merchant_name} został wyczerpany.",
+            )
 
     sample_filename = "biedronka_katowice.png" if sample_id == "biedronka" else "lidl_rybnik.png"
     sample_src_path = os.path.join(os.path.dirname(__file__), "static", "demo_samples", sample_filename)
@@ -1187,6 +1256,8 @@ async def scan_sample_transaction(
         content_hash=file_hash,
     )
     session.add(scan)
+    if is_demo_user(current_user) and current_user.id is not None:
+        session.add(ScanUsageLog(user_id=current_user.id, scan_type=f"sample_{sample_id}"))
     session.commit()
     session.refresh(scan)
     assert scan.id is not None

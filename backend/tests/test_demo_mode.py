@@ -297,7 +297,7 @@ def test_demo_reset_endpoint_access_control(client: TestClient, session: Session
 
 @pytest.mark.asyncio
 async def test_demo_mode_ocr_mock(session: Session):
-    """In DEMO_MODE=True, _process_scan simulates receipt parsing without external AI calls."""
+    """In DEMO_MODE=True, _process_scan executes real AIService.parse_receipt rather than mock fixtures."""
     from unittest.mock import patch
     from app.api import _process_scan
 
@@ -332,19 +332,43 @@ async def test_demo_mode_ocr_mock(session: Session):
     # Enable DEMO_MODE and bind operations_engine to test session
     settings.DEMO_MODE = True
     try:
-        with patch("app.api.operations_engine", session.bind):
+        mock_parsed = {
+            "merchant_name": "Biedronka (Live Pipeline)",
+            "total_amount": 47.90,
+            "currency": "PLN",
+            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "items": [
+                {
+                    "name": "Mleko Świeże 3.2% 1L",
+                    "price": 3.49,
+                    "quantity": 2.0,
+                    "category": "Żywność i Supermarket",
+                    "category_source": "ai",
+                    "original_price": 3.99,
+                    "discount_total": -1.0,
+                    "final_price": 3.49,
+                    "confidence": 0.98,
+                },
+            ],
+            "_validation": {"is_valid": True, "issues": [], "confidence": 0.95},
+            "_raw_ocr_text": "BIEDRONKA SP Z O O ... RAZEM PLN: 47.90",
+            "_reconstructed_lines": ["SUMA PLN: 47.90"],
+        }
+        with patch("app.api.operations_engine", session.bind), \
+             patch("app.api.AIService.parse_receipt", return_value=mock_parsed) as mock_parse:
             await _process_scan(scan_id=scan.id, transaction_id=tx.id, image_path="/tmp/fake_demo_receipt.jpg")
+            mock_parse.assert_called_once()
 
         # Verify processed scan
         session.refresh(scan)
         session.refresh(tx)
 
-        assert tx.merchant_name == "Biedronka (Demo)"
+        assert tx.merchant_name == "Biedronka (Live Pipeline)"
         assert tx.total_amount == 47.90
         assert scan.status in (ScanStatus.CATEGORIZATION_OK.value, ScanStatus.NEEDS_REVIEW.value, ScanStatus.PARSING_OK.value)
 
         lines = session.exec(select(TransactionLine).where(col(TransactionLine.transaction_id) == tx.id)).all()
-        assert len(lines) == 4
+        assert len(lines) == 1
         item_names = [line.name for line in lines]
         assert "Mleko Świeże 3.2% 1L" in item_names
     finally:
@@ -442,6 +466,103 @@ def test_demo_sample_scan_endpoint(mock_bg, client: TestClient, session: Session
     tx_data = res.json()
     assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
     mock_bg.assert_called_once()
+
+
+@patch("app.api.process_transaction_in_background")
+def test_demo_sample_scan_rate_limiting_and_deletion_immunity(mock_bg, client: TestClient, session: Session):
+    """Sample scans are limited to 2/day per sample, immune to transaction deletion."""
+    demo_user = seed_demo_environment(session, force_reset=True)
+    assert demo_user.default_budget_id is not None
+    demo_budget = session.get(Budget, demo_user.default_budget_id)
+    assert demo_budget is not None
+
+    app.dependency_overrides[get_current_user] = lambda: demo_user
+    app.dependency_overrides[get_current_budget] = lambda: demo_budget
+
+    # 1. First scan: succeeds
+    res1 = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res1.status_code == 200
+    tx1_id = res1.json()["id"]
+
+    # 2. Second scan: succeeds
+    res2 = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res2.status_code == 200
+
+    # 3. Third scan: blocked by rate limiter (HTTP 429)
+    res3 = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res3.status_code == 429
+    assert "Dzienny limit 2 skanów dla przykładowego paragonu Biedronka" in res3.json()["detail"]
+
+    # 4. User deletes transaction 1 from inbox/budget
+    del_res = client.delete(f"/api/transactions/{tx1_id}")
+    assert del_res.status_code == 204
+
+    # 5. Attempt scan again: MUST STILL BE BLOCKED! (quota immune to deletion)
+    res4 = client.post("/api/transactions/scan-sample?sample_id=biedronka")
+    assert res4.status_code == 429
+    assert "Dzienny limit 2 skanów dla przykładowego paragonu Biedronka" in res4.json()["detail"]
+
+    # 6. Sample Lidl is still independent and available (2 remaining)
+    res_lidl = client.post("/api/transactions/scan-sample?sample_id=lidl")
+    assert res_lidl.status_code == 200
+
+    # 7. Check quota endpoint breakdown
+    q_res = client.get("/api/demo/quota")
+    assert q_res.status_code == 200
+    qd = q_res.json()
+    assert qd["samples"]["biedronka"]["used"] == 2
+    assert qd["samples"]["biedronka"]["remaining"] == 0
+    assert qd["samples"]["biedronka"]["can_scan"] is False
+    assert qd["samples"]["lidl"]["used"] == 1
+    assert qd["samples"]["lidl"]["remaining"] == 1
+    assert qd["samples"]["lidl"]["can_scan"] is True
+
+
+@patch("app.api.process_transaction_in_background")
+def test_demo_custom_scan_deletion_immunity(mock_bg, client: TestClient, session: Session):
+    """Custom scan quota (5/day) is not reset when transaction is deleted."""
+    ephemeral_user = User(
+        email="demo_cust_del_test@rachownik.app",
+        hashed_password="pw",
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(ephemeral_user)
+    session.commit()
+    session.refresh(ephemeral_user)
+    seed_demo_environment(session, force_reset=False, custom_user=ephemeral_user)
+    assert ephemeral_user.default_budget_id is not None
+    budget = session.get(Budget, ephemeral_user.default_budget_id)
+    assert budget is not None
+
+    app.dependency_overrides[get_current_user] = lambda: ephemeral_user
+    app.dependency_overrides[get_current_budget] = lambda: budget
+
+    uploaded_ids = []
+    for i in range(5):
+        res = client.post(
+            "/api/transactions/scan",
+            files={"file": (f"rec_{i}.jpg", f"fake_content_{i}".encode(), "image/jpeg")},
+        )
+        assert res.status_code == 200
+        uploaded_ids.append(res.json()["id"])
+
+    # 6th scan is blocked
+    res6 = client.post(
+        "/api/transactions/scan",
+        files={"file": ("rec_6.jpg", b"fake_content_6", "image/jpeg")},
+    )
+    assert res6.status_code == 429
+
+    # Delete one transaction
+    del_res = client.delete(f"/api/transactions/{uploaded_ids[0]}")
+    assert del_res.status_code == 204
+
+    # Retrying scan is STILL blocked because ScanUsageLog persists
+    res_again = client.post(
+        "/api/transactions/scan",
+        files={"file": ("rec_again.jpg", b"fake_content_again", "image/jpeg")},
+    )
+    assert res_again.status_code == 429
 
 
 def test_receipt_validator_plausibility():

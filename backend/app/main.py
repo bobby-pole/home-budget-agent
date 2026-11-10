@@ -69,6 +69,7 @@ async def _periodic_demo_cleanup():
 # --- LIFESPAN (Start serwera) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    create_db_and_tables()
     # Seeding
     if os.getenv("ENVIRONMENT") == "development":
         seed_test_user()

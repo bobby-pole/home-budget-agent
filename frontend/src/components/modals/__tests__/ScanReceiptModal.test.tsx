@@ -76,4 +76,28 @@ describe("ScanReceiptModal", () => {
     expect(await screen.findByText(/limit wyczerpany/i)).toBeInTheDocument();
     expect(screen.getByText(/został wyczerpany/i)).toBeInTheDocument();
   });
+
+  it("renders sample quota badge and disables button when sample quota is exhausted", async () => {
+    vi.mocked(api.getDemoQuota).mockResolvedValue({
+      is_demo: true,
+      daily_limit: 5,
+      used: 0,
+      remaining: 5,
+      can_scan: true,
+      samples: {
+        biedronka: { daily_limit: 2, used: 2, remaining: 0, can_scan: false },
+        lidl: { daily_limit: 2, used: 1, remaining: 1, can_scan: true },
+      },
+    });
+
+    render(<ScanReceiptModal open={true} onOpenChange={onOpenChange} />);
+
+    const exhaustedElements = await screen.findAllByText(/Limit wykorzystany \(2\/2\)/i);
+    expect(exhaustedElements.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Pozostało: 1\/2 dzisiaj/i)).toBeInTheDocument();
+
+    const buttons = screen.getAllByRole("button");
+    const biedronkaBtn = buttons.find((b) => b.textContent?.includes("Limit wykorzystany"));
+    expect(biedronkaBtn).toBeDisabled();
+  });
 });
