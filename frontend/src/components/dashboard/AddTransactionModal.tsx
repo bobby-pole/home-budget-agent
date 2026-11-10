@@ -56,19 +56,26 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
 
   useEffect(() => {
     if (open) {
+      const defaultAccountId = accounts?.[0]?.id?.toString() || "";
       form.reset({
         merchant_name: "",
         total_amount: undefined,
         currency: "PLN",
         date: todayISO(),
         category_id: "",
-        account_id: "",
+        account_id: defaultAccountId,
         transfer_id: "",
         note: "",
         tag_ids: [],
       });
     }
-  }, [open, form]);
+  }, [open, form, accounts]);
+
+  useEffect(() => {
+    if (open && accounts?.length && !form.getValues("account_id")) {
+      form.setValue("account_id", accounts[0].id.toString());
+    }
+  }, [open, accounts, form]);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setItems([]);
@@ -120,6 +127,17 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
     mutation.mutate(values);
   };
 
+  const onInvalid = (errors: Record<string, unknown>) => {
+    console.warn("Manual transaction validation errors:", errors);
+    if (errors.merchant_name) {
+      toast.error(t("transactions.add_modal.validation.required"));
+    } else if (errors.account_id) {
+      toast.error(t("transactions.add_modal.validation.account_required"));
+    } else {
+      toast.error(t("transactions.add_modal.toast_error"));
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] flex flex-col">
@@ -129,7 +147,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
 
         <div className="flex-1 overflow-y-auto p-1 space-y-4">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
               <TransactionHeaderSection
                 control={form.control}
                 hasItems={hasItems}

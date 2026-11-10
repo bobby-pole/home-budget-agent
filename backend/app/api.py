@@ -309,7 +309,7 @@ def reset_demo(
             status_code=403,
             detail="Resetting demo data is only permitted for the demo user or when DEMO_MODE is active.",
         )
-    target_user = current_user if (current_user and user_is_demo) else None
+    target_user = ops_session.get(User, current_user.id) if (current_user and current_user.id and user_is_demo) else None
     seed_demo_environment(ops_session, force_reset=True, custom_user=target_user)
     return {"status": "ok", "message": "Demo data reset successfully"}
 

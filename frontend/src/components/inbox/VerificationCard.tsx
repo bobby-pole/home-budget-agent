@@ -240,7 +240,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       date: transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
       total_amount: transaction.total_amount || 0,
       currency: transaction.currency || "PLN",
-      account_id: transaction.account_id ? transaction.account_id.toString() : "",
+      account_id: transaction.account_id ? transaction.account_id.toString() : (accounts[0]?.id?.toString() || ""),
       lines: (transaction.lines || []).map(l => ({
         id: l.id,
         name: l.name,
@@ -256,6 +256,13 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       keep_image: false,
     },
   });
+
+  // Auto-select the first available account if transaction has no account selected
+  useEffect(() => {
+    if (!form.getValues("account_id") && accounts.length > 0) {
+      form.setValue("account_id", accounts[0].id.toString());
+    }
+  }, [accounts, form]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -317,6 +324,17 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       toast.error(t("inbox.verification_card.toast_verify_error"));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const onInvalid = (errors: Record<string, unknown>) => {
+    console.warn("Verification form validation errors:", errors);
+    if (errors.account_id) {
+      toast.error(t("inbox.verification_card.validation.account_required"));
+    } else if (errors.merchant_name) {
+      toast.error(t("inbox.verification_card.validation.merchant_required"));
+    } else {
+      toast.error(t("inbox.verification_card.toast_verify_error"));
     }
   };
 
@@ -472,7 +490,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         isMobileView && "border-none shadow-none rounded-none"
       )}>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full overflow-hidden">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex flex-col h-full overflow-hidden">
             <CardHeader className="py-4 px-6 border-b shrink-0">
               <div className="flex justify-between items-center gap-4">
                 <div className="flex items-center gap-2 min-w-0">

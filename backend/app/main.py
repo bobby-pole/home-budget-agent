@@ -92,6 +92,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    logging.error("Unhandled exception on %s %s: %s\n%s", request.method, request.url, exc, traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc), "type": type(exc).__name__},
+    )
+
 # CORS configuration
 origins = [
     "http://localhost:5173",

@@ -27,14 +27,17 @@ from .config import settings
 from .models import (
     Account,
     Budget,
+    BudgetAlert,
     BudgetMember,
     Category,
     EnvelopeAllocation,
+    ExternalReceiptConnection,
     ReceiptScan,
     ScanUsageLog,
     Transaction,
     TransactionLine,
     TransactionStatus,
+    TransactionTagLink,
     User,
 )
 
@@ -376,11 +379,14 @@ def get_transaction_dates(year: int, month: int, daily_count: int = 20) -> List[
 def clean_demo_data(session: Session, user: User) -> None:
     """Delete all budgets, accounts, categories, transactions and allocations owned by demo user."""
     logger.info("Cleaning existing demo data for user %s", user.email)
+    db_user = session.get(User, user.id) if user.id else user
+    if not db_user:
+        return
 
-    memberships = session.exec(select(BudgetMember).where(BudgetMember.user_id == user.id)).all()
+    memberships = session.exec(select(BudgetMember).where(BudgetMember.user_id == db_user.id)).all()
     budget_ids = [m.budget_id for m in memberships]
 
-    owned_budgets = session.exec(select(Budget).where(Budget.owner_id == user.id)).all()
+    owned_budgets = session.exec(select(Budget).where(Budget.owner_id == db_user.id)).all()
     for b in owned_budgets:
         if b.id and b.id not in budget_ids:
             budget_ids.append(b.id)
@@ -389,10 +395,13 @@ def clean_demo_data(session: Session, user: User) -> None:
         transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
         t_ids = [t.id for t in transactions if t.id is not None]
         if t_ids:
+            session.exec(delete(TransactionTagLink).where(col(TransactionTagLink.transaction_id).in_(t_ids)))
             session.exec(delete(TransactionLine).where(col(TransactionLine.transaction_id).in_(t_ids)))
             session.exec(delete(ReceiptScan).where(col(ReceiptScan.transaction_id).in_(t_ids)))
             session.exec(delete(Transaction).where(col(Transaction.id).in_(t_ids)))
 
+        session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
+        session.exec(delete(ExternalReceiptConnection).where(col(ExternalReceiptConnection.budget_id) == budget_id))
         session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
         session.exec(delete(Account).where(col(Account.budget_id) == budget_id))
 
@@ -407,8 +416,8 @@ def clean_demo_data(session: Session, user: User) -> None:
         session.exec(delete(BudgetMember).where(col(BudgetMember.budget_id) == budget_id))
         session.exec(delete(Budget).where(col(Budget.id) == budget_id))
 
-    user.default_budget_id = None
-    session.add(user)
+    db_user.default_budget_id = None
+    session.add(db_user)
     session.commit()
 
 
@@ -556,10 +565,21 @@ def seed_demo_environment(
     prev_month = 12 if now.month == 1 else now.month - 1
 
     if custom_user:
-        demo_user = custom_user
+        demo_user = session.get(User, custom_user.id) if custom_user.id else None
+        if not demo_user:
+            demo_user = custom_user
+            session.add(demo_user)
+            session.commit()
+            try:
+                session.refresh(demo_user)
+            except Exception:
+                pass
         if force_reset:
             clean_demo_data(session, demo_user)
-            session.refresh(demo_user)
+            try:
+                session.refresh(demo_user)
+            except Exception:
+                pass
         elif demo_user.default_budget_id:
             existing_budget = session.get(Budget, demo_user.default_budget_id)
             if existing_budget:
@@ -709,7 +729,10 @@ def seed_demo_environment(
         month=current_month,
     )
 
-    session.refresh(demo_user)
+    try:
+        session.refresh(demo_user)
+    except Exception:
+        pass
     logger.info("Demo environment successfully seeded for %s (Budget ID: %s)", demo_user.email, budget.id)
     return demo_user
 
