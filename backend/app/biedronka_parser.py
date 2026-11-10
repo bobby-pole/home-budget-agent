@@ -17,7 +17,7 @@ _DATE_LINE = re.compile(r"(?:\b(\d{4}-\d{2}-\d{2})\b|\b(\d{2})[/.-](\d{2})[/.-](
 # Example with multiplier: "PomidorPaprycz500g с 2x 14,99 29,98" or "BułkaKajzerka55g 3x 0,34 1,02"
 # Group 1: Name, Group 2: qty, Group 3: unit_price, Group 4: total
 _BIEDRONKA_ITEM_LINE = re.compile(
-    r"^(.*?)\s+(?:[A-Ea-zс]\s+)?(\d+(?:[.,]\d+)?)\s*[xX×]\s*(\d+[.,]\d+)\s+(\d+[.,]\d+)$",
+    r"^(.*?)\s+(?:[A-Ea-zс]\s+)?(\d+(?:[.,]\d+)?)\s*[xX×]\s*(?:[^\d\n]+\s+)?(\d+[.,]\d+)\s+(\d+[.,]\d+)$",
     re.IGNORECASE,
 )
 
@@ -133,7 +133,7 @@ class BiedronkaReceiptParser(BaseDeterministicParser):
                 # 1. Multiplier line: "2x 14.99 29.98"
                 m_item = _BIEDRONKA_ITEM_LINE.match(line)
                 if m_item:
-                    name = m_item.group(1).strip()
+                    name = re.sub(r"\s+[A-Ea-zс]$", "", m_item.group(1)).strip()
                     qty = to_decimal(m_item.group(2), default="1.0")
                     unit = to_decimal(m_item.group(3))
 

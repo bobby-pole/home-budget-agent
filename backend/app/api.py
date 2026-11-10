@@ -714,7 +714,17 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
     if not category_amounts:
         return
 
-    date_obj = transaction.date or datetime.now(timezone.utc)
+    raw_date = getattr(transaction, "date", None)
+    if isinstance(raw_date, str):
+        try:
+            date_str = str(raw_date).replace("Z", "+00:00")
+            date_obj = datetime.fromisoformat(date_str)
+        except ValueError:
+            date_obj = datetime.now(timezone.utc)
+    elif isinstance(raw_date, datetime):
+        date_obj = raw_date
+    else:
+        date_obj = datetime.now(timezone.utc)
     year = date_obj.year
     month = date_obj.month
 
@@ -821,11 +831,15 @@ def create_manual_transaction(
                 detail="Category is required for transfers to tracking accounts",
             )
 
+    tx_date = data.date or datetime.now(timezone.utc)
+    if tx_date.tzinfo is None:
+        tx_date = tx_date.replace(tzinfo=timezone.utc)
+
     transaction = Transaction(
         merchant_name=data.merchant_name,
         total_amount=total,
         currency=data.currency,
-        date=data.date or datetime.now(timezone.utc),
+        date=tx_date,
         is_manual=True,
         type=data.type,
         status=data.status,
@@ -1510,6 +1524,8 @@ async def verify_transaction(
     # Apply transaction field updates
     update_data = body.transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in update_data.items():
+        if key == "date" and isinstance(value, datetime) and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
         setattr(db_transaction, key, value)
 
     validate_transaction_accounts(
@@ -1592,6 +1608,8 @@ async def update_transaction(
 
     transaction_data = transaction_update.model_dump(exclude_unset=True, exclude={"tag_ids"})
     for key, value in transaction_data.items():
+        if key == "date" and isinstance(value, datetime) and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
         setattr(db_transaction, key, value)
 
     validate_transaction_accounts(

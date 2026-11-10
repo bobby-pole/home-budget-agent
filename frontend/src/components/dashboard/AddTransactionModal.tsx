@@ -89,7 +89,11 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
         merchant_name: values.merchant_name,
         total_amount: hasItems ? computedTotal : (values.total_amount ?? 0),
         currency: values.currency,
-        date: values.date || undefined,
+        date: values.date
+          ? values.date.includes("T")
+            ? values.date
+            : `${values.date}T00:00:00Z`
+          : undefined,
         category_id: hasItems ? undefined : (values.category_id ? parseInt(values.category_id) : undefined),
         account_id: values.account_id ? parseInt(values.account_id) : undefined,
         transfer_id: values.type === "transfer" && values.transfer_id ? parseInt(values.transfer_id) : undefined,

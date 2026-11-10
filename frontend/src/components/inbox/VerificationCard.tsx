@@ -288,11 +288,17 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
   const onSubmit = async (values: VerificationFormValues) => {
     setIsSubmitting(true);
     try {
+      const isoDate = values.date
+        ? values.date.includes("T")
+          ? values.date
+          : `${values.date}T00:00:00Z`
+        : undefined;
+
       await api.verifyTransaction(
         transaction.id,
         {
           merchant_name: values.merchant_name,
-          date: values.date,
+          date: isoDate,
           total_amount: values.total_amount,
           currency: values.currency,
           account_id: values.account_id ? parseInt(values.account_id) : undefined,

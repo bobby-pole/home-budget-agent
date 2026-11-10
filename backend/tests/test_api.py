@@ -835,3 +835,57 @@ def test_get_transactions_with_detached_session(client, session):
     finally:
         # restore default override
         app.dependency_overrides[get_ops_session] = lambda: session
+
+
+def test_verify_and_manual_with_naive_date_string(client: TestClient, session: Session):
+    # 1. Manual transaction with naive YYYY-MM-DD
+    manual_res = client.post("/api/transactions/manual", json={
+        "merchant_name": "Sklep ABC",
+        "total_amount": 15.0,
+        "currency": "PLN",
+        "date": "2026-11-10",
+        "type": "expense",
+    })
+    assert manual_res.status_code == 200, manual_res.text
+    m_data = manual_res.json()
+    assert m_data["date"].startswith("2026-11-10")
+
+    # 2. Verify transaction with naive YYYY-MM-DD date string
+    test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
+    test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
+    assert test_user is not None
+    assert test_budget is not None
+
+    tx = Transaction(
+        merchant_name="Biedronka Test",
+        uploaded_by=test_user.id,
+        budget_id=test_budget.id,
+        total_amount=50.0,
+        date=datetime.now(timezone.utc),
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    assert tx.id is not None
+
+    scan = ReceiptScan(transaction_id=tx.id, status=ScanStatus.NEEDS_REVIEW, content_hash="hash_naive_date")
+    session.add(scan)
+    session.add(TransactionLine(name="Item 1", price=50.0, quantity=1.0, transaction_id=tx.id))
+    session.commit()
+
+    verify_res = client.post(f"/api/transactions/{tx.id}/verify", json={
+        "transaction_update": {
+            "merchant_name": "Biedronka Verified",
+            "date": "2026-11-10",
+            "total_amount": 50.0,
+        },
+        "lines_update": [
+            {"name": "Item 1", "price": 50.0, "quantity": 1.0}
+        ],
+        "keep_image": False,
+    })
+    assert verify_res.status_code == 200, verify_res.text
+    v_data = verify_res.json()
+    assert v_data["merchant_name"] == "Biedronka Verified"
+    assert v_data["date"].startswith("2026-11-10")
+    assert v_data["receipt_scan"]["status"] == ScanStatus.DONE

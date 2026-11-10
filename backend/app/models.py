@@ -1,12 +1,46 @@
 # backend/app/models.py
 from enum import Enum
-from typing import List, Optional
-from datetime import datetime, timezone
+from typing import Any, List, Optional
+from datetime import date, datetime, timezone
 import math
 from pydantic import field_validator
 from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text, Boolean
 from sqlmodel import Field, Relationship, SQLModel
 from sqlmodel._compat import SQLModelConfig
+
+
+def ensure_tz_aware(v: Any) -> Optional[datetime]:
+    """Coerce string or naive datetime into a UTC-aware datetime.
+
+    Prevents SQLModel/SQLAlchemy StatementError when writing naive datetimes
+    to timezone-aware columns:
+    'Datetime values must have timezone information. Use datetime.now(timezone.utc)...'
+    """
+    if v is None:
+        return None
+    if isinstance(v, str):
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) == 10 and v.count("-") == 2:
+            try:
+                return datetime.strptime(v, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            except ValueError:
+                pass
+        try:
+            dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            pass
+    elif isinstance(v, datetime):
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+    elif isinstance(v, date):
+        return datetime.combine(v, datetime.min.time(), tzinfo=timezone.utc)
+    return v
 
 
 class ScanStatus(str, Enum):
@@ -242,6 +276,11 @@ class TransactionBase(SQLModel):
     import_hash: Optional[str] = Field(default=None, index=True)
     account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
     transfer_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
 
 
 class Transaction(TransactionBase, table=True):
@@ -619,6 +658,11 @@ class TransactionUpdate(SQLModel):
     account_id: Optional[int] = None
     transfer_id: Optional[int] = None
 
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
+
 
 class TransactionLineCreate(SQLModel):
     name: str
@@ -645,6 +689,11 @@ class ManualTransactionCreate(SQLModel):
     account_id: Optional[int] = None
     transfer_id: Optional[int] = None
 
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
+
 
 class TransferCreate(SQLModel):
     source_account_id: int
@@ -655,6 +704,11 @@ class TransferCreate(SQLModel):
     note: Optional[str] = None
     category_id: Optional[int] = None
     status: TransactionStatus = TransactionStatus.UNCLEARED
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
 
 
 class TransactionLineUpdate(SQLModel):
