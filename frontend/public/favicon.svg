@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="coin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FCD34D" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect width="32" height="32" rx="7" fill="url(#bg)" />
+
+  <!-- Gold coin dropping into piggy bank -->
+  <circle cx="16" cy="6.5" r="3.2" fill="url(#coin)" stroke="#B45309" stroke-width="0.8" />
+  <circle cx="16" cy="6.5" r="1.8" fill="none" stroke="#D97706" stroke-width="0.5" stroke-dasharray="1.5 1" />
+
+  <!-- Piggy bank silhouette -->
+  <g transform="translate(4, 7)" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z" />
+    <path d="M16 10h.01" stroke-width="2.2" />
+    <path d="M2 8v1a2 2 0 0 0 2 2h1" />
+  </g>
+</svg>
