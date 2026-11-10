@@ -90,7 +90,7 @@ jobs:
             cd /home/deploy/home-budget-agent
 
             # Ensure data and demo directories exist and are writable by container user (UID 1001)
-            mkdir -p data data-demo && chmod -R 777 data data-demo
+            mkdir -p data data-demo && chmod 777 data data-demo && (chmod -R 777 data data-demo 2>/dev/null || true)
 
             # Write .env from secrets (printf handles special chars safely)
             printf 'OPENAI_API_KEY=%s\nSECRET_KEY=%s\nENVIRONMENT=production\nGOOGLE_CREDENTIALS_JSON=%s\n' \
