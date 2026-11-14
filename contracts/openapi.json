@@ -4402,6 +4402,16 @@
         ],
         "title": "MonthlyBudgetSummary"
       },
+      "RawPayloadPolicy": {
+        "type": "string",
+        "enum": [
+          "none",
+          "ephemeral_image",
+          "retained_image",
+          "canonical_only"
+        ],
+        "title": "RawPayloadPolicy"
+      },
       "ReceiptScanRead": {
         "properties": {
           "id": {
@@ -4411,6 +4421,17 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "processed_via": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Processed Via"
           },
           "needs_review": {
             "type": "boolean",
@@ -4510,6 +4531,127 @@
           "created_at"
         ],
         "title": "ReceiptScanRead"
+      },
+      "SourceRecordRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "budget_id": {
+            "type": "integer",
+            "title": "Budget Id"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id"
+          },
+          "receipt_scan_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Scan Id"
+          },
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "canonical_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Hash"
+          },
+          "adapter_version": {
+            "type": "string",
+            "title": "Adapter Version"
+          },
+          "acquired_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Acquired At"
+          },
+          "quality": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$",
+                "example": "1.00"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality"
+          },
+          "raw_payload_policy": {
+            "$ref": "#/components/schemas/RawPayloadPolicy"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "budget_id",
+          "source_type",
+          "provider",
+          "adapter_version",
+          "acquired_at",
+          "raw_payload_policy"
+        ],
+        "title": "SourceRecordRead"
+      },
+      "SourceType": {
+        "type": "string",
+        "enum": [
+          "MERCHANT_API",
+          "E_RECEIPT",
+          "BANK_CSV",
+          "OCR_PHOTO",
+          "MANUAL"
+        ],
+        "title": "SourceType"
       },
       "TagCreate": {
         "properties": {
@@ -5157,6 +5299,14 @@
                 "type": "null"
               }
             ]
+          },
+          "source_records": {
+            "items": {
+              "$ref": "#/components/schemas/SourceRecordRead"
+            },
+            "type": "array",
+            "title": "Source Records",
+            "default": []
           }
         },
         "type": "object",

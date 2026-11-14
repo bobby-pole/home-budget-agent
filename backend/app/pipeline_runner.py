@@ -107,6 +107,8 @@ class PipelineRunner:
             # e-Paragon skips merchant detection and parsing — go to categorize/validate
             data = self._maybe_categorize(data)
             data = self._stage_validation(data)
+            if data is not None:
+                data["_processed_via"] = self._last_route_chosen() or "eparagon_json_adapter"
             return data
 
         lines, raw_text = self._stage_content_extraction(file_bytes, source)
@@ -135,8 +137,16 @@ class PipelineRunner:
         if data is not None:
             data["_raw_ocr_text"] = raw_text
             data["_reconstructed_lines"] = lines if lines else None
+            data["_processed_via"] = self._last_route_chosen()
 
         return data
+
+    def _last_route_chosen(self) -> Optional[str]:
+        """Return the most specific parsing/extraction route recorded by PipelineLogger."""
+        for stage in reversed(self.logger.stages):
+            if stage.route_chosen:
+                return stage.route_chosen
+        return None
 
     def _should_stop(self, current_stage: int) -> bool:
         return self.max_stage is not None and current_stage >= self.max_stage
@@ -563,6 +573,8 @@ class PipelineRunner:
                 if data:
                     data = self._maybe_categorize(data)
                     data = self._stage_validation(data)
+                    if data is not None:
+                        data["_processed_via"] = "ai_vision_direct"
                     log.output_summary = {"result": "success"}
                 else:
                     log.status = "FAIL"

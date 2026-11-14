@@ -12,6 +12,7 @@ from pydantic import BeforeValidator, PlainSerializer, WithJsonSchema
 MONEY_QUANT = Decimal("0.01")
 UNIT_PRICE_QUANT = Decimal("0.0001")
 QTY_QUANT = Decimal("0.0001")
+SCORE_QUANT = Decimal("0.0001")
 
 _ZERO = Decimal("0")
 _WHITESPACE_RE = re.compile(r"[\s\u00a0\u202f]+")
@@ -88,6 +89,14 @@ def quantize_quantity(value: Any) -> Decimal:
     return _ZERO.quantize(QTY_QUANT) if dec == _ZERO else dec
 
 
+def quantize_score(value: Any) -> Decimal:
+    """Parse and quantize a normalized quality/confidence score to 4 decimal places."""
+    dec = parse_decimal(value).quantize(SCORE_QUANT, rounding=ROUND_HALF_UP)
+    if dec < _ZERO or dec > Decimal("1"):
+        raise ValueError(f"Quality score must be between 0 and 1 (got {dec})")
+    return _ZERO.quantize(SCORE_QUANT) if dec == _ZERO else dec
+
+
 def format_money(value: Any) -> str:
     """Format a monetary Decimal cleanly to fixed 2 decimal places (e.g. '10.99')."""
     return format(quantize_money(value), "f")
@@ -147,6 +156,30 @@ QuantityDecimal = Annotated[
             "type": "string",
             "pattern": r"^-?\d+(\.\d{1,4})?$",
             "example": "1",
+        }
+    ),
+]
+
+
+def format_score(value: Any) -> str:
+    """Format a normalized quality score cleanly without trailing fractional zeros after 2 decimals."""
+    text = format(quantize_score(value), "f")
+    integer_part, frac_part = text.split(".")
+    trimmed_frac = frac_part.rstrip("0")
+    if len(trimmed_frac) < 2:
+        trimmed_frac = frac_part[:2]
+    return f"{integer_part}.{trimmed_frac}"
+
+
+ScoreDecimal = Annotated[
+    Decimal,
+    BeforeValidator(quantize_score),
+    PlainSerializer(format_score, return_type=str, when_used="json"),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": r"^(0(\.\d{1,4})?|1(\.0{1,4})?)$",
+            "example": "1.00",
         }
     ),
 ]

@@ -18,12 +18,13 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, B
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete, SQLModel
 from sqlalchemy import extract, func, or_, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
     ReceiptScan, ScanStatus, TransactionStatus, VerifyRequest,
-    ScanUsageLog,
+    ScanUsageLog, SourceRecord, SourceType, RawPayloadPolicy,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     Account, AccountCreate, AccountUpdate, AccountRead,
     MonthlyBudgetSummary, CategoryBudgetSummaryItem, EnvelopeAllocation, EnvelopeAllocationUpdate,
@@ -38,12 +39,23 @@ from .models import (
 )
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
+from .ocr_pipeline import ReceiptSource, ReceiptSourceDetector
+from .provenance_service import (
+    build_source_record,
+    delete_source_records_for_transaction,
+    extract_eparagon_external_id,
+    find_existing_source_record,
+    has_legacy_scan_duplicate,
+    record_manual_source_provenance,
+    record_source_provenance,
+    update_scan_source_metadata,
+)
 from .services import AIService
 from .auth import get_current_user, get_current_user_optional, hash_password, verify_password, create_access_token, is_demo_user
 from .demo_seed import seed_demo_environment
 from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
 from .config import settings
-from .money import format_money, quantize_money, quantize_quantity, quantize_unit_price, MoneyDecimal
+from .money import format_money, quantize_money, quantize_quantity, quantize_score, quantize_unit_price, MoneyDecimal
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -404,6 +416,7 @@ def delete_budget(
 
     session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
     session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
+    session.exec(delete(SourceRecord).where(col(SourceRecord.budget_id) == budget_id))
 
     transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
     for t in transactions:
@@ -493,6 +506,8 @@ def _set_scan_status(
                 scan.needs_review = needs_review
             elif status == ScanStatus.FAILED:
                 scan.needs_review = True
+            if status == ScanStatus.FAILED:
+                update_scan_source_metadata(s, receipt_scan_id=scan_id, quality="0.00")
             s.add(scan)
             s.commit()
 
@@ -562,6 +577,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         if not scan2:
             return
         scan2.status = ScanStatus.PARSING_OK
+        scan2.processed_via = data.get("_processed_via")
         scan2.raw_ocr_text = data.get("_raw_ocr_text")
         scan2.reconstructed_lines = data.get("_reconstructed_lines")
 
@@ -576,6 +592,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             transaction.merchant_name = merchant
             transaction.total_amount = total
             transaction.currency = data.get("currency", "PLN")
+            update_scan_source_metadata(session, receipt_scan_id=scan_id, quality="0.00")
             session.add(scan2)
             session.add(transaction)
             session.commit()
@@ -658,6 +675,17 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
                 final_price=quantize_unit_price(fin) if fin is not None else None,
                 is_adjustment=bool(item_raw.get("is_adjustment", False)),
             ))
+
+        if val_confidence is not None:
+            try:
+                clamped_conf = max(Decimal("0"), min(Decimal("1"), Decimal(str(val_confidence))))
+                update_scan_source_metadata(
+                    session,
+                    receipt_scan_id=scan_id,
+                    quality=quantize_score(clamped_conf),
+                )
+            except Exception:
+                pass
 
         session.add(transaction)
         session.add(scan2)
@@ -858,6 +886,15 @@ def create_manual_transaction(
         transaction.tags = list(tags)
 
     session.add(transaction)
+    session.flush()
+
+    if transaction.id is not None and current_budget.id is not None:
+        record_manual_source_provenance(
+            session,
+            budget_id=current_budget.id,
+            transaction_id=transaction.id,
+        )
+
     session.commit()
     session.refresh(transaction)
 
@@ -941,6 +978,15 @@ def create_transfer(
         uploaded_by=current_user.id,
     )
     session.add(transaction)
+    session.flush()
+
+    if transaction.id is not None and current_budget.id is not None:
+        record_manual_source_provenance(
+            session,
+            budget_id=current_budget.id,
+            transaction_id=transaction.id,
+        )
+
     session.commit()
     session.refresh(transaction)
     return transaction
@@ -958,6 +1004,8 @@ def delete_transfer(
     transaction = session.get(Transaction, transfer_id)
     if not transaction or transaction.budget_id != current_budget.id or transaction.type != "transfer":
         raise HTTPException(status_code=404, detail="Transfer not found")
+    delete_source_records_for_transaction(session, transfer_id)
+    session.expire(transaction, ["source_records"])
     session.delete(transaction)
     session.commit()
     return None
@@ -973,7 +1021,7 @@ async def scan_transaction(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
     file_content = await file.read()
@@ -1022,23 +1070,45 @@ async def scan_transaction(
             )
 
     file_hash = hashlib.sha256(file_content).hexdigest()
-
-    if not force:
-        existing_scan = session.exec(
-            select(ReceiptScan).where(
-                ReceiptScan.content_hash == file_hash,
-                ReceiptScan.transaction_id.in_(  # type: ignore
-                    select(Transaction.id).where(Transaction.budget_id == current_budget.id)
-                ),
-            )
-        ).first()
-        if existing_scan:
-            raise HTTPException(
-                status_code=409,
-                detail="Duplicate receipt detected. Use force=true to upload anyway."
-            )
-
     filename = file.filename or "upload.jpg"
+    detected_source = ReceiptSourceDetector.detect(
+        filename=filename,
+        content_type=file.content_type,
+        file_bytes=file_content,
+    )
+    if detected_source == ReceiptSource.EPARAGON:
+        src_type = SourceType.E_RECEIPT
+        src_provider = "eparagon_json"
+        src_external_id = extract_eparagon_external_id(file_content)
+        src_adapter_version = "eparagon_v1"
+        src_quality = "1.00"
+        src_policy = RawPayloadPolicy.CANONICAL_ONLY
+    else:
+        src_type = SourceType.OCR_PHOTO
+        src_provider = "receipt_upload"
+        src_external_id = None
+        src_adapter_version = "ocr_pipeline_v1"
+        src_quality = "0.85"
+        src_policy = RawPayloadPolicy.EPHEMERAL_IMAGE
+
+    existing_provenance = find_existing_source_record(
+        session,
+        budget_id=current_budget.id,
+        provider=src_provider,
+        external_id=src_external_id,
+        canonical_hash=file_hash,
+    )
+    existing_legacy_scan = has_legacy_scan_duplicate(
+        session,
+        budget_id=current_budget.id,
+        content_hash=file_hash,
+    )
+    if not force and (existing_provenance is not None or existing_legacy_scan is not None):
+        raise HTTPException(
+            status_code=409,
+            detail="Duplicate receipt detected. Use force=true to upload anyway.",
+        )
+
     file_extension = filename.split(".")[-1]
     unique_filename = f"{uuid4()}.{file_extension}"
     file_path = f"{UPLOAD_DIR}/{unique_filename}"
@@ -1046,33 +1116,85 @@ async def scan_transaction(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    new_transaction = Transaction(
-        merchant_name="Processing...",
-        uploaded_by=current_user.id,
-        budget_id=current_budget.id,
-        note=note,
-    )
-    session.add(new_transaction)
-    session.commit()
-    session.refresh(new_transaction)
+    allow_unique_keys = not (force and existing_provenance is not None)
+    new_transaction: Optional[Transaction] = None
+    scan: Optional[ReceiptScan] = None
 
-    if new_transaction.id is None:
-        raise HTTPException(status_code=500, detail="Failed to create transaction")
-    scan = ReceiptScan(
-        transaction_id=new_transaction.id,
-        image_path=file_path,
-        status=ScanStatus.QUEUED,
-        content_hash=file_hash,
-        # keep_image defaults to False; final decision is made by user at verify time
-    )
-    session.add(scan)
-    if is_demo_user(current_user) and current_user.id is not None:
-        session.add(ScanUsageLog(user_id=current_user.id, scan_type="custom"))
+    for attempt in range(2):
+        try:
+            with session.begin_nested():
+                candidate_tx = Transaction(
+                    merchant_name="Processing...",
+                    uploaded_by=current_user.id,
+                    budget_id=current_budget.id,
+                    note=note,
+                )
+                session.add(candidate_tx)
+                session.flush()
+                if candidate_tx.id is None:
+                    raise HTTPException(status_code=500, detail="Failed to create transaction")
+
+                candidate_scan = ReceiptScan(
+                    transaction_id=candidate_tx.id,
+                    image_path=file_path,
+                    status=ScanStatus.QUEUED,
+                    content_hash=file_hash,
+                    # keep_image defaults to False; final decision is made by user at verify time
+                )
+                session.add(candidate_scan)
+                if is_demo_user(current_user) and current_user.id is not None:
+                    session.add(ScanUsageLog(user_id=current_user.id, scan_type="custom"))
+                session.flush()
+                if candidate_scan.id is None:
+                    raise HTTPException(status_code=500, detail="Failed to create receipt scan")
+
+                session.add(
+                    build_source_record(
+                        budget_id=current_budget.id,
+                        transaction_id=candidate_tx.id,
+                        receipt_scan_id=candidate_scan.id,
+                        source_type=src_type,
+                        provider=src_provider,
+                        external_id=src_external_id if allow_unique_keys else None,
+                        canonical_hash=file_hash if allow_unique_keys else None,
+                        adapter_version=src_adapter_version,
+                        quality=src_quality,
+                        raw_payload_policy=src_policy,
+                    )
+                )
+                session.flush()
+                new_transaction = candidate_tx
+                scan = candidate_scan
+            break
+        except IntegrityError:
+            raced = find_existing_source_record(
+                session,
+                budget_id=current_budget.id,
+                provider=src_provider,
+                external_id=src_external_id,
+                canonical_hash=file_hash,
+            )
+            if raced is not None and not force:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                raise HTTPException(
+                    status_code=409,
+                    detail="Duplicate receipt detected. Use force=true to upload anyway.",
+                )
+            if force and allow_unique_keys and attempt == 0:
+                allow_unique_keys = False
+                continue
+            raise
+
+    if new_transaction is None or new_transaction.id is None or scan is None or scan.id is None:
+        raise HTTPException(status_code=500, detail="Failed to persist receipt scan")
+
     session.commit()
     session.refresh(scan)
 
-    if scan.id is None:
-        raise HTTPException(status_code=500, detail="Failed to create receipt scan")
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
     session.refresh(new_transaction)
@@ -1265,22 +1387,38 @@ async def scan_sample_transaction(
         note=f"Wzorcowy paragon demonstracyjny: {sample_id.capitalize()}",
     )
     session.add(new_transaction)
-    session.commit()
-    session.refresh(new_transaction)
+    session.flush()
     assert new_transaction.id is not None
 
     scan = ReceiptScan(
         transaction_id=new_transaction.id,
         image_path=file_path,
         status=ScanStatus.QUEUED.value,
+        processed_via=f"demo_sample_{sample_id}",
         content_hash=file_hash,
     )
     session.add(scan)
     if is_demo_user(current_user) and current_user.id is not None:
         session.add(ScanUsageLog(user_id=current_user.id, scan_type=f"sample_{sample_id}"))
+    session.flush()
+    assert scan.id is not None
+    assert current_budget.id is not None
+
+    record_source_provenance(
+        session,
+        budget_id=current_budget.id,
+        transaction_id=new_transaction.id,
+        receipt_scan_id=scan.id,
+        source_type=SourceType.OCR_PHOTO,
+        provider="demo_sample",
+        external_id=None,
+        canonical_hash=file_hash,
+        adapter_version="demo_sample_v1",
+        quality="1.00",
+        raw_payload_policy=RawPayloadPolicy.EPHEMERAL_IMAGE,
+    )
     session.commit()
     session.refresh(scan)
-    assert scan.id is not None
 
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
     session.refresh(new_transaction)
@@ -1570,6 +1708,14 @@ async def verify_transaction(
     scan.keep_image = body.keep_image
     scan.status = ScanStatus.DONE
     scan.needs_review = False
+    if scan.id is not None:
+        update_scan_source_metadata(
+            session,
+            receipt_scan_id=scan.id,
+            raw_payload_policy=(
+                RawPayloadPolicy.RETAINED_IMAGE if scan.keep_image else RawPayloadPolicy.CANONICAL_ONLY
+            ),
+        )
     session.add(db_transaction)
     session.add(scan)
 
@@ -1707,6 +1853,9 @@ async def delete_transaction(
 
     if transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this transaction")
+
+    delete_source_records_for_transaction(session, transaction_id)
+    session.expire(transaction, ["source_records"])
 
     scan = session.exec(
         select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
@@ -1974,15 +2123,28 @@ async def import_transactions(
 
     hashes_to_check = [r["hash"] for r in rows_to_process]
 
-    existing_hashes = set(session.exec(
+    existing_legacy_hashes = set(session.exec(
         select(Transaction.import_hash).where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.import_hash).in_(hashes_to_check)
         )
     ).all())
+    existing_source_hashes = set(session.exec(
+        select(SourceRecord.canonical_hash).where(
+            SourceRecord.budget_id == current_budget.id,
+            col(SourceRecord.canonical_hash).in_(hashes_to_check)
+        )
+    ).all())
+    seen_hashes = {h for h in (existing_legacy_hashes | existing_source_hashes) if h}
 
-    final_rows = [r for r in rows_to_process if r["hash"] not in existing_hashes]
-    skipped_count = len(rows_to_process) - len(final_rows)
+    final_rows = []
+    skipped_count = 0
+    for row_item in rows_to_process:
+        if row_item["hash"] in seen_hashes:
+            skipped_count += 1
+        else:
+            seen_hashes.add(row_item["hash"])
+            final_rows.append(row_item)
 
     if not final_rows:
         return {"created": 0, "skipped": skipped_count, "failed": 0, "summary": f"All {len(rows_to_process)} transactions already imported."}
@@ -2089,45 +2251,82 @@ async def import_transactions(
                 candidate_date = candidate_date.replace(tzinfo=timezone.utc)
             if quantize_money(cand.total_amount) == t_amount and candidate_date and d_start <= candidate_date <= d_end:
                 existing_duplicate = cand
-                manual_candidates.remove(cand) # Don't match the same receipt twice
                 break
 
-        if existing_duplicate:
-            # Auto-Merge: Powiązanie paragonu z wpisem z banku
-            existing_duplicate.import_hash = row_data["hash"]
-            # Aktualizacja typu, o ile paragon był np. "expense", a skrypt wykrył "transfer"
-            if existing_duplicate.type == "expense" and t_type == "transfer":
-                existing_duplicate.type = "transfer"
+        bank_provider = "ing_pdf" if is_pdf else "ing_csv"
+        bank_adapter_version = "ing_pdf_v1" if is_pdf else "ing_csv_v1"
+        assert current_budget.id is not None
 
-            # Wzbogacenie notatki o dane z banku, żeby nie stracić oryginalnego tytułu przelewu
-            bank_note = f"[Bank: {row_data['title']}]"
-            if existing_duplicate.note:
-                if "[Bank:" not in existing_duplicate.note:
-                    existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
-            else:
-                existing_duplicate.note = bank_note
+        try:
+            with session.begin_nested():
+                if existing_duplicate:
+                    # Auto-Merge: Powiązanie paragonu z wpisem z banku
+                    existing_duplicate.import_hash = row_data["hash"]
+                    # Aktualizacja typu, o ile paragon był np. "expense", a skrypt wykrył "transfer"
+                    if existing_duplicate.type == "expense" and t_type == "transfer":
+                        existing_duplicate.type = "transfer"
 
-            existing_duplicate.status = TransactionStatus.CLEARED
-            session.add(existing_duplicate)
-            created_count += 1
-            print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
-        else:
-            transaction = Transaction(
-                merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
-                total_amount=t_amount,
-                currency=row_data["currency"],
-                date=t_date,
-                is_manual=False,
-                type=t_type,
-                status=TransactionStatus.CLEARED,
-                uploaded_by=current_user.id,
+                    # Wzbogacenie notatki o dane z banku, żeby nie stracić oryginalnego tytułu przelewu
+                    bank_note = f"[Bank: {row_data['title']}]"
+                    if existing_duplicate.note:
+                        if "[Bank:" not in existing_duplicate.note:
+                            existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
+                    else:
+                        existing_duplicate.note = bank_note
+
+                    existing_duplicate.status = TransactionStatus.CLEARED
+                    session.add(existing_duplicate)
+                    session.flush()
+                    target_tx = existing_duplicate
+                else:
+                    target_tx = Transaction(
+                        merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
+                        total_amount=t_amount,
+                        currency=row_data["currency"],
+                        date=t_date,
+                        is_manual=False,
+                        type=t_type,
+                        status=TransactionStatus.CLEARED,
+                        uploaded_by=current_user.id,
+                        budget_id=current_budget.id,
+                        category_id=cat_id,
+                        note=row_data["title"],
+                        import_hash=row_data["hash"],
+                    )
+                    session.add(target_tx)
+                    session.flush()
+
+                if target_tx.id is not None:
+                    session.add(
+                        build_source_record(
+                            budget_id=current_budget.id,
+                            transaction_id=target_tx.id,
+                            source_type=SourceType.BANK_CSV,
+                            provider=bank_provider,
+                            external_id=None,
+                            canonical_hash=row_data["hash"],
+                            adapter_version=bank_adapter_version,
+                            quality="0.95",
+                            raw_payload_policy=RawPayloadPolicy.NONE,
+                        )
+                    )
+                    session.flush()
+        except IntegrityError:
+            raced = find_existing_source_record(
+                session,
                 budget_id=current_budget.id,
-                category_id=cat_id,
-                note=row_data["title"],
-                import_hash=row_data["hash"]
+                provider=bank_provider,
+                canonical_hash=row_data["hash"],
             )
-            session.add(transaction)
-            created_count += 1
+            if raced is not None:
+                skipped_count += 1
+                continue
+            raise
+
+        if existing_duplicate is not None:
+            manual_candidates.remove(existing_duplicate)
+            print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
+        created_count += 1
 
     session.commit()
     return {
@@ -2662,6 +2861,16 @@ async def create_account(
             note="Auto-generated initial balance"
         )
         session.add(tx)
+        session.flush()
+        if tx.id is not None:
+            record_manual_source_provenance(
+                session,
+                budget_id=current_budget.id,
+                transaction_id=tx.id,
+                provider="system_opening_balance",
+                adapter_version="account_v1",
+                acquired_at=tx.date,
+            )
         session.commit()
         session.refresh(tx)
         line = TransactionLine(
@@ -2751,6 +2960,16 @@ async def reconcile_account(
             note="System adjustment"
         )
         session.add(tx)
+        session.flush()
+        if tx.id is not None and current_budget.id is not None:
+            record_manual_source_provenance(
+                session,
+                budget_id=current_budget.id,
+                transaction_id=tx.id,
+                provider="system_reconcile",
+                adapter_version="account_v1",
+                acquired_at=tx.date,
+            )
         session.commit()
         session.refresh(tx)
         line = TransactionLine(

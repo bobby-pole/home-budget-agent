@@ -33,14 +33,18 @@ from .models import (
     Category,
     EnvelopeAllocation,
     ExternalReceiptConnection,
+    RawPayloadPolicy,
     ReceiptScan,
     ScanUsageLog,
+    SourceRecord,
+    SourceType,
     Transaction,
     TransactionLine,
     TransactionStatus,
     TransactionTagLink,
     User,
 )
+from .provenance_service import build_source_record
 
 logger = logging.getLogger(__name__)
 
@@ -393,6 +397,7 @@ def clean_demo_data(session: Session, user: User) -> None:
             budget_ids.append(b.id)
 
     for budget_id in budget_ids:
+        session.exec(delete(SourceRecord).where(col(SourceRecord.budget_id) == budget_id))
         transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
         t_ids = [t.id for t in transactions if t.id is not None]
         if t_ids:
@@ -481,6 +486,20 @@ def seed_demo_month(
         )
         session.add(t)
         session.flush()
+
+        if budget.id is not None and t.id is not None:
+            session.add(
+                build_source_record(
+                    budget_id=budget.id,
+                    transaction_id=t.id,
+                    source_type=SourceType.MANUAL,
+                    provider="demo_seed",
+                    adapter_version="demo_seed_v1",
+                    acquired_at=t.date,
+                    quality="1.00",
+                    raw_payload_policy=RawPayloadPolicy.NONE,
+                )
+            )
 
         for line_name, unit_price, qty, c_name in items:
             session.add(

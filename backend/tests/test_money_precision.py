@@ -7,10 +7,10 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Numeric, column, create_engine, inspect, select as sa_select, table, text
 from sqlmodel import Session
 
-from app.models import Account, EnvelopeAllocation, Transaction, TransactionLine
+from app.models import Account
 from app.money import (
     format_money,
     format_quantity,
@@ -230,8 +230,8 @@ def test_alembic_decimal_migration_upgrade_downgrade_roundtrip(tmp_path: Path, m
             {"alloc": 250.55000000000001},
         )
 
-    # 2. Upgrade to head (Decimal / NUMERIC)
-    command.upgrade(alembic_cfg, "head")
+    # 2. Upgrade to Decimal / NUMERIC revision
+    command.upgrade(alembic_cfg, "d4f8a92c1e01")
 
     insp = inspect(engine)
     acc_cols = {c["name"]: c["type"] for c in insp.get_columns("account")}
@@ -249,18 +249,31 @@ def test_alembic_decimal_migration_upgrade_downgrade_roundtrip(tmp_path: Path, m
     assert "NUMERIC(12, 4)" in str(line_cols["final_price"]).upper()
     assert "NUMERIC(12, 2)" in str(alloc_cols["amount"]).upper()
 
-    with Session(engine) as s:
-        acc = s.get(Account, 1)
-        tx = s.get(Transaction, 1)
-        line = s.get(TransactionLine, 1)
-        alloc = s.get(EnvelopeAllocation, 1)
-        assert acc is not None and acc.current_balance == Decimal("10.99")
-        assert tx is not None and tx.total_amount == Decimal("0.30")
-        assert line is not None
-        assert line.price == Decimal("3.9943")
-        assert line.quantity == Decimal("1.9760")
-        assert line.discount_total == Decimal("-0.27")
-        assert alloc is not None and alloc.amount == Decimal("250.55")
+    acc_t = table("account", column("id"), column("current_balance", Numeric(12, 2)))
+    tx_t = table("transaction", column("id"), column("total_amount", Numeric(12, 2)))
+    line_t = table(
+        "transactionline",
+        column("id"),
+        column("price", Numeric(12, 4)),
+        column("quantity", Numeric(12, 4)),
+        column("discount_total", Numeric(12, 2)),
+    )
+    alloc_t = table("envelope_allocation", column("id"), column("amount", Numeric(12, 2)))
+
+    with engine.connect() as conn:
+        acc_row = conn.execute(sa_select(acc_t.c.current_balance).where(acc_t.c.id == 1)).first()
+        tx_row = conn.execute(sa_select(tx_t.c.total_amount).where(tx_t.c.id == 1)).first()
+        line_row = conn.execute(
+            sa_select(line_t.c.price, line_t.c.quantity, line_t.c.discount_total).where(line_t.c.id == 1)
+        ).first()
+        alloc_row = conn.execute(sa_select(alloc_t.c.amount).where(alloc_t.c.id == 1)).first()
+        assert acc_row is not None and acc_row.current_balance == Decimal("10.99")
+        assert tx_row is not None and tx_row.total_amount == Decimal("0.30")
+        assert line_row is not None
+        assert line_row.price == Decimal("3.9943")
+        assert line_row.quantity == Decimal("1.9760")
+        assert line_row.discount_total == Decimal("-0.27")
+        assert alloc_row is not None and alloc_row.amount == Decimal("250.55")
 
     # 3. Downgrade -1 back to FLOAT
     command.downgrade(alembic_cfg, "-1")
@@ -269,10 +282,10 @@ def test_alembic_decimal_migration_upgrade_downgrade_roundtrip(tmp_path: Path, m
     tx_cols_down = {c["name"]: c["type"] for c in insp_down.get_columns("transaction")}
     assert "FLOAT" in str(tx_cols_down["total_amount"]).upper()
 
-    # 4. Re-upgrade back to head
-    command.upgrade(alembic_cfg, "head")
-    with Session(engine) as s:
-        tx_re = s.get(Transaction, 1)
+    # 4. Re-upgrade back to Decimal / NUMERIC revision
+    command.upgrade(alembic_cfg, "d4f8a92c1e01")
+    with engine.connect() as conn:
+        tx_re = conn.execute(sa_select(tx_t.c.total_amount).where(tx_t.c.id == 1)).first()
         assert tx_re is not None and tx_re.total_amount == Decimal("0.30")
     engine.dispose()
 
