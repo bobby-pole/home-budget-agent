@@ -11,7 +11,7 @@ provider-specific transaction commit code.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Optional, Sequence
 
@@ -33,6 +33,7 @@ from app.models import (
     TransactionStatus,
 )
 from app.money import quantize_money, quantize_quantity, quantize_unit_price
+from app.reconciliation_service import discover_reconciliation_candidates
 from app.provenance_service import (
     build_source_record,
     find_existing_source_record,
@@ -258,6 +259,7 @@ def ingest_receipt_result(
             )
         raise
 
+    discover_reconciliation_candidates(session, budget_id=budget_id, commit=commit)
     if commit:
         session.commit()
 
@@ -344,6 +346,8 @@ def apply_receipt_result_to_existing_scan(
     session.add(transaction)
     session.add(scan)
     session.commit()
+    if transaction.budget_id is not None:
+        discover_reconciliation_candidates(session, budget_id=transaction.budget_id, commit=True)
     return scan.status
 
 
@@ -363,7 +367,7 @@ def ingest_transaction_batch(
     enable_ai_categorization: bool = False,
     tx_type_classifier: Optional[Callable[[TransactionAdapterResult], str]] = None,
 ) -> dict[str, Any]:
-    """Persist any ``TransactionBatchAdapterResult`` with idempotent dedup & Auto-Merge."""
+    """Persist any ``TransactionBatchAdapterResult`` with idempotent dedup and safe reconciliation discovery."""
     if not batch.items:
         return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
 
@@ -437,6 +441,7 @@ def ingest_transaction_batch(
             final_items.append(item)
 
     if not final_items:
+        discover_reconciliation_candidates(session, budget_id=budget_id, commit=True)
         return {
             "created": 0,
             "skipped": skipped_count,
@@ -487,18 +492,6 @@ def ingest_transaction_batch(
                 chunk = descriptions_to_query[i : i + 50]
                 ai_mapping.update(AIService.categorize_descriptions(chunk, categories=cat_dicts))
 
-    booked_dates = [item.transaction.booked_at for item in final_items]
-    min_date = min(booked_dates) - timedelta(days=2)
-    max_date = max(booked_dates) + timedelta(days=2)
-    candidates_stmt = select(Transaction).where(
-        Transaction.budget_id == budget_id,
-        Transaction.is_manual,
-        col(Transaction.import_hash).is_(None),
-        col(Transaction.date) >= min_date,
-        col(Transaction.date) <= max_date,
-    )
-    manual_candidates = list(session.exec(candidates_stmt).all())
-
     created_count = 0
     for item in final_items:
         tx_data = item.transaction
@@ -521,56 +514,26 @@ def ingest_transaction_batch(
         t_date = tx_data.booked_at
         t_amount = tx_data.abs_amount
 
-        existing_duplicate: Optional[Transaction] = None
-        d_start = t_date - timedelta(days=2)
-        d_end = t_date + timedelta(days=2)
-        for cand in manual_candidates:
-            candidate_date = cand.date
-            if candidate_date is not None and candidate_date.tzinfo is None:
-                candidate_date = candidate_date.replace(tzinfo=timezone.utc)
-            if (
-                quantize_money(cand.total_amount) == t_amount
-                and candidate_date is not None
-                and d_start <= candidate_date <= d_end
-            ):
-                existing_duplicate = cand
-                break
-
         try:
             with session.begin_nested():
-                if existing_duplicate is not None:
-                    existing_duplicate.import_hash = prov.canonical_hash
-                    if existing_duplicate.type == "expense" and t_type == "transfer":
-                        existing_duplicate.type = "transfer"
-
-                    bank_note = f"[Bank: {tx_data.title}]"
-                    if existing_duplicate.note:
-                        if "[Bank:" not in existing_duplicate.note:
-                            existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
-                    else:
-                        existing_duplicate.note = bank_note
-
-                    existing_duplicate.status = TransactionStatus.CLEARED
-                    session.add(existing_duplicate)
-                    session.flush()
-                    target_tx = existing_duplicate
-                else:
-                    target_tx = Transaction(
-                        merchant_name=tx_data.counterparty or tx_data.title or "Bank Transaction",
-                        total_amount=t_amount,
-                        currency=tx_data.currency,
-                        date=t_date,
-                        is_manual=False,
-                        type=t_type,
-                        status=TransactionStatus.CLEARED,
-                        uploaded_by=user_id,
-                        budget_id=budget_id,
-                        category_id=cat_id,
-                        note=tx_data.title,
-                        import_hash=prov.canonical_hash,
-                    )
-                    session.add(target_tx)
-                    session.flush()
+                # Safe reconciliation (#261): never silently merge bank cashflows onto existing
+                # manual/receipt transactions; keep distinct SourceRecords until confirmed.
+                target_tx = Transaction(
+                    merchant_name=tx_data.counterparty or tx_data.title or "Bank Transaction",
+                    total_amount=t_amount,
+                    currency=tx_data.currency,
+                    date=t_date,
+                    is_manual=False,
+                    type=t_type,
+                    status=TransactionStatus.CLEARED,
+                    uploaded_by=user_id,
+                    budget_id=budget_id,
+                    category_id=cat_id,
+                    note=tx_data.title,
+                    import_hash=prov.canonical_hash,
+                )
+                session.add(target_tx)
+                session.flush()
 
                 if target_tx.id is not None:
                     session.add(
@@ -602,11 +565,10 @@ def ingest_transaction_batch(
                 continue
             raise
 
-        if existing_duplicate is not None:
-            manual_candidates.remove(existing_duplicate)
         created_count += 1
 
     session.commit()
+    discover_reconciliation_candidates(session, budget_id=budget_id, commit=True)
     return {
         "created": created_count,
         "skipped": skipped_count,

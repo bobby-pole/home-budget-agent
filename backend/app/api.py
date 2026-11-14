@@ -34,7 +34,8 @@ from .models import (
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
     ImportJob,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
-    ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest
+    ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest,
+    ReconciliationActionResponse, ReconciliationListResponse, ReconciliationStatus,
 )
 from .adapters import (
     AdapterContractError,
@@ -49,6 +50,19 @@ from .database import get_session, get_ops_session, operations_engine
 from .ingestion_service import (
     apply_receipt_result_to_existing_scan,
     ingest_transaction_batch,
+)
+from .reconciliation_service import (
+    ReconciliationConflictError,
+    ReconciliationNotFoundError,
+    ReconciliationPermissionError,
+    accept_reconciliation_link,
+    cleanup_reconciliation_before_transaction_delete,
+    cleanup_reconciliation_for_budget,
+    discover_reconciliation_candidates,
+    list_reconciliation_links,
+    reject_reconciliation_link,
+    require_reconciliation_write_access,
+    unlink_reconciliation_link,
 )
 from .ocr_pipeline import ReceiptSource, ReceiptSourceDetector
 from .provenance_service import (
@@ -427,6 +441,7 @@ def delete_budget(
 
     session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
     session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
+    cleanup_reconciliation_for_budget(session, budget_id=budget_id)
     session.exec(delete(SourceRecord).where(col(SourceRecord.budget_id) == budget_id))
     session.exec(delete(ImportJob).where(col(ImportJob.budget_id) == budget_id))
     session.exec(delete(ExternalReceiptConnection).where(col(ExternalReceiptConnection.budget_id) == budget_id))
@@ -713,6 +728,7 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
             select(func.sum(Transaction.total_amount)).where(
                 Transaction.budget_id == transaction.budget_id,
                 Transaction.type == "expense",
+                col(Transaction.reconciled_into_id).is_(None),
                 extract('year', col(Transaction.date)) == year,
                 extract('month', col(Transaction.date)) == month,
                 col(Transaction.category_id) == cat_id,
@@ -727,6 +743,7 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
             ).where(
                 Transaction.budget_id == transaction.budget_id,
                 Transaction.type == "expense",
+                col(Transaction.reconciled_into_id).is_(None),
                 extract('year', col(Transaction.date)) == year,
                 extract('month', col(Transaction.date)) == month,
                 col(TransactionLine.category_id) == cat_id
@@ -862,6 +879,8 @@ def create_manual_transaction(
     _check_envelope_balance_and_alert(session, transaction, transaction.total_amount)
 
     session.commit()
+    if current_budget.id is not None:
+        discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=True)
     session.refresh(transaction)
 
     return transaction
@@ -1424,7 +1443,10 @@ async def get_transactions(
         raise HTTPException(status_code=404, detail="Budget not found")
     statement = (
         select(Transaction)
-        .where(Transaction.budget_id == current_budget.id)
+        .where(
+            Transaction.budget_id == current_budget.id,
+            col(Transaction.reconciled_into_id).is_(None),
+        )
     )
 
     if type:
@@ -1661,6 +1683,8 @@ async def verify_transaction(
     _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
 
     session.commit()
+    if current_budget.id is not None:
+        discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=True)
     session.refresh(db_transaction)
 
     # Delete image only if user did not request to keep it
@@ -1727,6 +1751,8 @@ async def update_transaction(
     _check_envelope_balance_and_alert(session, db_transaction, delta_amount)
 
     session.add(db_transaction)
+    session.flush()
+    discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=False)
     session.commit()
     session.refresh(db_transaction)
 
@@ -1793,6 +1819,7 @@ async def delete_transaction(
     if transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this transaction")
 
+    cleanup_reconciliation_before_transaction_delete(session, transaction_id=transaction_id)
     delete_source_records_for_transaction(session, transaction_id)
     session.expire(transaction, ["source_records"])
 
@@ -2014,6 +2041,7 @@ def get_summary(
     income_stmt = select(func.sum(Transaction.total_amount)).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "income",
+        col(Transaction.reconciled_into_id).is_(None),
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
@@ -2027,6 +2055,7 @@ def get_summary(
         .where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
+            col(Transaction.reconciled_into_id).is_(None),
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(False),
@@ -2040,6 +2069,7 @@ def get_summary(
     expense_stmt = select(func.sum(Transaction.total_amount)).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
+        col(Transaction.reconciled_into_id).is_(None),
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
@@ -2053,6 +2083,7 @@ def get_summary(
         .where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
+            col(Transaction.reconciled_into_id).is_(None),
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(True),
@@ -2078,6 +2109,7 @@ def get_summary(
     ).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
+        col(Transaction.reconciled_into_id).is_(None),
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month,
         col(Transaction.category_id).is_not(None),
@@ -2092,6 +2124,7 @@ def get_summary(
     ).join(Transaction, col(Transaction.id) == col(TransactionLine.transaction_id)).where(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
+        col(Transaction.reconciled_into_id).is_(None),
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month,
         col(TransactionLine.category_id).is_not(None)
@@ -2110,6 +2143,7 @@ def get_summary(
         .where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
+            col(Transaction.reconciled_into_id).is_(None),
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(True),
@@ -2665,3 +2699,137 @@ def disconnect_receipt_connection(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     return ConnectionService.disconnect(session, current_budget.id, connection_id, current_user)
+
+
+# --- RECONCILIATION ---
+
+
+def _handle_reconciliation_action(fn):
+    try:
+        return fn()
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ReconciliationNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ReconciliationConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get("/reconciliation/candidates", response_model=ReconciliationListResponse)
+def get_reconciliation_candidates(
+    status: Optional[ReconciliationStatus] = Query(default=None),
+    refresh: bool = Query(default=False),
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """List explainable receipt-bank reconciliation candidates and decisions for the active budget."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    if refresh:
+        try:
+            require_reconciliation_write_access(session, current_user, current_budget.id)
+        except ReconciliationPermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+    return list_reconciliation_links(
+        session,
+        budget_id=current_budget.id,
+        status=status,
+        auto_discover=refresh,
+    )
+
+
+@router.post("/reconciliation/refresh", response_model=ReconciliationListResponse)
+def refresh_reconciliation_candidates(
+    status: Optional[ReconciliationStatus] = Query(default=None),
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Recompute deterministic receipt-bank reconciliation candidates without altering prior decisions."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+
+    def _run() -> ReconciliationListResponse:
+        assert current_budget.id is not None
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return list_reconciliation_links(
+            session,
+            budget_id=current_budget.id,
+            status=status,
+            auto_discover=True,
+        )
+
+    return _handle_reconciliation_action(_run)
+
+
+@router.post("/reconciliation/{link_id}/accept", response_model=ReconciliationActionResponse)
+def accept_reconciliation_candidate(
+    link_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Confirm a reconciliation match between a bank row and a receipt/manual transaction."""
+    if current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget or user")
+
+    def _run() -> ReconciliationActionResponse:
+        assert current_budget.id is not None and current_user.id is not None
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return accept_reconciliation_link(
+            session,
+            budget_id=current_budget.id,
+            link_id=link_id,
+            user_id=current_user.id,
+        )
+
+    return _handle_reconciliation_action(_run)
+
+
+@router.post("/reconciliation/{link_id}/reject", response_model=ReconciliationActionResponse)
+def reject_reconciliation_candidate(
+    link_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Reject a proposed reconciliation candidate and keep that decision across re-imports."""
+    if current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget or user")
+
+    def _run() -> ReconciliationActionResponse:
+        assert current_budget.id is not None and current_user.id is not None
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return reject_reconciliation_link(
+            session,
+            budget_id=current_budget.id,
+            link_id=link_id,
+            user_id=current_user.id,
+        )
+
+    return _handle_reconciliation_action(_run)
+
+
+@router.post("/reconciliation/{link_id}/unlink", response_model=ReconciliationActionResponse)
+def unlink_reconciliation_candidate(
+    link_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Reversibly unlink a previously accepted reconciliation match."""
+    if current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget or user")
+
+    def _run() -> ReconciliationActionResponse:
+        assert current_budget.id is not None and current_user.id is not None
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return unlink_reconciliation_link(
+            session,
+            budget_id=current_budget.id,
+            link_id=link_id,
+            user_id=current_user.id,
+        )
+
+    return _handle_reconciliation_action(_run)

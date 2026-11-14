@@ -245,7 +245,81 @@
       }
     },
     "no_preview": "Podgląd niedostępny",
-    "no_visual_rep": "Pliki strukturalne (e-Paragon) nie posiadają reprezentacji wizualnej."
+    "no_visual_rep": "Pliki strukturalne (e-Paragon) nie posiadają reprezentacji wizualnej.",
+    "tabs": {
+      "receipts": "Skany paragonów",
+      "reconciliation": "Uzgadnianie z bankiem"
+    },
+    "reconciliation": {
+      "title": "Bezpieczne uzgadnianie paragonów i banku",
+      "subtitle": "Sprawdź proponowane powiązania przed ich połączeniem. System nie scala transakcji po cichu.",
+      "refresh_button": "Odśwież dopasowania",
+      "refresh_success": "Odświeżono kandydatów uzgadniania",
+      "load_error": "Nie udało się załadować propozycji dopasowań",
+      "action_error": "Nie udało się zaktualizować powiązania",
+      "accept_button": "Połącz",
+      "reject_button": "Odrzuć",
+      "unlink_button": "Rozłącz",
+      "accept_success": "Powiązanie potwierdzone i zapisane",
+      "reject_success": "Propozycja dopasowania odrzucona",
+      "unlink_success": "Powiązanie rozłączone",
+      "empty_title": "Brak dopasowań w tym widoku",
+      "empty_description": "Zaimportuj wyciąg bankowy (CSV/PDF) i dodaj paragony, aby bezpiecznie przeglądać propozycje powiązań.",
+      "bank_side_label": "Zapis bankowy",
+      "receipt_side_label": "Paragon / Wpis ręczny",
+      "no_account": "Konto nieprzypisane",
+      "score_label": "Pewność",
+      "reasons_title": "Dlaczego zaproponowano to dopasowanie",
+      "ambiguity_warning": "Wykryto wiele transakcji ({count}) na tę samą kwotę tego samego dnia — zweryfikuj sklep i opis przed połączeniem.",
+      "filters": {
+        "pending": "Oczekujące",
+        "accepted": "Połączone",
+        "rejected": "Odrzucone",
+        "unlinked": "Rozłączone",
+        "all": "Wszystkie"
+      },
+      "status": {
+        "pending": "Do decyzji",
+        "accepted": "Połączono",
+        "rejected": "Odrzucono",
+        "unlinked": "Rozłączono"
+      },
+      "match_kind": {
+        "exact": "Pełna kwota",
+        "refund": "Zwrot",
+        "split_payment": "Płatność dzielona"
+      },
+      "confidence": {
+        "high": "Wysoka",
+        "medium": "Średnia",
+        "low": "Niska"
+      },
+      "signals": {
+        "amount_exact": "Dokładna zgodność kwoty",
+        "amount_exact_rounding": "Zgodność kwoty (tolerancja 0,01)",
+        "refund_amount_exact": "Dokładna kwota zwrotu",
+        "refund_amount_partial": "Częściowy zwrot środków",
+        "split_payment_pair_sum": "Suma płatności bankowych pokrywa paragon",
+        "split_payment_remainder": "Pokrywa pozostałą kwotę paragonu",
+        "split_payment_partial": "Częściowa płatność za paragon",
+        "date_same_day": "Ta sama data transakcji",
+        "date_within_1d": "Zaksięgowano w ciągu 1 dnia",
+        "date_within_2d": "Zaksięgowano w ciągu 2 dni",
+        "date_settlement_lag": "Opóźnienie księgowania karty (3–5 dni)",
+        "refund_date_recent": "Zwrot zaksięgowany do 7 dni",
+        "refund_date_window": "Zwrot zaksięgowany do 30 dni",
+        "merchant_strong_match": "Wysoka zgodność nazwy sklepu",
+        "merchant_partial_match": "Częściowe podobieństwo sklepu",
+        "merchant_mismatch": "Nazwy sklepu różnią się",
+        "account_exact_match": "To samo konto",
+        "account_mismatch": "Różne konta",
+        "account_unassigned": "Paragon bez konta (przejmie konto bankowe)",
+        "source_receipt_unpaired": "Niepowiązany zweryfikowany paragon",
+        "source_manual_unpaired": "Niepowiązany wpis ręczny",
+        "source_split_continuation": "Kolejna płatność do częściowo opłaconego paragonu",
+        "same_day_equal_amount_ambiguity": "Wiele pozycji o tej samej kwocie tego dnia"
+      }
+    }
   },
   "transactions": {
     "page_title": "Historia Transakcji",

@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any, List, Optional
 from datetime import date, datetime, timezone
 from pydantic import field_validator
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, DateTime, TypeDecorator, event, select, text, update, Boolean
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, DateTime, TypeDecorator, event, or_, select, text, update, Boolean
 from sqlmodel import Field, Relationship, SQLModel, col
 from sqlmodel._compat import SQLModelConfig
 
@@ -330,6 +330,7 @@ class Transaction(TransactionBase, table=True):
     budget_id: Optional[int] = Field(default=None, foreign_key="budget.id", index=True)
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
+    reconciled_into_id: Optional[int] = Field(default=None, foreign_key="transaction.id", index=True)
 
     lines: List["TransactionLine"] = Relationship(
         back_populates="transaction",
@@ -451,6 +452,81 @@ class SourceRecord(SQLModel, table=True):
     @field_validator("acquired_at", mode="before")
     @classmethod
     def validate_acquired_at_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
+
+
+class ReconciliationStatus(str, Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    UNLINKED = "unlinked"
+
+
+class ReconciliationMatchKind(str, Enum):
+    EXACT = "exact"
+    REFUND = "refund"
+    SPLIT_PAYMENT = "split_payment"
+
+
+class ReconciliationLink(SQLModel, table=True):
+    """Persistent, reversible reconciliation candidate or link between a bank source and a receipt/manual source."""
+
+    __tablename__: str = "reconciliation_link"  # type: ignore
+    __table_args__ = (
+        UniqueConstraint(
+            "budget_id",
+            "bank_source_record_id",
+            "target_source_record_id",
+            name="uq_reconciliation_budget_source_pair",
+        ),
+        Index(
+            "uq_reconciliation_active_bank_source",
+            "bank_source_record_id",
+            unique=True,
+            sqlite_where=text("status = 'accepted'"),
+            postgresql_where=text("status = 'accepted'"),
+        ),
+        Index(
+            "uq_reconciliation_active_target_purchase_exclusive",
+            "target_source_record_id",
+            unique=True,
+            sqlite_where=text("status = 'accepted' AND match_kind = 'exact'"),
+            postgresql_where=text("status = 'accepted' AND match_kind = 'exact'"),
+        ),
+        Index("ix_reconciliation_link_budget_status", "budget_id", "status", "score"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+    bank_source_record_id: int = Field(foreign_key="source_record.id", index=True)
+    target_source_record_id: int = Field(foreign_key="source_record.id", index=True)
+    bank_transaction_id: int = Field(foreign_key="transaction.id", index=True)
+    target_transaction_id: int = Field(foreign_key="transaction.id", index=True)
+    match_kind: ReconciliationMatchKind = Field(
+        default=ReconciliationMatchKind.EXACT,
+        sa_column=Column(String, nullable=False, server_default=ReconciliationMatchKind.EXACT.value),
+    )
+    status: ReconciliationStatus = Field(
+        default=ReconciliationStatus.PENDING,
+        sa_column=Column(String, index=True, nullable=False, server_default=ReconciliationStatus.PENDING.value),
+    )
+    score: ScoreDecimal = Field(default=Decimal("0.0000"), sa_type=Numeric(5, 4))  # type: ignore[arg-type]
+    reasons: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
+    previous_receipt_status: Optional[str] = Field(default=None)
+    decided_by_user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    decided_at: Optional[datetime] = Field(default=None, sa_column=Column(UTCDateTime(), nullable=True))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False),
+    )
+
+    @field_validator("decided_at", "created_at", "updated_at", mode="before")
+    @classmethod
+    def validate_dates_tz(cls, v: Any) -> Optional[datetime]:
         return ensure_tz_aware(v)
 
 
@@ -868,12 +944,68 @@ class TransactionRead(TransactionBase):
     id: int
     note: Optional[str] = None
     category_id: Optional[int] = None
+    reconciled_into_id: Optional[int] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
     tags: List["TagRead"] = []
     receipt_scan: Optional[ReceiptScanRead] = None
     source_records: List[SourceRecordRead] = []
+
+
+class ReconciliationTransactionSummary(SQLModel):
+    id: int
+    merchant_name: str
+    total_amount: MoneyDecimal
+    currency: str
+    date: Optional[datetime] = None
+    type: str
+    status: TransactionStatus
+    account_id: Optional[int] = None
+    account_name: Optional[str] = None
+    note: Optional[str] = None
+    source_type: Optional[SourceType] = None
+    provider: Optional[str] = None
+
+
+class ReconciliationSignalRead(SQLModel):
+    code: str
+    matched: bool
+    weight: ScoreDecimal
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReconciliationLinkRead(SQLModel):
+    id: int
+    budget_id: int
+    bank_source_record_id: int
+    target_source_record_id: int
+    bank_transaction_id: int
+    target_transaction_id: int
+    match_kind: ReconciliationMatchKind
+    status: ReconciliationStatus
+    score: ScoreDecimal
+    confidence_tier: str
+    signals: List[ReconciliationSignalRead] = []
+    same_day_conflict_count: int = 0
+    bank_transaction: Optional[ReconciliationTransactionSummary] = None
+    target_transaction: Optional[ReconciliationTransactionSummary] = None
+    decided_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReconciliationListResponse(SQLModel):
+    candidates: List[ReconciliationLinkRead] = []
+    pending_count: int = 0
+    accepted_count: int = 0
+    rejected_count: int = 0
+    unlinked_count: int = 0
+
+
+class ReconciliationActionResponse(SQLModel):
+    link: ReconciliationLinkRead
+    message: str
 
 
 class TransactionCreate(TransactionBase):
@@ -1108,6 +1240,119 @@ def remember_previous_transaction_accounts(mapper, connection, target):
     target.__dict__["_balance_recalc_previous_account_ids"] = previous_ids
 
 
+def recalculate_account_balance(connection: Any, acc_id: int) -> None:
+    """Recompute and persist ``Account.current_balance`` for ``acc_id``.
+
+    Excludes bank transactions folded via ``reconciled_into_id`` for exact matches,
+    while attributing accepted ``split_payment`` outflows directly to each bank
+    transaction's own account and counting only the uncovered remainder (if any)
+    on a pre-assigned target account.
+    """
+    split_links = connection.execute(
+        select(
+            col(ReconciliationLink.target_transaction_id),
+            col(ReconciliationLink.bank_transaction_id),
+        ).where(
+            col(ReconciliationLink.status) == ReconciliationStatus.ACCEPTED.value,
+            col(ReconciliationLink.match_kind) == ReconciliationMatchKind.SPLIT_PAYMENT.value,
+        )
+    ).fetchall()
+
+    split_bank_by_target: dict[int, list[int]] = {}
+    split_bank_ids: set[int] = set()
+    for target_tx_id, bank_tx_id in split_links:
+        if target_tx_id is not None and bank_tx_id is not None:
+            split_bank_by_target.setdefault(target_tx_id, []).append(bank_tx_id)
+            split_bank_ids.add(bank_tx_id)
+    split_target_ids = set(split_bank_by_target.keys())
+
+    regular_filter = col(Transaction.reconciled_into_id).is_(None)
+    if split_target_ids:
+        regular_filter = regular_filter & col(Transaction.id).not_in(split_target_ids)
+    out_filter = or_(regular_filter, col(Transaction.id).in_(split_bank_ids)) if split_bank_ids else regular_filter
+
+    res_out = connection.execute(
+        select(col(Transaction.type), col(Transaction.total_amount)).where(
+            col(Transaction.account_id) == acc_id,
+            out_filter,
+        )
+    ).fetchall()
+
+    split_target_rows = []
+    if split_target_ids:
+        split_target_rows = connection.execute(
+            select(col(Transaction.id), col(Transaction.type), col(Transaction.total_amount)).where(
+                col(Transaction.account_id) == acc_id,
+                col(Transaction.id).in_(split_target_ids),
+                col(Transaction.reconciled_into_id).is_(None),
+            )
+        ).fetchall()
+
+    covered_bank_amounts: dict[int, Decimal] = {}
+    if split_target_rows:
+        needed_bank_ids = {
+            b_id
+            for t_id, _, _ in split_target_rows
+            for b_id in split_bank_by_target.get(t_id, [])
+        }
+        if needed_bank_ids:
+            bank_rows = connection.execute(
+                select(col(Transaction.id), col(Transaction.total_amount)).where(
+                    col(Transaction.id).in_(needed_bank_ids)
+                )
+            ).fetchall()
+            for b_id, b_amt in bank_rows:
+                if b_id is not None and b_amt is not None:
+                    covered_bank_amounts[b_id] = quantize_money(abs(b_amt))
+
+    res_in_rows = connection.execute(
+        select(col(Transaction.total_amount)).where(
+            col(Transaction.transfer_id) == acc_id,
+            col(Transaction.type) == "transfer",
+            col(Transaction.reconciled_into_id).is_(None),
+        )
+    ).scalars().all()
+
+    init_bal_raw = connection.execute(
+        select(col(Account.initial_balance)).where(col(Account.id) == acc_id)
+    ).scalar()
+
+    balance = quantize_money(init_bal_raw or Decimal("0.00"))
+    for tx_type, amount in res_out:
+        if amount is None:
+            continue
+        dec_amount = quantize_money(amount)
+        if tx_type == "income":
+            balance += dec_amount
+        elif tx_type in ("expense", "transfer"):
+            balance -= dec_amount
+
+    for target_tx_id, tx_type, target_amount in split_target_rows:
+        if target_amount is None:
+            continue
+        covered_sum = sum(
+            (covered_bank_amounts.get(b_id, Decimal("0.00")) for b_id in split_bank_by_target.get(target_tx_id, [])),
+            Decimal("0.00"),
+        )
+        uncovered = max(Decimal("0.00"), quantize_money(target_amount) - covered_sum)
+        if uncovered <= Decimal("0.00"):
+            continue
+        if tx_type == "income":
+            balance += uncovered
+        elif tx_type in ("expense", "transfer"):
+            balance -= uncovered
+
+    for transfer_in_amount in res_in_rows:
+        if transfer_in_amount is not None:
+            balance += quantize_money(transfer_in_amount)
+
+    connection.execute(
+        update(Account)
+        .where(Account.id == acc_id)  # type: ignore[arg-type]
+        .values(current_balance=quantize_money(balance))
+    )
+
+
 @event.listens_for(Transaction, "after_insert")
 @event.listens_for(Transaction, "after_update")
 @event.listens_for(Transaction, "after_delete")
@@ -1118,37 +1363,4 @@ def transaction_changed_update_balance(mapper, connection, target):
         return
 
     for acc_id in account_ids:
-        res_out = connection.execute(
-            select(col(Transaction.type), col(Transaction.total_amount)).where(col(Transaction.account_id) == acc_id)
-        ).fetchall()
-
-        res_in_rows = connection.execute(
-            select(col(Transaction.total_amount)).where(
-                col(Transaction.transfer_id) == acc_id,
-                col(Transaction.type) == "transfer",
-            )
-        ).scalars().all()
-
-        init_bal_raw = connection.execute(
-            select(col(Account.initial_balance)).where(col(Account.id) == acc_id)
-        ).scalar()
-
-        balance = quantize_money(init_bal_raw or Decimal("0.00"))
-        for tx_type, amount in res_out:
-            if amount is None:
-                continue
-            dec_amount = quantize_money(amount)
-            if tx_type == "income":
-                balance += dec_amount
-            elif tx_type in ("expense", "transfer"):
-                balance -= dec_amount
-
-        for transfer_in_amount in res_in_rows:
-            if transfer_in_amount is not None:
-                balance += quantize_money(transfer_in_amount)
-
-        connection.execute(
-            update(Account)
-            .where(Account.id == acc_id)  # type: ignore[arg-type]
-            .values(current_balance=quantize_money(balance))
-        )
+        recalculate_account_balance(connection, acc_id)

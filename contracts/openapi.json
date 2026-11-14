@@ -3222,6 +3222,335 @@
         }
       }
     },
+    "/api/reconciliation/candidates": {
+      "get": {
+        "summary": "Get Reconciliation Candidates",
+        "description": "List explainable receipt-bank reconciliation candidates and decisions for the active budget.",
+        "operationId": "get_reconciliation_candidates_api_reconciliation_candidates_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReconciliationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Refresh"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reconciliation/refresh": {
+      "post": {
+        "summary": "Refresh Reconciliation Candidates",
+        "description": "Recompute deterministic receipt-bank reconciliation candidates without altering prior decisions.",
+        "operationId": "refresh_reconciliation_candidates_api_reconciliation_refresh_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ReconciliationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reconciliation/{link_id}/accept": {
+      "post": {
+        "summary": "Accept Reconciliation Candidate",
+        "description": "Confirm a reconciliation match between a bank row and a receipt/manual transaction.",
+        "operationId": "accept_reconciliation_candidate_api_reconciliation__link_id__accept_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Link Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reconciliation/{link_id}/reject": {
+      "post": {
+        "summary": "Reject Reconciliation Candidate",
+        "description": "Reject a proposed reconciliation candidate and keep that decision across re-imports.",
+        "operationId": "reject_reconciliation_candidate_api_reconciliation__link_id__reject_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Link Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reconciliation/{link_id}/unlink": {
+      "post": {
+        "summary": "Unlink Reconciliation Candidate",
+        "description": "Reversibly unlink a previously accepted reconciliation match.",
+        "operationId": "unlink_reconciliation_candidate_api_reconciliation__link_id__unlink_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Link Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Health Check",
@@ -4532,6 +4861,326 @@
         ],
         "title": "ReceiptScanRead"
       },
+      "ReconciliationActionResponse": {
+        "properties": {
+          "link": {
+            "$ref": "#/components/schemas/ReconciliationLinkRead"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "link",
+          "message"
+        ],
+        "title": "ReconciliationActionResponse"
+      },
+      "ReconciliationLinkRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "budget_id": {
+            "type": "integer",
+            "title": "Budget Id"
+          },
+          "bank_source_record_id": {
+            "type": "integer",
+            "title": "Bank Source Record Id"
+          },
+          "target_source_record_id": {
+            "type": "integer",
+            "title": "Target Source Record Id"
+          },
+          "bank_transaction_id": {
+            "type": "integer",
+            "title": "Bank Transaction Id"
+          },
+          "target_transaction_id": {
+            "type": "integer",
+            "title": "Target Transaction Id"
+          },
+          "match_kind": {
+            "$ref": "#/components/schemas/ReconciliationMatchKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ReconciliationStatus"
+          },
+          "score": {
+            "type": "string",
+            "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$",
+            "title": "Score",
+            "example": "1.00"
+          },
+          "confidence_tier": {
+            "type": "string",
+            "title": "Confidence Tier"
+          },
+          "signals": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationSignalRead"
+            },
+            "type": "array",
+            "title": "Signals",
+            "default": []
+          },
+          "same_day_conflict_count": {
+            "type": "integer",
+            "title": "Same Day Conflict Count",
+            "default": 0
+          },
+          "bank_transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationTransactionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_transaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReconciliationTransactionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "budget_id",
+          "bank_source_record_id",
+          "target_source_record_id",
+          "bank_transaction_id",
+          "target_transaction_id",
+          "match_kind",
+          "status",
+          "score",
+          "confidence_tier",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReconciliationLinkRead"
+      },
+      "ReconciliationListResponse": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/ReconciliationLinkRead"
+            },
+            "type": "array",
+            "title": "Candidates",
+            "default": []
+          },
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count",
+            "default": 0
+          },
+          "accepted_count": {
+            "type": "integer",
+            "title": "Accepted Count",
+            "default": 0
+          },
+          "rejected_count": {
+            "type": "integer",
+            "title": "Rejected Count",
+            "default": 0
+          },
+          "unlinked_count": {
+            "type": "integer",
+            "title": "Unlinked Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ReconciliationListResponse"
+      },
+      "ReconciliationMatchKind": {
+        "type": "string",
+        "enum": [
+          "exact",
+          "refund",
+          "split_payment"
+        ],
+        "title": "ReconciliationMatchKind"
+      },
+      "ReconciliationSignalRead": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "matched": {
+            "type": "boolean",
+            "title": "Matched"
+          },
+          "weight": {
+            "type": "string",
+            "pattern": "^(0(\\.\\d{1,4})?|1(\\.0{1,4})?)$",
+            "title": "Weight",
+            "example": "1.00"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "matched",
+          "weight"
+        ],
+        "title": "ReconciliationSignalRead"
+      },
+      "ReconciliationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "accepted",
+          "rejected",
+          "unlinked"
+        ],
+        "title": "ReconciliationStatus"
+      },
+      "ReconciliationTransactionSummary": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "merchant_name": {
+            "type": "string",
+            "title": "Merchant Name"
+          },
+          "total_amount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Total Amount",
+            "example": "10.99"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TransactionStatus"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "account_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Name"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "merchant_name",
+          "total_amount",
+          "currency",
+          "type",
+          "status"
+        ],
+        "title": "ReconciliationTransactionSummary"
+      },
       "SourceRecordRead": {
         "properties": {
           "id": {
@@ -5251,6 +5900,17 @@
               }
             ],
             "title": "Category Id"
+          },
+          "reconciled_into_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reconciled Into Id"
           },
           "lines": {
             "items": {
