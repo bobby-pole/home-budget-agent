@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { addMoney, toCents, toChartNumber } from "@/lib/money";
 
 export function SpendingChart() {
   const { data: transactions, isLoading: isTransactionsLoading } = useQuery({
@@ -34,7 +35,7 @@ export function SpendingChart() {
   }
 
   // Aggregate Data
-  const categoryTotals: Record<string, { value: number; color: string; icon: string }> = {};
+  const categoryTotals: Record<string, { value: string; color: string; icon: string }> = {};
 
   const now = new Date();
   const curMonth = now.getMonth();
@@ -59,11 +60,11 @@ export function SpendingChart() {
     transaction.lines?.forEach((item) => {
       const displayCat = getCategoryById(item.category_id ?? null);
 
-      if (item.price > 0) {
+      if (toCents(item.price) > 0n) {
         if (!categoryTotals[displayCat.name]) {
-          categoryTotals[displayCat.name] = { value: 0, color: displayCat.color, icon: displayCat.icon };
+          categoryTotals[displayCat.name] = { value: "0.00", color: displayCat.color, icon: displayCat.icon };
         }
-        categoryTotals[displayCat.name].value += item.price;
+        categoryTotals[displayCat.name].value = addMoney(categoryTotals[displayCat.name].value, item.price);
       }
     });
   });
@@ -72,13 +73,14 @@ export function SpendingChart() {
   const chartData = Object.entries(categoryTotals)
     .map(([name, data]) => ({
       name,
-      value: data.value,
+      value: toChartNumber(data.value),
       color: data.color,
       icon: data.icon
     }))
     .sort((a, b) => b.value - a.value);
 
-  const total = chartData.reduce((sum, item) => sum + item.value, 0);
+  const totalStr = Object.values(categoryTotals).reduce((sum, item) => addMoney(sum, item.value), "0.00");
+  const total = toChartNumber(totalStr);
 
   return (
     <Card className="rounded-2xl border border-border/50 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">

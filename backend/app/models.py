@@ -1,12 +1,14 @@
 # backend/app/models.py
 from enum import Enum
+from decimal import Decimal
 from typing import Any, List, Optional
 from datetime import date, datetime, timezone
-import math
 from pydantic import field_validator
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, event, text, Boolean
-from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, event, select, text, update, Boolean
+from sqlmodel import Field, Relationship, SQLModel, col
 from sqlmodel._compat import SQLModelConfig
+
+from app.money import MoneyDecimal, QuantityDecimal, UnitPriceDecimal, quantize_money
 
 
 def ensure_tz_aware(v: Any) -> Optional[datetime]:
@@ -146,8 +148,8 @@ class AccountBase(SQLModel):
     name: str = Field(min_length=1, max_length=120)
     type: str = Field(default="checking")  # checking, savings, cash, credit, tracking_asset, tracking_liability
     currency: str = Field(default="PLN", min_length=3, max_length=3)
-    initial_balance: float = Field(default=0.0)
-    current_balance: float = Field(default=0.0)
+    initial_balance: MoneyDecimal = Field(default=Decimal("0.00"), sa_type=Numeric(12, 2))  # type: ignore[arg-type]
+    current_balance: MoneyDecimal = Field(default=Decimal("0.00"), sa_type=Numeric(12, 2))  # type: ignore[arg-type]
     is_on_budget: bool = Field(default=True)
     is_active: bool = Field(default=True)
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
@@ -178,8 +180,8 @@ class AccountBase(SQLModel):
 
     @field_validator("initial_balance", "current_balance")
     @classmethod
-    def validate_balance(cls, value: float) -> float:
-        if not math.isfinite(value):
+    def validate_balance(cls, value: Decimal) -> Decimal:
+        if not value.is_finite():
             raise ValueError("Balance must be finite")
         return value
 
@@ -265,7 +267,7 @@ class Tag(TagBase, table=True):
 class TransactionBase(SQLModel):
     merchant_name: str = Field(index=True)
     date: Optional[datetime] = Field(default=None)
-    total_amount: float = Field(default=0.0)
+    total_amount: MoneyDecimal = Field(default=Decimal("0.00"), sa_type=Numeric(12, 2))  # type: ignore[arg-type]
     currency: str = Field(default="PLN")
     is_manual: bool = Field(default=False)
     type: str = Field(default="expense")  # expense | income | transfer
@@ -367,13 +369,13 @@ class ScanUsageLog(SQLModel, table=True):
 
 class TransactionLineBase(SQLModel):
     name: str
-    price: float
-    quantity: float = Field(default=1.0)
+    price: UnitPriceDecimal = Field(sa_type=Numeric(12, 4))  # type: ignore[arg-type]
+    quantity: QuantityDecimal = Field(default=Decimal("1"), sa_type=Numeric(12, 4))  # type: ignore[arg-type]
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     category_source: Optional[str] = Field(default=None)
-    original_price: Optional[float] = Field(default=None)
-    discount_total: float = Field(default=0.0)
-    final_price: Optional[float] = Field(default=None)
+    original_price: Optional[UnitPriceDecimal] = Field(default=None, sa_type=Numeric(12, 4))  # type: ignore[arg-type]
+    discount_total: MoneyDecimal = Field(default=Decimal("0.00"), sa_type=Numeric(12, 2))  # type: ignore[arg-type]
+    final_price: Optional[UnitPriceDecimal] = Field(default=None, sa_type=Numeric(12, 4))  # type: ignore[arg-type]
     is_adjustment: bool = Field(default=False)
 
 
@@ -399,7 +401,7 @@ class EnvelopeAllocation(SQLModel, table=True):
     category_id: int = Field(foreign_key="category.id", index=True)
     month: int = Field(index=True)
     year: int = Field(index=True)
-    amount: float = Field(default=0.0)
+    amount: MoneyDecimal = Field(default=Decimal("0.00"), sa_type=Numeric(12, 2))  # type: ignore[arg-type]
 
     budget: Optional[Budget] = Relationship(back_populates="envelope_allocations")
     category: Optional["Category"] = Relationship(back_populates="envelope_allocations")
@@ -550,8 +552,8 @@ class AccountCreate(AccountBase):
 
     @field_validator("current_balance")
     @classmethod
-    def validate_client_current_balance(cls, value: float) -> float:
-        if value != 0:
+    def validate_client_current_balance(cls, value: Decimal) -> Decimal:
+        if value != Decimal("0"):
             raise ValueError("current_balance is calculated from transactions")
         return value
 
@@ -601,14 +603,14 @@ class EnvelopeAllocationRead(SQLModel):
     category_id: int
     month: int
     year: int
-    amount: float
+    amount: MoneyDecimal
 
 
 class EnvelopeAllocationCreate(SQLModel):
     category_id: int
     month: int
     year: int
-    amount: float
+    amount: MoneyDecimal
 
 
 
@@ -648,7 +650,7 @@ class TransactionCreate(TransactionBase):
 class TransactionUpdate(SQLModel):
     merchant_name: Optional[str] = None
     date: Optional[datetime] = None
-    total_amount: Optional[float] = None
+    total_amount: Optional[MoneyDecimal] = Field(default=None, ge=0)
     currency: Optional[str] = None
     category_id: Optional[int] = None
     note: Optional[str] = None
@@ -666,18 +668,18 @@ class TransactionUpdate(SQLModel):
 
 class TransactionLineCreate(SQLModel):
     name: str
-    price: float
-    quantity: float = 1.0
+    price: UnitPriceDecimal
+    quantity: QuantityDecimal = Field(default=Decimal("1"), gt=0)
     category_id: Optional[int] = None
-    original_price: Optional[float] = None
-    discount_total: float = 0.0
-    final_price: Optional[float] = None
+    original_price: Optional[UnitPriceDecimal] = None
+    discount_total: MoneyDecimal = Decimal("0.00")
+    final_price: Optional[UnitPriceDecimal] = None
     is_adjustment: bool = False
 
 
 class ManualTransactionCreate(SQLModel):
     merchant_name: str
-    total_amount: float
+    total_amount: MoneyDecimal = Field(ge=0)
     currency: str = "PLN"
     date: Optional[datetime] = None
     category_id: Optional[int] = None
@@ -698,7 +700,7 @@ class ManualTransactionCreate(SQLModel):
 class TransferCreate(SQLModel):
     source_account_id: int
     destination_account_id: int
-    amount: float = Field(gt=0)
+    amount: MoneyDecimal = Field(gt=0)
     currency: str = Field(default="PLN", min_length=3, max_length=3)
     date: Optional[datetime] = None
     note: Optional[str] = None
@@ -713,12 +715,12 @@ class TransferCreate(SQLModel):
 
 class TransactionLineUpdate(SQLModel):
     name: Optional[str] = None
-    price: Optional[float] = None
-    quantity: Optional[float] = None
+    price: Optional[UnitPriceDecimal] = None
+    quantity: Optional[QuantityDecimal] = Field(default=None, gt=0)
     category_id: Optional[int] = None
-    original_price: Optional[float] = None
-    discount_total: Optional[float] = None
-    final_price: Optional[float] = None
+    original_price: Optional[UnitPriceDecimal] = None
+    discount_total: Optional[MoneyDecimal] = None
+    final_price: Optional[UnitPriceDecimal] = None
     is_adjustment: Optional[bool] = None
 
 
@@ -731,7 +733,7 @@ class VerifyRequest(SQLModel):
 
 
 class EnvelopeAllocationUpdate(SQLModel):
-    amount: float
+    amount: MoneyDecimal = Field(ge=0)
 
 
 class BudgetMemberRead(SQLModel):
@@ -760,18 +762,18 @@ class ChangePasswordRequest(SQLModel):
 class CategoryBudgetSummaryItem(SQLModel):
     category_id: int
     category_name: str
-    planned: float
-    spent: float
-    remaining: float
+    planned: MoneyDecimal
+    spent: MoneyDecimal
+    remaining: MoneyDecimal
 
 
 class MonthlyBudgetSummary(SQLModel):
     year: int
     month: int
-    total_planned: float
-    total_spent: float
-    net_cash_flow: float
-    total_income: float
+    total_planned: MoneyDecimal
+    total_spent: MoneyDecimal
+    net_cash_flow: MoneyDecimal
+    total_income: MoneyDecimal
     categories: List[CategoryBudgetSummaryItem]
 
 
@@ -883,37 +885,37 @@ def transaction_changed_update_balance(mapper, connection, target):
         return
 
     for acc_id in account_ids:
-        query_out = text("""
-            SELECT type, SUM(total_amount)
-            FROM "transaction"
-            WHERE account_id = :acc_id
-            GROUP BY type
-        """)
-        res_out = connection.execute(query_out, {"acc_id": acc_id}).fetchall()
+        res_out = connection.execute(
+            select(col(Transaction.type), col(Transaction.total_amount)).where(col(Transaction.account_id) == acc_id)
+        ).fetchall()
 
-        query_in = text("""
-            SELECT SUM(total_amount)
-            FROM "transaction"
-            WHERE transfer_id = :acc_id AND type = 'transfer'
-        """)
-        res_in = connection.execute(query_in, {"acc_id": acc_id}).scalar() or 0.0
+        res_in_rows = connection.execute(
+            select(col(Transaction.total_amount)).where(
+                col(Transaction.transfer_id) == acc_id,
+                col(Transaction.type) == "transfer",
+            )
+        ).scalars().all()
 
-        query_init = text("""
-            SELECT initial_balance FROM account WHERE id = :acc_id
-        """)
-        init_bal = connection.execute(query_init, {"acc_id": acc_id}).scalar() or 0.0
+        init_bal_raw = connection.execute(
+            select(col(Account.initial_balance)).where(col(Account.id) == acc_id)
+        ).scalar()
 
-        balance = init_bal
-        for tx_type, total in res_out:
-            if total:
-                if tx_type == "income":
-                    balance += total
-                elif tx_type in ("expense", "transfer"):
-                    balance -= total
+        balance = quantize_money(init_bal_raw or Decimal("0.00"))
+        for tx_type, amount in res_out:
+            if amount is None:
+                continue
+            dec_amount = quantize_money(amount)
+            if tx_type == "income":
+                balance += dec_amount
+            elif tx_type in ("expense", "transfer"):
+                balance -= dec_amount
 
-        balance += res_in
+        for transfer_in_amount in res_in_rows:
+            if transfer_in_amount is not None:
+                balance += quantize_money(transfer_in_amount)
 
         connection.execute(
-            text("UPDATE account SET current_balance = :bal WHERE id = :acc_id"),
-            {"bal": round(balance, 2), "acc_id": acc_id}
+            update(Account)
+            .where(Account.id == acc_id)  # type: ignore[arg-type]
+            .values(current_balance=quantize_money(balance))
         )

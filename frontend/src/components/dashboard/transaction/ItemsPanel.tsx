@@ -2,6 +2,11 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { t } from "@/lib/i18n";
+import {
+  isPositiveDecimalInput,
+  parseQuantityInput,
+  parseUnitPriceInput,
+} from "@/lib/money";
 import { ItemRow } from "./ItemRow";
 import { DraftItemRow } from "./DraftItemRow";
 import type { ManualItem } from "./ItemRow";
@@ -26,13 +31,20 @@ export function ItemsPanel({ items, currency, onItemsChange }: ItemsPanelProps) 
   const [draft, setDraft] = useState<NewItemDraft | null>(null);
   const draftNameRef = useRef<HTMLInputElement>(null);
 
-  const draftValid = !!(draft?.name.trim() && draft?.price);
+  const draftValid = !!(
+    draft?.name.trim() &&
+    draft?.price &&
+    isPositiveDecimalInput(draft.price)
+  );
 
   const confirmDraft = () => {
     if (!draft?.name.trim() || !draft.price) return;
-    const price = parseFloat(draft.price);
-    const quantity = parseFloat(draft.quantity) || 1;
-    if (isNaN(price) || price <= 0) return;
+    const price = parseUnitPriceInput(draft.price);
+    if (!price || !isPositiveDecimalInput(price)) return;
+    const quantity =
+      draft.quantity.trim() && isPositiveDecimalInput(draft.quantity)
+        ? (parseQuantityInput(draft.quantity) ?? "1")
+        : "1";
     onItemsChange([
       ...items,
       {

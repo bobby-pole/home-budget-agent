@@ -8,6 +8,7 @@ import { AllocationDrawer } from "@/components/budget/AllocationDrawer";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { compareMoney } from "@/lib/money";
 
 export function BudgetPage() {
   const [isAddIncomeOpen, setIsAddIncomeOpen] = useState(false);
@@ -31,8 +32,8 @@ export function BudgetPage() {
 
   const isLoading = isCategoriesLoading || isBudgetLoading;
 
-  const totalIncome = budgetSummary?.total_income ?? 0;
-  const totalPlanned = budgetSummary?.total_planned ?? 0;
+  const totalIncome = budgetSummary?.total_income ?? "0.00";
+  const totalPlanned = budgetSummary?.total_planned ?? "0.00";
 
   const envelopes: EnvelopeItem[] = categories.map(cat => {
     const summaryItem = (budgetSummary?.categories ?? []).find(c => c.category_id === cat.id);
@@ -40,15 +41,16 @@ export function BudgetPage() {
     return {
       categoryId: cat.id,
       categoryName: displayName,
-      planned: summaryItem?.planned ?? 0,
-      spent: summaryItem?.spent ?? 0,
-      remaining: summaryItem?.remaining ?? 0,
+      planned: summaryItem?.planned ?? "0.00",
+      spent: summaryItem?.spent ?? "0.00",
+      remaining: summaryItem?.remaining ?? "0.00",
       icon: cat.icon ?? "coins",
       color: cat.color ?? "#3b82f6",
     };
   }).sort((a, b) => {
-    if (b.planned !== a.planned) {
-      return b.planned - a.planned;
+    const cmp = compareMoney(b.planned, a.planned);
+    if (cmp !== 0) {
+      return cmp;
     }
     return a.categoryName.localeCompare(b.categoryName);
   });
@@ -88,7 +90,7 @@ export function BudgetPage() {
         categoryId={selectedEnvelope?.categoryId ?? null}
         categoryName={selectedEnvelope?.categoryName ?? ""}
         categoryIcon={selectedEnvelope?.icon ?? "coins"}
-        currentPlanned={selectedEnvelope?.planned ?? 0}
+        currentPlanned={selectedEnvelope?.planned ?? "0.00"}
         year={curYear}
         month={curMonth + 1}
       />

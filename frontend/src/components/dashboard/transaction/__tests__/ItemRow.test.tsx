@@ -16,8 +16,8 @@ vi.mock("@/lib/api", () => ({
 const item: ManualItem = {
   id: "abc-123",
   name: "Mleko UHT",
-  price: 3.5,
-  quantity: 2,
+  price: "3.50",
+  quantity: "2",
   category_id: 1,
 };
 
@@ -39,7 +39,7 @@ describe("ItemRow", () => {
   });
 
   it("renders currency from props", () => {
-    render(<ItemRow item={{ ...item, price: 10, quantity: 1 }} currency="EUR" onRemove={vi.fn()} />);
+    render(<ItemRow item={{ ...item, price: "10.00", quantity: "1" }} currency="EUR" onRemove={vi.fn()} />);
     expect(screen.getByText("10.00 EUR")).toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe("ItemRow", () => {
 
     it("matches snapshot — EUR currency", () => {
       const { asFragment } = render(
-        <ItemRow item={{ ...item, price: 10, quantity: 1 }} currency="EUR" onRemove={vi.fn()} />
+        <ItemRow item={{ ...item, price: "10.00", quantity: "1" }} currency="EUR" onRemove={vi.fn()} />
       );
       expect(asFragment()).toMatchSnapshot();
     });

@@ -1,4 +1,5 @@
-import { t } from "@/lib/i18n";
+import { t } from "@/lib/i18n"
+import { formatMoneyFixed } from "@/lib/money";
 import {
   LayoutDashboard,
   Wallet,
@@ -91,7 +92,7 @@ export function AppSidebar() {
           const payload = JSON.parse(alert.message);
           if (payload.type === "zeroed_envelope") {
             title = t("alerts.zeroed_envelope_title");
-            description = t("alerts.zeroed_envelope_desc", { category: alert.category_name, remaining: payload.remaining.toFixed(2) });
+            description = t("alerts.zeroed_envelope_desc", { category: alert.category_name, remaining: formatMoneyFixed(payload.remaining) });
           }
         } catch {
           // Fallback to raw string if not JSON

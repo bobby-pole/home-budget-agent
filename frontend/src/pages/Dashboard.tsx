@@ -16,6 +16,7 @@ import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { toCents, toChartNumber } from "@/lib/money";
 
 export function Dashboard() {
   const {
@@ -57,20 +58,20 @@ export function Dashboard() {
 
   // --- DATA AGGREGATION ---
 
-  const totalSpent = budgetSummary?.total_spent ?? 0;
-  const totalIncome = budgetSummary?.total_income ?? 0;
-  const budgetAmount = budgetSummary?.total_planned ?? 0;
-  const netCashFlow = budgetSummary?.net_cash_flow ?? 0;
+  const totalSpent = budgetSummary?.total_spent ?? "0.00";
+  const totalIncome = budgetSummary?.total_income ?? "0.00";
+  const budgetAmount = budgetSummary?.total_planned ?? "0.00";
+  const netCashFlow = budgetSummary?.net_cash_flow ?? "0.00";
 
   // Pie Chart Data
   const pieData = (budgetSummary?.categories ?? [])
-    .filter(c => c.spent > 0)
+    .filter(c => toCents(c.spent) > 0n)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
       const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
       return {
         name: displayName,
-        value: c.spent,
+        value: toChartNumber(c.spent),
         color: cat?.color ?? "#9ca3af",
       };
     })
@@ -78,7 +79,7 @@ export function Dashboard() {
 
   // Top Envelopes Data
   const envelopes = (budgetSummary?.categories ?? [])
-    .filter(c => c.planned > 0)
+    .filter(c => toCents(c.planned) > 0n)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
       const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
@@ -91,7 +92,7 @@ export function Dashboard() {
         icon: cat?.icon ?? "coins",
       };
     })
-    .sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit))
+    .sort((a, b) => (toChartNumber(b.spent) / toChartNumber(b.limit)) - (toChartNumber(a.spent) / toChartNumber(a.limit)))
     .slice(0, 3);
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);

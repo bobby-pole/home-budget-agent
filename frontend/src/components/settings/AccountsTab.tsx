@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { formatMoneyFixed, parseMoneyInput } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,8 +43,8 @@ export function AccountsTab() {
     name: "",
     type: "checking",
     currency: "PLN",
-    initial_balance: 0,
-    current_balance: 0,
+    initial_balance: "0.00",
+    current_balance: "0.00",
     is_on_budget: true,
     is_active: true,
     category_id: undefined
@@ -96,8 +97,8 @@ export function AccountsTab() {
       name: "",
       type: "checking",
       currency: "PLN",
-      initial_balance: 0,
-      current_balance: 0,
+      initial_balance: "0.00",
+      current_balance: "0.00",
       is_on_budget: true,
       is_active: true
     });
@@ -109,8 +110,8 @@ export function AccountsTab() {
       name: account.name,
       type: account.type || "checking",
       currency: account.currency || "PLN",
-      initial_balance: account.initial_balance || 0,
-      current_balance: account.current_balance || 0,
+      initial_balance: account.initial_balance ?? "0.00",
+      current_balance: account.current_balance ?? "0.00",
       is_on_budget: account.is_on_budget ?? true,
       is_active: account.is_active ?? true,
       category_id: account.category_id ?? undefined
@@ -132,7 +133,17 @@ export function AccountsTab() {
       };
       updateMutation.mutate({ id: editingId, data: details });
     } else {
-      createMutation.mutate(formData);
+      const rawInitial = String(formData.initial_balance ?? "").trim();
+      const normalizedInitial = rawInitial === "" ? "0.00" : parseMoneyInput(rawInitial);
+      if (normalizedInitial === null) {
+        toast.error(t("budget.allocation_drawer.amount_error"));
+        return;
+      }
+      createMutation.mutate({
+        ...formData,
+        initial_balance: normalizedInitial,
+        current_balance: normalizedInitial,
+      });
     }
   };
 
@@ -213,10 +224,10 @@ export function AccountsTab() {
                   <Label htmlFor="initial_balance">{t("settings.accounts.form.initial_balance")}</Label>
                   <Input 
                     id="initial_balance"
-                    type="number"
-                    step="0.01"
-                    value={formData.initial_balance}
-                    onChange={(e) => setFormData({...formData, initial_balance: parseFloat(e.target.value) || 0})}
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.initial_balance ?? ""}
+                    onChange={(e) => setFormData({...formData, initial_balance: e.target.value})}
                     disabled={editingId !== null}
                   />
                 </div>
@@ -273,7 +284,7 @@ export function AccountsTab() {
                   <div className="text-sm text-muted-foreground flex items-center gap-2 mt-1">
                     <span>{t(`settings.accounts.form.types.${account.type || 'checking'}`)}</span>
                     <span>&bull;</span>
-                    <span className="font-mono">{(account.current_balance || 0).toFixed(2)} {account.currency}</span>
+                    <span className="font-mono">{formatMoneyFixed(account.current_balance ?? "0.00")} {account.currency}</span>
                   </div>
                 </div>
                 

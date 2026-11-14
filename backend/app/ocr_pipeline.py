@@ -5,8 +5,11 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
+
+from .money import parse_decimal, quantize_money
 
 if TYPE_CHECKING:
     from .receipt_schema import CanonicalReceipt
@@ -142,15 +145,19 @@ class PDFTextLayerAdapter:
 # ── E-Paragon JSON Adapter ─────────────────────────────────────────────────────
 
 
-def _parse_polish_float(value: str | int | float, divisor: float = 1.0) -> float:
-    """Parse a numeric value that may use Polish comma decimal format.
+def _parse_polish_decimal(
+    value: str | int | float | Decimal,
+    divisor: int | float | Decimal = Decimal("1"),
+) -> Decimal:
+    """Parse a numeric value that may use Polish comma decimal format without float drift.
 
     Handles: "0,038", "2", 799, 8.99, "0.348"
     """
-    if isinstance(value, (int, float)):
-        return float(value) / divisor
-    # Polish e-paragons use comma as decimal separator in string quantities
-    return float(str(value).replace(",", ".")) / divisor
+    dec_value = parse_decimal(value)
+    dec_divisor = parse_decimal(divisor)
+    if dec_divisor == Decimal("0"):
+        raise ValueError("Divisor cannot be zero")
+    return dec_value / dec_divisor
 
 
 class EParagonJSONAdapter:
@@ -202,12 +209,12 @@ class EParagonJSONAdapter:
         # 3. Currency and totals
         podsum = paragon.get("podsum", {})
         currency = podsum.get("waluta", "PLN")
-        total_gross = _parse_polish_float(paragon.get("total", {}).get("zaplZwrot", 0), divisor=100.0)
+        total_gross = quantize_money(_parse_polish_decimal(paragon.get("total", {}).get("zaplZwrot", 0), divisor=100))
 
         # 4. Items — handle two e-paragon formats:
         #    a) Biedronka: rabat is INLINE in towar → {"towar": {"nazwa":..., "rabat": {"wart": -150}}}
         #    b) Żabka:     rabat is a SEPARATE pozycja entry → {"rabat": {"nazwa":..., "wart": -400}}
-        from .receipt_schema import CanonicalItem, CanonicalReceipt, to_decimal
+        from .receipt_schema import CanonicalItem, CanonicalReceipt
         from .receipt_normalizer import normalize_receipt
 
         items: list[CanonicalItem] = []
@@ -217,22 +224,22 @@ class EParagonJSONAdapter:
             towar = pos.get("towar")
             if towar and isinstance(towar, dict):
                 name = towar.get("nazwa", "Unknown Item").strip()
-                orig_unit_price = _parse_polish_float(towar.get("cena", 0), divisor=100.0)
-                qty = _parse_polish_float(towar.get("ilosc", "1"))
+                orig_unit_price = _parse_polish_decimal(towar.get("cena", 0), divisor=100)
+                qty = _parse_polish_decimal(towar.get("ilosc", "1"))
 
                 # Inline rabat (Biedronka format: rabat inside towar)
-                discount_total = 0.0
+                discount_total = Decimal("0.00")
                 rabat = towar.get("rabat", {})
                 if rabat:
-                    discount_total = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
+                    discount_total = quantize_money(_parse_polish_decimal(rabat.get("wart", 0), divisor=100))
 
                 items.append(CanonicalItem(
                     name=name,
-                    unit_price=to_decimal(orig_unit_price),
-                    quantity=to_decimal(qty),
-                    discount_total=to_decimal(discount_total),
+                    unit_price=orig_unit_price,
+                    quantity=qty,
+                    discount_total=discount_total,
                     is_adjustment=False,
-                    original_price=to_decimal(orig_unit_price),
+                    original_price=orig_unit_price,
                 ))
                 continue
 
@@ -241,11 +248,11 @@ class EParagonJSONAdapter:
             # Apply the discount to the last non-adjustment item.
             rabat = pos.get("rabat")
             if rabat and isinstance(rabat, dict) and items:
-                discount_val = _parse_polish_float(rabat.get("wart", 0), divisor=100.0)
+                discount_val = quantize_money(_parse_polish_decimal(rabat.get("wart", 0), divisor=100))
                 # Find last non-adjustment item to apply discount to
                 for prev_item in reversed(items):
                     if not prev_item.is_adjustment:
-                        prev_item.discount_total += to_decimal(discount_val)
+                        prev_item.discount_total += discount_val
                         break
                 continue
 
@@ -254,21 +261,21 @@ class EParagonJSONAdapter:
         if opak:
             for op_item in opak.get("daneOpak", []):
                 name = op_item.get("nazwa", "Kaucja").strip()
-                cena = _parse_polish_float(op_item.get("cena", 0), divisor=100.0)
-                ilosc_raw = op_item.get("ilosc", 1000)
-                qty = float(ilosc_raw) / 1000.0 if ilosc_raw > 10 else float(ilosc_raw)
+                cena = _parse_polish_decimal(op_item.get("cena", 0), divisor=100)
+                ilosc_dec = _parse_polish_decimal(op_item.get("ilosc", 1000))
+                qty = ilosc_dec / Decimal("1000") if ilosc_dec > Decimal("10") else ilosc_dec
 
                 items.append(CanonicalItem(
                     name=name,
-                    unit_price=to_decimal(cena),
-                    quantity=to_decimal(qty),
+                    unit_price=cena,
+                    quantity=qty,
                     is_adjustment=True,
                 ))
 
         receipt = CanonicalReceipt(
             merchant_name=merchant,
             date=date_str,
-            total_amount=to_decimal(total_gross),
+            total_amount=total_gross,
             currency=currency,
             items=items,
         )

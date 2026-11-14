@@ -24,11 +24,11 @@ import { Loader2, Plus } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
+import { isPositiveMoneyInput, parseMoneyInput } from "@/lib/money";
 
 const incomeSchema = z.object({
   amount: z.string().min(1, t("budget.add_income_modal.validation.amount_required")).refine((val) => {
-    const num = parseFloat(val);
-    return !isNaN(num) && num > 0;
+    return isPositiveMoneyInput(val);
   }, t("budget.add_income_modal.validation.amount_positive")),
   date: z.string(),
   merchant_name: z.string().min(1, t("budget.add_income_modal.validation.source_required")),
@@ -71,7 +71,7 @@ export function AddIncomeModal({ open, onOpenChange }: AddIncomeModalProps) {
     mutationFn: (values: IncomeFormValues) =>
       api.createManualTransaction({
         merchant_name: values.merchant_name,
-        total_amount: parseFloat(values.amount),
+        total_amount: parseMoneyInput(values.amount) ?? "0.00",
         currency: "PLN",
         date: values.date,
         type: "income",

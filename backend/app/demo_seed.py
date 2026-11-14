@@ -24,6 +24,7 @@ from sqlmodel import Session, col, delete, select
 
 from .auth import hash_password
 from .config import settings
+from .money import quantize_money, quantize_quantity, quantize_unit_price
 from .models import (
     Account,
     Budget,
@@ -452,7 +453,7 @@ def seed_demo_month(
                         category_id=sub_cat.id,
                         year=year,
                         month=month,
-                        amount=planned,
+                        amount=quantize_money(planned),
                     )
                     session.add(allocation)
 
@@ -468,7 +469,7 @@ def seed_demo_month(
         t = Transaction(
             merchant_name=merchant,
             date=t_date,
-            total_amount=amount,
+            total_amount=quantize_money(amount),
             currency="PLN",
             type=t_type,
             status=status,
@@ -486,8 +487,8 @@ def seed_demo_month(
                 TransactionLine(
                     transaction_id=t.id,
                     name=line_name,
-                    price=unit_price,
-                    quantity=qty,
+                    price=quantize_unit_price(unit_price),
+                    quantity=quantize_quantity(qty),
                     category_id=get_cat(c_name),
                     category_source="auto_categorizer" if c_name else None,
                 )
@@ -638,8 +639,8 @@ def seed_demo_environment(
         name="Konto Główne ROR (mBank)",
         type="checking",
         currency="PLN",
-        initial_balance=4250.00,
-        current_balance=4250.00,
+        initial_balance=quantize_money("4250.00"),
+        current_balance=quantize_money("4250.00"),
         budget_id=budget.id,
         is_on_budget=True,
         is_active=True,
@@ -648,8 +649,8 @@ def seed_demo_environment(
         name="Konto Oszczędnościowe (ING)",
         type="savings",
         currency="PLN",
-        initial_balance=18500.00,
-        current_balance=18500.00,
+        initial_balance=quantize_money("18500.00"),
+        current_balance=quantize_money("18500.00"),
         budget_id=budget.id,
         is_on_budget=True,
         is_active=True,
@@ -658,8 +659,8 @@ def seed_demo_environment(
         name="Portfel / Gotówka",
         type="cash",
         currency="PLN",
-        initial_balance=320.00,
-        current_balance=320.00,
+        initial_balance=quantize_money("320.00"),
+        current_balance=quantize_money("320.00"),
         budget_id=budget.id,
         is_on_budget=True,
         is_active=True,

@@ -46,9 +46,9 @@ describe("transactionSchema (Zod)", () => {
     });
 
     it("accepts positive amount", () => {
-      const result = transactionSchema.safeParse({ ...validBase, total_amount: 49.99 });
+      const result = transactionSchema.safeParse({ ...validBase, total_amount: "49.99" });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.total_amount).toBe(49.99);
+      if (result.success) expect(result.data.total_amount).toBe("49.99");
     });
 
     it("rejects amount of 0", () => {
@@ -61,10 +61,10 @@ describe("transactionSchema (Zod)", () => {
       expect(result.success).toBe(false);
     });
 
-    it("coerces string to number", () => {
-      const result = transactionSchema.safeParse({ ...validBase, total_amount: "25.50" });
+    it("normalizes Polish comma and numeric values to decimal string", () => {
+      const result = transactionSchema.safeParse({ ...validBase, total_amount: "25,5" });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.data.total_amount).toBe(25.5);
+      if (result.success) expect(result.data.total_amount).toBe("25.50");
     });
   });
 

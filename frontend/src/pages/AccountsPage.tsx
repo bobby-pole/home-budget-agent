@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
+import { formatDecimalLocale, parseMoneyInput, toCents } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,8 +91,8 @@ const defaultAccountForm: AccountCreate = {
   name: "",
   type: "checking",
   currency: "PLN",
-  initial_balance: 0,
-  current_balance: 0,
+  initial_balance: "0.00",
+  current_balance: "0.00",
   is_on_budget: true,
   is_active: true,
   category_id: undefined,
@@ -152,7 +153,7 @@ export function AccountsPage() {
   });
 
   const reconcileMutation = useMutation({
-    mutationFn: (data: { accountId: number; realBalance: number }) =>
+    mutationFn: (data: { accountId: number; realBalance: string }) =>
       api.reconcileAccount(data.accountId, data.realBalance),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
@@ -181,8 +182,8 @@ export function AccountsPage() {
       name: account.name,
       type: account.type || "checking",
       currency: account.currency || "PLN",
-      initial_balance: account.initial_balance || 0,
-      current_balance: account.current_balance || 0,
+      initial_balance: account.initial_balance ?? "0.00",
+      current_balance: account.current_balance ?? "0.00",
       is_on_budget: account.is_on_budget ?? true,
       is_active: account.is_active ?? true,
       category_id: account.category_id ?? undefined,
@@ -204,15 +205,28 @@ export function AccountsPage() {
       };
       updateMutation.mutate({ id: editingAccount.id, data: details });
     } else {
-      createMutation.mutate(formData);
+      const rawInitial = String(formData.initial_balance ?? "").trim();
+      const normalizedInitial = rawInitial === "" ? "0.00" : parseMoneyInput(rawInitial);
+      if (normalizedInitial === null) {
+        toast.error(t("budget.allocation_drawer.amount_error"));
+        return;
+      }
+      createMutation.mutate({
+        ...formData,
+        initial_balance: normalizedInitial,
+        current_balance: normalizedInitial,
+      });
     }
   };
 
   const handleReconcile = () => {
     if (!reconcileAccount) return;
-    const val = parseFloat(realBalance.replace(",", "."));
-    if (isNaN(val)) return;
-    reconcileMutation.mutate({ accountId: reconcileAccount.id, realBalance: val });
+    const parsed = parseMoneyInput(realBalance);
+    if (parsed === null) {
+      toast.error(t("budget.allocation_drawer.amount_error"));
+      return;
+    }
+    reconcileMutation.mutate({ accountId: reconcileAccount.id, realBalance: parsed });
   };
 
   return (
@@ -270,13 +284,10 @@ export function AccountsPage() {
                   <span
                     className={cn(
                       "font-bold shrink-0 tabular-nums text-lg",
-                      (acc.current_balance ?? 0) < 0 ? "text-destructive" : "text-foreground"
+                      toCents(acc.current_balance ?? "0.00") < 0n ? "text-destructive" : "text-foreground"
                     )}
                   >
-                    {(acc.current_balance ?? 0).toLocaleString(getIntlLocale(), {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}{" "}
+                    {formatDecimalLocale(acc.current_balance ?? "0.00", getIntlLocale())}{" "}
                     <span className="text-xs font-semibold text-muted-foreground">
                       {acc.currency}
                     </span>
@@ -289,7 +300,7 @@ export function AccountsPage() {
                       size="sm"
                       onClick={() => {
                         setReconcileAccount(acc);
-                        setRealBalance((acc.current_balance ?? 0).toString());
+                        setRealBalance(acc.current_balance ?? "0.00");
                       }}
                       title={t("accounts.reconcile_button")}
                     >
@@ -447,13 +458,13 @@ export function AccountsPage() {
               </Label>
               <Input
                 id="account_initial_balance"
-                type="number"
-                step="0.01"
-                value={formData.initial_balance}
+                type="text"
+                inputMode="decimal"
+                value={formData.initial_balance ?? ""}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
-                    initial_balance: parseFloat(e.target.value) || 0,
+                    initial_balance: e.target.value,
                   })
                 }
                 disabled={editingAccount !== null}
@@ -510,8 +521,8 @@ export function AccountsPage() {
             <div className="flex items-center gap-2 mt-2">
               <Input
                 id="realBalance"
-                type="number"
-                step="0.01"
+                type="text"
+                inputMode="decimal"
                 value={realBalance}
                 onChange={(e) => setRealBalance(e.target.value)}
               />

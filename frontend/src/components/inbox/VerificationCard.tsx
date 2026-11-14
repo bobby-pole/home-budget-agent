@@ -48,6 +48,19 @@ import type { TransactionRead as Transaction } from "@/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { translateValidationMessage } from "@/lib/errorCodes";
+import {
+  addMoney,
+  computeLineTotal,
+  divideMoneyByQuantity,
+  formatMoneyFixed,
+  isPositiveDecimalInput,
+  isValidDecimalInput,
+  parseMoneyInput,
+  parseQuantityInput,
+  parseUnitPriceInput,
+  subtractMoney,
+  toCents,
+} from "@/lib/money";
 import { ItemsSection } from "./ItemsSection";
 
 const lineSchema = z.object({
@@ -56,10 +69,13 @@ const lineSchema = z.object({
   // Unit price BEFORE any discount (per piece / per kg) for regular items.
   // For basket adjustments (kaucja, basket coupons) this holds the (negative)
   // refund amount, so no lower bound here.
-  unit_price: z.number(),
-  quantity: z.number().min(0.01),
+  unit_price: z.string().refine((val) => isValidDecimalInput(val)),
+  quantity: z.string().refine((val) => isPositiveDecimalInput(val)),
   // total discount on this line (always ≤ 0)
-  discount_total: z.number().max(0),
+  discount_total: z.string().refine((val) => {
+    const parsed = parseMoneyInput(val);
+    return parsed !== null && toCents(parsed) <= 0n;
+  }),
   category_id: z.string().optional(),
   category_source: z.string().optional(),
   // True for basket-level adjustments (kaucja, basket coupons). UI hides
@@ -70,7 +86,10 @@ const lineSchema = z.object({
 const verificationSchema = z.object({
   merchant_name: z.string().min(1, t("inbox.verification_card.validation.merchant_required")),
   date: z.string(),
-  total_amount: z.number().min(0),
+  total_amount: z.string().refine((val) => {
+    const parsed = parseMoneyInput(val);
+    return parsed !== null && toCents(parsed) >= 0n;
+  }),
   currency: z.string(),
   account_id: z.string().min(1, t("inbox.verification_card.validation.account_required")),
   lines: z.array(lineSchema),
@@ -238,7 +257,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
     defaultValues: {
       merchant_name: transaction.merchant_name || "",
       date: transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
-      total_amount: transaction.total_amount || 0,
+      total_amount: transaction.total_amount ?? "0.00",
       currency: transaction.currency || "PLN",
       account_id: transaction.account_id ? transaction.account_id.toString() : (accounts[0]?.id?.toString() || ""),
       lines: (transaction.lines || []).map(l => ({
@@ -246,9 +265,11 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         name: l.name,
         // Prefer pre-discount unit price; fall back to current per-unit price
         // (which equals unit price when there is no discount).
-        unit_price: l.original_price ?? l.price ?? 0,
-        quantity: l.quantity || 1,
-        discount_total: (l.discount_total ?? 0) > 0 ? -(l.discount_total ?? 0) : (l.discount_total ?? 0),
+        unit_price: l.original_price ?? l.price ?? "0.00",
+        quantity: l.quantity ?? "1",
+        discount_total: toCents(l.discount_total ?? "0.00") > 0n
+          ? subtractMoney("0.00", l.discount_total ?? "0.00")
+          : (l.discount_total ?? "0.00"),
         category_id: l.category_id?.toString() || "",
         category_source: l.category_source || "",
         is_adjustment: l.is_adjustment ?? false,
@@ -299,25 +320,31 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
         {
           merchant_name: values.merchant_name,
           date: isoDate,
-          total_amount: values.total_amount,
+          total_amount: parseMoneyInput(values.total_amount) ?? "0.00",
           currency: values.currency,
           account_id: values.account_id ? parseInt(values.account_id) : undefined,
         },
         values.lines.map(l => {
           // For adjustments we keep the user-entered unit_price as-is (single line, qty=1).
           // For regular items: line gross = unit_price × qty; final per-unit = unit + discount/qty.
-          const qty = l.quantity || 1;
-          const gross = l.unit_price * qty;
-          const finalLineTotal = gross + l.discount_total;
-          const finalUnit = qty > 0 ? finalLineTotal / qty : finalLineTotal;
+          const qty = parseQuantityInput(l.quantity) ?? "1";
+          const unit = parseUnitPriceInput(l.unit_price) ?? "0.00";
+          const disc = parseMoneyInput(l.discount_total) ?? "0.00";
+          const discCents = toCents(disc);
+          const finalLineTotal = computeLineTotal(unit, qty, disc);
+          const finalUnit = l.is_adjustment
+            ? unit
+            : discCents < 0n
+              ? divideMoneyByQuantity(finalLineTotal, qty)
+              : unit;
           return {
             name: l.name,
             price: finalUnit,
             quantity: qty,
             category_id: l.category_id ? parseInt(l.category_id) : undefined,
-            original_price: l.discount_total < 0 || l.is_adjustment ? l.unit_price : null,
-            discount_total: l.discount_total,
-            final_price: l.discount_total < 0 ? finalUnit : null,
+            original_price: discCents < 0n || l.is_adjustment ? unit : null,
+            discount_total: disc,
+            final_price: discCents < 0n ? finalUnit : null,
             is_adjustment: l.is_adjustment,
           };
         }),
@@ -344,26 +371,16 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
     }
   };
 
-  const parseNumber = (val: string | number): number => {
-    if (typeof val === "number") return val;
-    if (typeof val === "string") {
-      const clean = val.replace(",", ".");
-      const parsed = parseFloat(clean);
-      return isNaN(parsed) ? 0 : parsed;
-    }
-    return 0;
-  };
-
   const lines = useWatch({ control: form.control, name: "lines" }) || [];
   const linesTotal = lines.reduce((acc, l) => {
     if (l.is_adjustment) {
-      return acc + parseNumber(l.unit_price);
+      return addMoney(acc, l.unit_price || "0.00");
     }
-    const unit = parseNumber(l.unit_price);
-    const qty = parseNumber(l.quantity);
-    const disc = parseNumber(l.discount_total);
-    return acc + (unit * qty + disc);
-  }, 0);
+    return addMoney(
+      acc,
+      computeLineTotal(l.unit_price || "0.00", l.quantity || "1", l.discount_total || "0.00")
+    );
+  }, "0.00");
 
   const receiptPreview = (
     <Card className="flex flex-col h-full bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden shadow-sm">
@@ -633,10 +650,9 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                         <FormControl>
                           <div className="relative">
                             <Input
-                              type="number"
-                              step="0.01"
+                              type="text"
+                              inputMode="decimal"
                               {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                               className="bg-background/80 border-border/50 focus:border-primary/50 pr-12"
                             />
                             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
@@ -726,7 +742,7 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                   )}
                 />
                 <div className="text-xs md:text-sm font-bold shrink-0">
-                  {t("inbox.verification_card.sum_prefix")} {linesTotal.toFixed(2)} {form.getValues("currency")}
+                  {t("inbox.verification_card.sum_prefix")} {formatMoneyFixed(linesTotal)} {form.getValues("currency")}
                 </div>
               </div>
             </CardFooter>

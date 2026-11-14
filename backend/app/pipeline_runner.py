@@ -514,11 +514,15 @@ class PipelineRunner:
             items = data.get("items", [])
             if items:
                 items_sum = sum(
-                    float(i.get("price", 0)) * float(i.get("quantity", 1))
-                    for i in items
+                    (
+                        Decimal(str(i.get("price", 0))) * Decimal(str(i.get("quantity", 1)))
+                        for i in items
+                    ),
+                    Decimal("0"),
                 )
+                total_val = Decimal(str(data.get("total_amount", 0)))
                 self.logger.detail(
-                    f"Sum check: items_sum={items_sum:.2f} vs total={data.get('total_amount', 0):.2f}"
+                    f"Sum check: items_sum={items_sum:.2f} vs total={total_val:.2f}"
                 )
 
             return result

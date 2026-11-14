@@ -5,13 +5,14 @@ import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatDecimalLocale, toCents } from "@/lib/money";
 
 export interface EnvelopeItem {
   categoryId: number;
   categoryName: string;
-  planned: number;
-  spent: number;
-  remaining: number;
+  planned: string;
+  spent: string;
+  remaining: string;
   icon: string;
   color: string;
 }
@@ -51,22 +52,27 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map((env) => {
-            const percentage = env.planned > 0 ? Math.min(Math.round((env.spent / env.planned) * 100), 100) : (env.spent > 0 ? 100 : 0);
-            const isOverLimit = env.remaining < 0;
-            const remainingSafe = env.remaining > 0 ? env.remaining : 0;
+            const plannedCents = toCents(env.planned);
+            const spentCents = toCents(env.spent);
+            const remainingCents = toCents(env.remaining);
+            const percentage = plannedCents > 0n
+              ? Math.min(Math.round((Number(spentCents) / Number(plannedCents)) * 100), 100)
+              : (spentCents > 0n ? 100 : 0);
+            const isOverLimit = remainingCents < 0n;
+            const remainingSafeCents = remainingCents > 0n ? remainingCents : 0n;
             
             // Pacing
             let pacingText = "";
             let isPacingSafe = false;
-            if (isCurrentMonth && daysLeft > 0 && remainingSafe > 0) {
-              const daily = remainingSafe / daysLeft;
+            if (isCurrentMonth && daysLeft > 0 && remainingSafeCents > 0n) {
+              const daily = Number(remainingSafeCents) / 100 / daysLeft;
               pacingText = `${t("budget.envelope_list.pacing_safe_prefix")} ${daily.toLocaleString(getIntlLocale(), { maximumFractionDigits: 0 })} ${t("budget.envelope_list.pacing_safe_suffix")}`;
               isPacingSafe = true;
             } else if (isOverLimit) {
               pacingText = t("budget.envelope_list.pacing_over_limit");
-            } else if (remainingSafe === 0 && env.planned > 0) {
+            } else if (remainingSafeCents === 0n && plannedCents > 0n) {
               pacingText = t("budget.envelope_list.pacing_funds_exhausted");
-            } else if (env.planned === 0) {
+            } else if (plannedCents === 0n) {
               pacingText = t("budget.envelope_list.pacing_no_plan");
             }
 
@@ -123,13 +129,13 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                       <div className="flex flex-col">
                         <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">{t("budget.envelope_list.col_planned")}</span>
                         <span className="text-xs font-black tabular-nums text-foreground">
-                          {env.planned.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {formatDecimalLocale(env.planned, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">{t("budget.envelope_list.col_spent")}</span>
                         <span className="text-xs font-black tabular-nums text-foreground">
-                          {env.spent.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {formatDecimalLocale(env.spent, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex flex-col">
@@ -138,7 +144,7 @@ export function EnvelopeGroupList({ items, isLoading, onEnvelopeClick, year, mon
                           "text-xs font-black tabular-nums",
                           isOverLimit ? "text-destructive" : "text-primary"
                         )}>
-                          {env.remaining.toLocaleString(getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {formatDecimalLocale(env.remaining, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                     </div>

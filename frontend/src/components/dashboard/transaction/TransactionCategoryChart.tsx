@@ -11,6 +11,13 @@ import {
 } from "@/components/ui/accordion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import { CATEGORY_LABELS } from "@/lib/constants";
+import {
+  addMoney,
+  computeLineTotal,
+  formatMoneyFixed,
+  toCents,
+  toChartNumber,
+} from "@/lib/money";
 
 interface TransactionCategoryChartProps {
   lines: TransactionLine[];
@@ -46,14 +53,11 @@ export function TransactionCategoryChart({ lines, currency }: TransactionCategor
       if (line.is_adjustment) return acc;
 
       const catId = line.category_id || 0; // 0 for Uncategorized
-      const total = line.price * (line.quantity || 1);
+      const total = computeLineTotal(line.price, line.quantity ?? "1", "0.00");
 
-      if (!acc[catId]) {
-        acc[catId] = 0;
-      }
-      acc[catId] += total;
+      acc[catId] = addMoney(acc[catId] ?? "0.00", total);
       return acc;
-    }, {} as Record<number, number>);
+    }, {} as Record<number, string>);
 
     // Create array for Recharts
     const data = Object.entries(grouped).map(([idStr, total]) => {
@@ -67,7 +71,7 @@ export function TransactionCategoryChart({ lines, currency }: TransactionCategor
       }
       return {
         name,
-        value: total > 0 ? parseFloat(total.toFixed(2)) : 0, // Avoid negative segments in pie chart
+        value: toCents(total) > 0n ? toChartNumber(total) : 0, // Avoid negative segments in pie chart
       };
     }).filter(item => item.value > 0); // Recharts Pie cannot handle negative values well
 
@@ -102,7 +106,10 @@ export function TransactionCategoryChart({ lines, currency }: TransactionCategor
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: unknown) => [`${Number(value).toFixed(2)} ${currency}`, t("transactions.detail_modal.chart.tooltip_amount")]}
+                  formatter={(value: unknown) => [
+                    `${formatMoneyFixed(typeof value === "number" || typeof value === "string" ? value : 0)} ${currency}`,
+                    t("transactions.detail_modal.chart.tooltip_amount"),
+                  ]}
                   contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }}
                 />
                 <Legend 

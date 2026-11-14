@@ -31,13 +31,16 @@ import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
 import { TagPicker } from "../shared/TagPicker";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatMoneyFixed, isPositiveMoneyInput, parseMoneyInput } from "@/lib/money";
 
 const formSchema = z.object({
   merchant_name: z.string().min(1, t("transactions.header_form.validation.merchant_required")),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), {
     message: t("transactions.header_form.validation.date_invalid"),
   }),
-  total_amount: z.coerce.number().min(0.01, t("transactions.header_form.validation.amount_positive")),
+  total_amount: z
+    .string()
+    .refine(isPositiveMoneyInput, t("transactions.header_form.validation.amount_positive")),
   currency: z.string().min(3, t("transactions.header_form.validation.currency_length")).max(3),
   type: z.enum(["expense", "income", "transfer"]).default("expense"),
   category_id: z.number().nullable().optional(),
@@ -72,7 +75,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     defaultValues: {
       merchant_name: "",
       date: "",
-      total_amount: 0,
+      total_amount: "0.00",
       currency: "PLN",
       type: "expense",
       category_id: null,
@@ -87,7 +90,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     form.reset({
       merchant_name: transaction.merchant_name,
       date: transaction.date ? new Date(transaction.date).toISOString().split("T")[0] : "",
-      total_amount: transaction.total_amount ?? 0,
+      total_amount: transaction.total_amount ?? "0.00",
       currency: transaction.currency ?? "PLN",
       type: (transaction.type as "expense" | "income" | "transfer") ?? "expense",
       category_id: transaction.category_id ?? null,
@@ -102,6 +105,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     mutationFn: (values: FormValues) =>
       api.updateTransaction(transaction.id, {
         ...values,
+        total_amount: parseMoneyInput(values.total_amount) ?? values.total_amount,
         date: new Date(values.date).toISOString(),
         note: values.note || undefined,
         category_id: values.category_id || undefined,
@@ -204,13 +208,13 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                 {isEditing ? (
                   <>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} />
+                      <Input type="text" inputMode="decimal" {...field} />
                     </FormControl>
                     <FormMessage />
                   </>
                 ) : (
                   <div className="text-lg font-bold text-primary">
-                    {Number(field.value).toFixed(2)}
+                    {formatMoneyFixed(field.value ?? "0.00")}
                   </div>
                 )}
               </FormItem>

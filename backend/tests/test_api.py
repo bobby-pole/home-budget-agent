@@ -3,6 +3,7 @@ from unittest.mock import patch, mock_open
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 from datetime import datetime, timezone
+from decimal import Decimal
 from app.models import Account, Transaction, TransactionLine, ReceiptScan, ScanStatus, User, Budget, BudgetMember, Category, Tag
 
 
@@ -30,7 +31,7 @@ def test_create_manual_transaction(client: TestClient, session: Session):
     assert response.status_code == 200
     data = response.json()
     assert data["merchant_name"] == "Test Store"
-    assert data["total_amount"] == 100.50
+    assert data["total_amount"] == "100.50"
     assert data["is_manual"] is True
     assert data["type"] == "expense"
     assert len(data["lines"]) == 2
@@ -88,7 +89,7 @@ def test_scan_duplicate_returns_409(client: TestClient, session: Session):
     assert test_user is not None
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert test_budget is not None
-    transaction = Transaction(merchant_name="Original", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=30.0)
+    transaction = Transaction(merchant_name="Original", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=Decimal("30.00"))
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
@@ -112,7 +113,7 @@ def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, sessio
     assert test_user is not None
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert test_budget is not None
-    transaction = Transaction(merchant_name="Failed Shop", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=30.0)
+    transaction = Transaction(merchant_name="Failed Shop", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=Decimal("30.00"))
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
@@ -137,7 +138,7 @@ def test_delete_removes_receipt_scan(client: TestClient, session: Session):
     assert test_user is not None
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert test_budget is not None
-    transaction = Transaction(merchant_name="Old Shop", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=20.0)
+    transaction = Transaction(merchant_name="Old Shop", uploaded_by=test_user.id, budget_id=test_budget.id, total_amount=Decimal("20.00"))
     session.add(transaction)
     session.commit()
     session.refresh(transaction)
@@ -378,7 +379,7 @@ def test_get_summary_calculates_income(client: TestClient, session: Session):
     # Create an income transaction
     tx_income = Transaction(
         merchant_name="Salary",
-        total_amount=5000.0,
+        total_amount=Decimal("5000.00"),
         currency="PLN",
         date=datetime(2026, 4, 15, 12, 0, 0, tzinfo=timezone.utc),
         type="income",
@@ -388,7 +389,7 @@ def test_get_summary_calculates_income(client: TestClient, session: Session):
     # Create an expense transaction
     tx_expense = Transaction(
         merchant_name="Groceries",
-        total_amount=200.0,
+        total_amount=Decimal("200.00"),
         currency="PLN",
         date=datetime(2026, 4, 10, 10, 0, 0, tzinfo=timezone.utc),
         type="expense",
@@ -403,8 +404,8 @@ def test_get_summary_calculates_income(client: TestClient, session: Session):
     response = client.get("/api/budget/2026/4/summary")
     assert response.status_code == 200
     data = response.json()
-    assert data["total_income"] == 5000.0
-    assert data["total_spent"] == 200.0
+    assert data["total_income"] == "5000.00"
+    assert data["total_spent"] == "200.00"
 
 def test_get_inbox_and_verify(client: TestClient, session: Session):
     # Setup: Transaction with needs_review scan
@@ -417,7 +418,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
         merchant_name="AI Merchant",
         uploaded_by=test_user.id,
         budget_id=test_budget.id,
-        total_amount=50.0,
+        total_amount=Decimal("50.00"),
         date=datetime.now(timezone.utc)
     )
     session.add(transaction)
@@ -428,7 +429,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     scan = ReceiptScan(transaction_id=transaction.id, status=ScanStatus.NEEDS_REVIEW, content_hash="hash123")
     session.add(scan)
     
-    line = TransactionLine(name="AI Item", price=50.0, quantity=1.0, transaction_id=transaction.id)
+    line = TransactionLine(name="AI Item", price=Decimal("50.00"), quantity=Decimal("1"), transaction_id=transaction.id)
     session.add(line)
     session.commit()
 
@@ -458,7 +459,7 @@ def test_get_inbox_and_verify(client: TestClient, session: Session):
     assert response.status_code == 200
     data = response.json()
     assert data["merchant_name"] == "Verified Merchant"
-    assert data["total_amount"] == 55.0
+    assert data["total_amount"] == "55.00"
     assert data["receipt_scan"]["status"] == ScanStatus.DONE
     assert len(data["lines"]) == 1
     assert data["lines"][0]["name"] == "Verified Item"
@@ -490,7 +491,7 @@ def test_inbox_includes_legacy_needs_review(client: TestClient, session: Session
         merchant_name="Legacy Store",
         uploaded_by=test_user.id,
         budget_id=test_budget.id,
-        total_amount=10.0,
+        total_amount=Decimal("10.00"),
         date=datetime.now(timezone.utc),
     )
     session.add(tx)
@@ -518,7 +519,7 @@ def test_retry_accepts_legacy_error_status(client: TestClient, session: Session)
         merchant_name="Legacy Fail Shop",
         uploaded_by=test_user.id,
         budget_id=test_budget.id,
-        total_amount=5.0,
+        total_amount=Decimal("5.00"),
     )
     session.add(tx)
     session.commit()
@@ -639,7 +640,7 @@ def test_get_summary_with_multi_item_receipt(client: TestClient, session: Sessio
         category_id=cat.id,
         year=2026,
         month=4,
-        amount=500.0
+        amount=Decimal("500.00")
     )
     session.add(alloc)
     session.commit()
@@ -678,9 +679,9 @@ def test_get_summary_with_multi_item_receipt(client: TestClient, session: Sessio
     
     # Category "Jedzenie" should have spent = 150.0 (5.0*2.0 + 140.0)
     cat_summary = next(c for c in summary_data["categories"] if c["category_id"] == cat.id)
-    assert cat_summary["spent"] == 150.0
-    assert cat_summary["remaining"] == 350.0
-    assert summary_data["total_spent"] == 150.0
+    assert cat_summary["spent"] == "150.00"
+    assert cat_summary["remaining"] == "350.00"
+    assert summary_data["total_spent"] == "150.00"
 
 
 def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: Session):
@@ -715,7 +716,7 @@ def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: 
         category_id=cat.id,
         year=2026,
         month=4,
-        amount=50.0
+        amount=Decimal("50.00")
     )
     session.add(alloc)
     session.commit()
@@ -753,7 +754,7 @@ def test_envelope_balance_alert_multi_item_receipt(client: TestClient, session: 
     assert alerts[0].category_name == "Rozrywka"
     alert_details = json.loads(alerts[0].message)
     assert alert_details["type"] == "zeroed_envelope"
-    assert alert_details["remaining"] == -10.0
+    assert alert_details["remaining"] == "-10.00"
 
 
 def test_get_transactions_with_detached_session(client, session):
@@ -770,7 +771,7 @@ def test_get_transactions_with_detached_session(client, session):
 
     tx = Transaction(
         merchant_name="Biedronka Test",
-        total_amount=50.0,
+        total_amount=Decimal("50.00"),
         budget_id=test_budget.id,
         uploaded_by=test_user.id,
     )
@@ -782,8 +783,8 @@ def test_get_transactions_with_detached_session(client, session):
     line = TransactionLine(
         transaction_id=tx.id,
         name="Chleb",
-        price=5.0,
-        quantity=1.0,
+        price=Decimal("5.00"),
+        quantity=Decimal("1"),
     )
     session.add(line)
 
@@ -860,7 +861,7 @@ def test_verify_and_manual_with_naive_date_string(client: TestClient, session: S
         merchant_name="Biedronka Test",
         uploaded_by=test_user.id,
         budget_id=test_budget.id,
-        total_amount=50.0,
+        total_amount=Decimal("50.00"),
         date=datetime.now(timezone.utc),
     )
     session.add(tx)
@@ -870,7 +871,7 @@ def test_verify_and_manual_with_naive_date_string(client: TestClient, session: S
 
     scan = ReceiptScan(transaction_id=tx.id, status=ScanStatus.NEEDS_REVIEW, content_hash="hash_naive_date")
     session.add(scan)
-    session.add(TransactionLine(name="Item 1", price=50.0, quantity=1.0, transaction_id=tx.id))
+    session.add(TransactionLine(name="Item 1", price=Decimal("50.00"), quantity=Decimal("1"), transaction_id=tx.id))
     session.commit()
 
     verify_res = client.post(f"/api/transactions/{tx.id}/verify", json={

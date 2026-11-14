@@ -103,25 +103,25 @@ class CanonicalItem:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict compatible with API, Database models, and UI."""
         if self._original_price is not None:
-            orig_price = float(self._original_price)
+            orig_price = self._original_price
         elif self.discount_total < Decimal("0") and not self.is_adjustment:
-            orig_price = float(self.unit_price)
+            orig_price = self.unit_price
         else:
             orig_price = None
 
-        final_unit = float(self.effective_unit_price) if self.discount_total < Decimal("0") else float(self.unit_price)
+        final_unit = self.effective_unit_price if self.discount_total < Decimal("0") else self.unit_price
 
         d = {
             "name": self.name,
-            "unit_price": float(self.unit_price),
-            "price": float(self.effective_unit_price),
-            "quantity": float(self.quantity),
+            "unit_price": self.unit_price,
+            "price": self.effective_unit_price,
+            "quantity": self.quantity,
             "category": self.category,
             "category_source": self.category_source,
             "original_price": orig_price,
-            "discount_total": float(self.discount_total),
+            "discount_total": self.discount_total,
             "final_price": final_unit if self.discount_total < Decimal("0") else None,
-            "final_line_total": float(self.final_line_total),
+            "final_line_total": self.final_line_total,
             "is_adjustment": self.is_adjustment,
         }
         if hasattr(self, "_extra"):
@@ -177,7 +177,7 @@ class CanonicalReceipt:
         d = {
             "merchant_name": self.merchant_name,
             "date": self.date,
-            "total_amount": float(self.total_amount),
+            "total_amount": self.total_amount,
             "currency": self.currency,
             "items": [item.to_dict() for item in self.items],
         }

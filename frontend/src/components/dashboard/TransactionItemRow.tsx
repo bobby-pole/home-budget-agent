@@ -20,12 +20,29 @@ import { toast } from "sonner";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import type { TransactionLineRead } from "@/client";
 import { getIntlLocale } from "@/lib/dates";
+import {
+  computeLineTotal,
+  formatDecimalLocale,
+  isPositiveDecimalInput,
+  isPositiveMoneyInput,
+  parseQuantityInput,
+  parseUnitPriceInput,
+  toCents,
+  type DecimalInput,
+} from "@/lib/money";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
 const itemSchema = z.object({
   name: z.string().min(1, t("transactions.item_row.validation.name_required")),
-  price: z.number().min(0.01),
-  quantity: z.number().min(0.1),
+  price: z
+    .string()
+    .refine(isPositiveMoneyInput, t("transactions.add_modal.validation.positive")),
+  quantity: z
+    .string()
+    .refine(
+      isPositiveDecimalInput,
+      t("transactions.add_modal.validation.positive"),
+    ),
   category_id: z.number().nullable(),
 });
 
@@ -51,14 +68,19 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
     defaultValues: {
       name: item.name,
       price: item.price,
-      quantity: item.quantity ?? 1,
+      quantity: item.quantity ?? "1",
       category_id: item.category_id ?? null,
     },
   });
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) =>
-      api.updateTransactionLine(transactionId, item.id, values),
+      api.updateTransactionLine(transactionId, item.id, {
+        name: values.name,
+        price: parseUnitPriceInput(values.price) ?? values.price,
+        quantity: parseQuantityInput(values.quantity) ?? values.quantity,
+        category_id: values.category_id,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
@@ -87,13 +109,13 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
 
   if (!isEditing) {
     const displayCat = getDisplayCategory(item.category_id ?? null);
-    const qty = item.quantity ?? 1;
+    const qty = item.quantity ?? "1";
     const hasDiscount =
-      item.original_price != null && (item.discount_total ?? 0) !== 0;
+      item.original_price != null && toCents(item.discount_total ?? "0.00") !== 0n;
     const isAdjustment = item.is_adjustment === true;
     const intlLocale = getIntlLocale();
-    const formatMoney = (value: number) =>
-      value.toLocaleString(intlLocale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatMoney = (value: DecimalInput) =>
+      formatDecimalLocale(value, intlLocale);
 
     if (isAdjustment) {
       return (
@@ -102,7 +124,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             {item.name}
           </span>
           <span className="font-semibold whitespace-nowrap text-amber-700 dark:text-amber-400 tabular-nums">
-            {formatMoney(item.price * qty)} {currency}
+            {formatMoney(computeLineTotal(item.price, qty, "0.00"))} {currency}
           </span>
         </div>
       );
@@ -135,18 +157,18 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
           <div className="flex flex-col items-end gap-0.5">
             {hasDiscount && (
               <span className="text-[11px] line-through text-muted-foreground/60 leading-none">
-                {formatMoney((item.original_price as number) * qty)} {currency}
+                {formatMoney(computeLineTotal(item.original_price ?? item.price, qty, "0.00"))} {currency}
               </span>
             )}
             <span className="font-semibold whitespace-nowrap min-w-[70px] text-right leading-none">
-              {formatMoney(item.price * qty)} {currency}
+              {formatMoney(computeLineTotal(item.price, qty, "0.00"))} {currency}
             </span>
             {hasDiscount && (
               <span
                 className="text-[10px] font-medium px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 leading-none"
                 title={t("transactions.item_row.discount_badge")}
               >
-                {formatMoney(item.discount_total as number)} {currency}
+                {formatMoney(item.discount_total ?? "0.00")} {currency}
               </span>
             )}
           </div>
@@ -220,7 +242,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             render={({ field }) => (
               <FormItem className="w-14 space-y-0">
                 <FormControl>
-                  <Input {...field} type="number" step="0.1" className="h-8 text-xs px-1 text-center bg-background" placeholder={t("transactions.item_row.placeholder_qty")} title="Ilość" />
+                  <Input {...field} type="text" inputMode="decimal" className="h-8 text-xs px-1 text-center bg-background" placeholder={t("transactions.item_row.placeholder_qty")} title="Ilość" />
                 </FormControl>
               </FormItem>
             )}
@@ -233,7 +255,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             render={({ field }) => (
               <FormItem className="w-20 space-y-0">
                 <FormControl>
-                  <Input {...field} type="number" step="0.01" className="h-8 text-xs px-1 text-right bg-background" placeholder={t("transactions.item_row.placeholder_price")} />
+                  <Input {...field} type="text" inputMode="decimal" className="h-8 text-xs px-1 text-right bg-background" placeholder={t("transactions.item_row.placeholder_price")} />
                 </FormControl>
               </FormItem>
             )}

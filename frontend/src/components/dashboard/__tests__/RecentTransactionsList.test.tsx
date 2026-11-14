@@ -10,7 +10,7 @@ describe("RecentTransactionsList", () => {
     {
       id: 1,
       merchant_name: "Biedronka",
-      total_amount: 42.5,
+      total_amount: "42.50",
       currency: "PLN",
       date: "2026-02-28",
       type: "expense",
@@ -19,7 +19,7 @@ describe("RecentTransactionsList", () => {
     {
       id: 2,
       merchant_name: "Wypłata",
-      total_amount: 5000,
+      total_amount: "5000.00",
       currency: "PLN",
       date: "2026-02-27",
       type: "income",

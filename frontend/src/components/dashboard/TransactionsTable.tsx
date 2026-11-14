@@ -25,6 +25,7 @@ import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight, ArrowUpRight
 import type { TransactionRead as Transaction, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
+import { formatMoneyFixed } from "@/lib/money";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -262,7 +263,7 @@ export function TransactionsTable({
                           isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                         )}>
                           {isIncome ? "+" : isTransferNeutral ? "" : "-"}
-                          {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
+                          {formatMoneyFixed(transaction.total_amount ?? "0.00")} {transaction.currency ?? "PLN"}
                         </span>
                         <div className="flex items-center gap-0.5 -mr-1.5">
                           {scanStatus === "error" && (
@@ -466,7 +467,7 @@ export function TransactionsTable({
                         isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                       )}>
                         {isIncome ? "+" : isTransferNeutral ? "" : "-"}
-                        {(transaction.total_amount ?? 0).toFixed(2)} {transaction.currency ?? "PLN"}
+                        {formatMoneyFixed(transaction.total_amount ?? "0.00")} {transaction.currency ?? "PLN"}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">

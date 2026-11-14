@@ -138,8 +138,8 @@ describe("ItemsPanel", () => {
     const existingItem: ManualItem = {
       id: "item-1",
       name: "Mleko",
-      price: 3.99,
-      quantity: 1,
+      price: "3.99",
+      quantity: "1",
       category_id: null,
     };
 
@@ -189,8 +189,8 @@ describe("ItemsPanel", () => {
 
     it("renders multiple items", () => {
       const items: ManualItem[] = [
-        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category_id: null },
-        { id: "2", name: "Masło", price: 6.5, quantity: 2, category_id: null },
+        { id: "1", name: "Chleb", price: "3.00", quantity: "1", category_id: null },
+        { id: "2", name: "Masło", price: "6.50", quantity: "2", category_id: null },
       ];
       render(<ItemsPanelWrapper initialItems={items} />);
       expect(screen.getByText("Chleb")).toBeInTheDocument();
@@ -201,7 +201,7 @@ describe("ItemsPanel", () => {
     it("amounts are displayed with currency", () => {
       render(
         <ItemsPanelWrapper
-          initialItems={[{ id: "x", name: "Test", price: 10, quantity: 3, category_id: null }]}
+          initialItems={[{ id: "x", name: "Test", price: "10.00", quantity: "3", category_id: null }]}
         />
       );
       expect(screen.getByText("30.00 PLN")).toBeInTheDocument();
@@ -216,8 +216,8 @@ describe("ItemsPanel", () => {
 
     it("matches snapshot — with two items", () => {
       const items: ManualItem[] = [
-        { id: "1", name: "Chleb", price: 3.0, quantity: 1, category_id: null },
-        { id: "2", name: "Masło", price: 6.5, quantity: 2, category_id: null },
+        { id: "1", name: "Chleb", price: "3.00", quantity: "1", category_id: null },
+        { id: "2", name: "Masło", price: "6.50", quantity: "2", category_id: null },
       ];
       const { asFragment } = render(<ItemsPanelWrapper initialItems={items} />);
       expect(asFragment()).toMatchSnapshot();

@@ -1,5 +1,6 @@
 import os
 import json
+from decimal import Decimal
 import pytest
 from unittest.mock import patch
 import fitz
@@ -138,7 +139,7 @@ def test_eparagon_json_adapter_parse():
     parsed = EParagonJSONAdapter.parse(json_bytes)
     assert parsed["merchant_name"] == "TEST BIEDRONKA S.A."
     assert parsed["date"] == "2026-05-27"
-    assert parsed["total_amount"] == 36.51
+    assert parsed["total_amount"] == Decimal("36.51")
     assert parsed["currency"] == "PLN"
     
     # 2 products + 1 deposit = 3 items
@@ -147,26 +148,26 @@ def test_eparagon_json_adapter_parse():
     # Check item 1 (no discount)
     item1 = parsed["items"][0]
     assert item1["name"] == "Chleb Graham C"
-    assert item1["price"] == 3.50
-    assert item1["quantity"] == 2.0
-    assert item1["discount_total"] == 0.0
-    assert item1["original_price"] == 3.50
+    assert item1["price"] == Decimal("3.50")
+    assert item1["quantity"] == Decimal("2")
+    assert item1["discount_total"] == Decimal("0")
+    assert item1["original_price"] == Decimal("3.50")
     assert item1["is_adjustment"] is False
 
     # Check item 2 (discounted)
     item2 = parsed["items"][1]
     assert item2["name"] == "Maslo Ekstra C"
-    assert item2["price"] == 4.50  # 6.00 - 1.50 = 4.50 unit-price after discount
-    assert item2["quantity"] == 1.0
-    assert item2["discount_total"] == -1.50
-    assert item2["original_price"] == 6.00
+    assert item2["price"] == Decimal("4.50")  # 6.00 - 1.50 = 4.50 unit-price after discount
+    assert item2["quantity"] == Decimal("1")
+    assert item2["discount_total"] == Decimal("-1.50")
+    assert item2["original_price"] == Decimal("6.00")
     assert item2["is_adjustment"] is False
 
     # Check deposit
     item3 = parsed["items"][2]
     assert item3["name"] == "Butelka Kaucja"
-    assert item3["price"] == 0.50
-    assert item3["quantity"] == 2.0
+    assert item3["price"] == Decimal("0.50")
+    assert item3["quantity"] == Decimal("2")
     assert item3["is_adjustment"] is True
 
 
@@ -207,16 +208,16 @@ def test_eparagon_polish_decimal_quantity():
     # Weighed item with Polish decimal
     item1 = parsed["items"][0]
     assert item1["name"] == "CukierkiKrówkaMixLuz"
-    assert item1["quantity"] == pytest.approx(0.038, abs=0.001)
-    assert item1["original_price"] == pytest.approx(19.90, abs=0.01)
-    assert item1["discount_total"] == 0.0
+    assert item1["quantity"] == Decimal("0.038")
+    assert item1["original_price"] == Decimal("19.90")
+    assert item1["discount_total"] == Decimal("0")
 
     # Weighed item with Polish decimal + inline rabat
     item2 = parsed["items"][1]
     assert item2["name"] == "OgórekSzkLuz"
-    assert item2["quantity"] == pytest.approx(0.348, abs=0.001)
-    assert item2["original_price"] == pytest.approx(7.99, abs=0.01)
-    assert item2["discount_total"] == pytest.approx(-1.39, abs=0.01)
+    assert item2["quantity"] == Decimal("0.348")
+    assert item2["original_price"] == Decimal("7.99")
+    assert item2["discount_total"] == Decimal("-1.39")
 
 
 def test_eparagon_zabka_separate_rabat():
@@ -250,42 +251,42 @@ def test_eparagon_zabka_separate_rabat():
     json_bytes = json.dumps(mock_jpk).encode("utf-8")
 
     parsed = EParagonJSONAdapter.parse(json_bytes)
-    assert parsed["total_amount"] == pytest.approx(13.98, abs=0.01)
+    assert parsed["total_amount"] == Decimal("13.98")
 
     # Only 1 item (rabat applied to it, no ghost item)
     assert len(parsed["items"]) == 1
 
     item = parsed["items"][0]
     assert item["name"] == "ZELKI HARIBO 175g-A"
-    assert item["quantity"] == 2.0
-    assert item["original_price"] == pytest.approx(8.99, abs=0.01)
-    assert item["discount_total"] == pytest.approx(-4.00, abs=0.01)
+    assert item["quantity"] == Decimal("2")
+    assert item["original_price"] == Decimal("8.99")
+    assert item["discount_total"] == Decimal("-4.00")
     # Final price per unit: 8.99 + (-4.00 / 2) = 6.99
-    assert item["price"] == pytest.approx(6.99, abs=0.01)
+    assert item["price"] == Decimal("6.99")
     assert item["is_adjustment"] is False
 
     # items sum: 6.99 * 2 = 13.98 = total
-    items_sum = sum(i["price"] * i["quantity"] for i in parsed["items"])
-    assert items_sum == pytest.approx(parsed["total_amount"], abs=0.01)
+    items_sum = sum((i["price"] * i["quantity"] for i in parsed["items"]), Decimal("0"))
+    assert abs(items_sum - parsed["total_amount"]) <= Decimal("0.01")
 
 
-def test_parse_polish_float_helper():
-    """Test the _parse_polish_float helper directly."""
-    from app.ocr_pipeline import _parse_polish_float
+def test_parse_polish_decimal_helper():
+    """Test the _parse_polish_decimal helper directly."""
+    from app.ocr_pipeline import _parse_polish_decimal
 
     # Polish comma format
-    assert _parse_polish_float("0,038") == pytest.approx(0.038, abs=0.001)
-    assert _parse_polish_float("0,348") == pytest.approx(0.348, abs=0.001)
+    assert _parse_polish_decimal("0,038") == Decimal("0.038")
+    assert _parse_polish_decimal("0,348") == Decimal("0.348")
 
     # Standard dot format
-    assert _parse_polish_float("1.5") == pytest.approx(1.5, abs=0.01)
+    assert _parse_polish_decimal("1.5") == Decimal("1.5")
 
     # Integer string
-    assert _parse_polish_float("2") == pytest.approx(2.0, abs=0.01)
+    assert _parse_polish_decimal("2") == Decimal("2")
 
     # Numeric types
-    assert _parse_polish_float(799) == pytest.approx(799.0, abs=0.01)
-    assert _parse_polish_float(799, divisor=100.0) == pytest.approx(7.99, abs=0.01)
+    assert _parse_polish_decimal(799) == Decimal("799")
+    assert _parse_polish_decimal(799, divisor=100) == Decimal("7.99")
 
 
 # ── AIService E2E Integration Tests ─────────────────────────────────────────────
@@ -300,7 +301,8 @@ def test_pipeline_eparagon_json(tmp_path):
     
     assert result is not None
     assert result["merchant_name"] == "e-Store"
-    assert result["total_amount"] == 10.0
+    assert isinstance(result["total_amount"], Decimal)
+    assert result["total_amount"] == Decimal("10.00")
 
 
 @patch("app.services.AIService._ai_structurize")
@@ -420,7 +422,7 @@ def test_e2e_user_downloads_receipt2_json():
     result = AIService.parse_receipt(json_path)
     assert result is not None
     assert "JERONIMO MARTINS" in result["merchant_name"].upper()
-    assert result["total_amount"] == 71.98
+    assert result["total_amount"] == Decimal("71.98")
     assert result["currency"] == "PLN"
     
     # 7 products + 1 deposit kaucja = 8 items
@@ -429,7 +431,7 @@ def test_e2e_user_downloads_receipt2_json():
     # Check first item chipsy
     item = result["items"][0]
     assert "CHIPSY" in item["name"].upper()
-    assert item["price"] == 3.99  # 9.49 - 5.50 = 3.99
-    assert item["original_price"] == 9.49
-    assert item["discount_total"] == -5.50
-    assert item["quantity"] == 1.0
+    assert item["price"] == Decimal("3.99")  # 9.49 - 5.50 = 3.99
+    assert item["original_price"] == Decimal("9.49")
+    assert item["discount_total"] == Decimal("-5.50")
+    assert item["quantity"] == Decimal("1")

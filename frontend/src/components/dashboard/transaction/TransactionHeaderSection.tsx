@@ -17,12 +17,13 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { SectionGrid } from "../shared/SectionGrid";
+import { formatMoneyFixed } from "@/lib/money";
 import type { TransactionFormInput } from "./schema";
 
 interface TransactionHeaderSectionProps {
   control: Control<TransactionFormInput>;
   hasItems: boolean;
-  computedTotal: number;
+  computedTotal: string;
   currency: string;
 }
 
@@ -105,12 +106,11 @@ export function TransactionHeaderSection({
               </FormLabel>
               <FormControl>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.00"
                   {...field}
-                  value={(field.value as number) ?? ""}
+                  value={field.value ?? ""}
                 />
               </FormControl>
               <FormMessage />
@@ -123,7 +123,7 @@ export function TransactionHeaderSection({
             {t("transactions.header_section.computed_total_label")}
           </span>
           <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-sm font-bold text-primary">
-            {computedTotal.toFixed(2)} {currency}
+            {formatMoneyFixed(computedTotal)} {currency}
           </div>
         </div>
       )}

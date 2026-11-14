@@ -1,6 +1,7 @@
 import asyncio
 from unittest.mock import patch
 from datetime import datetime, timezone
+from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -52,7 +53,7 @@ def test_process_scan_valid_receipt(client: TestClient, session: Session, requir
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert user and budget
 
-    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=0.0)
+    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=Decimal("0.00"))
     session.add(tx)
     session.commit()
     session.refresh(tx)
@@ -104,7 +105,7 @@ def test_process_scan_sum_mismatch_sets_needs_review_and_persists_lines(client: 
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert user and budget
 
-    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=0.0)
+    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=Decimal("0.00"))
     session.add(tx)
     session.commit()
     session.refresh(tx)
@@ -158,7 +159,7 @@ def test_process_scan_low_confidence_line_sets_needs_review(client: TestClient, 
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert user and budget
 
-    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=0.0)
+    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Pending", total_amount=Decimal("0.00"))
     session.add(tx)
     session.commit()
     session.refresh(tx)
@@ -208,7 +209,7 @@ def test_inbox_filtering_by_needs_review(client: TestClient, session: Session):
     assert user and budget
 
     # Transaction 1: Ready / Categorized (needs_review = False)
-    t1 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Ready", total_amount=20.0)
+    t1 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Ready", total_amount=Decimal("20.00"))
     session.add(t1)
     session.commit()
     session.refresh(t1)
@@ -217,7 +218,7 @@ def test_inbox_filtering_by_needs_review(client: TestClient, session: Session):
     session.add(s1)
 
     # Transaction 2: Review required (needs_review = True, NEEDS_REVIEW)
-    t2 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Needs Review", total_amount=30.0)
+    t2 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Needs Review", total_amount=Decimal("30.00"))
     session.add(t2)
     session.commit()
     session.refresh(t2)
@@ -226,7 +227,7 @@ def test_inbox_filtering_by_needs_review(client: TestClient, session: Session):
     session.add(s2)
 
     # Transaction 3: Review required (needs_review = True, FAILED)
-    t3 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Failed", total_amount=40.0)
+    t3 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Tx Failed", total_amount=Decimal("40.00"))
     session.add(t3)
     session.commit()
     session.refresh(t3)
@@ -267,7 +268,7 @@ def test_verify_transaction_sets_done_and_removes_from_inbox(client: TestClient,
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert user and budget
 
-    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Unverified", total_amount=50.0)
+    tx = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="Unverified", total_amount=Decimal("50.00"))
     session.add(tx)
     session.commit()
     session.refresh(tx)
@@ -305,7 +306,7 @@ def test_app_status_endpoint_includes_all_inbox_items(client: TestClient, sessio
     budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
     assert user and budget
 
-    t1 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="App Status 1", total_amount=12.0)
+    t1 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="App Status 1", total_amount=Decimal("12.00"))
     session.add(t1)
     session.commit()
     session.refresh(t1)
@@ -313,7 +314,7 @@ def test_app_status_endpoint_includes_all_inbox_items(client: TestClient, sessio
     s1 = ReceiptScan(transaction_id=t1.id, status=ScanStatus.CATEGORIZATION_OK.value, needs_review=False)
     session.add(s1)
 
-    t2 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="App Status 2", total_amount=15.0)
+    t2 = Transaction(budget_id=budget.id, uploaded_by=user.id, merchant_name="App Status 2", total_amount=Decimal("15.00"))
     session.add(t2)
     session.commit()
     session.refresh(t2)

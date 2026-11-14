@@ -15,7 +15,10 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Generator, Optional
+
+from .money import format_money, format_quantity, quantize_money
 
 
 @dataclass
@@ -158,11 +161,12 @@ class PipelineLogger:
         print(f"  Items ({len(items)}):")
         for item in items[:max_show]:
             name = str(item.get("name", "?"))[:40]
-            price = float(item.get("price", 0))
-            qty = float(item.get("quantity", 1))
-            parts = [f"    {name:40} {price:>8.2f} PLN  x{qty}"]
-            if item.get("discount_total"):
-                parts.append(f" (rabat: {item['discount_total']:.2f})")
+            price_str = format_money(item.get("price", Decimal("0.00")))
+            qty_str = format_quantity(item.get("quantity", Decimal("1")))
+            parts = [f"    {name:40} {price_str:>8} PLN  x{qty_str}"]
+            disc_val = item.get("discount_total")
+            if disc_val is not None and quantize_money(disc_val) != Decimal("0.00"):
+                parts.append(f" (rabat: {format_money(disc_val)})")
             if item.get("is_adjustment"):
                 parts.append(" [adj]")
             print("".join(parts))
@@ -242,6 +246,8 @@ def _truncate(s: str, max_len: int = 120) -> str:
 
 def _make_serializable(obj: Any) -> Any:
     """Convert non-serializable objects for JSON export."""
+    if isinstance(obj, Decimal):
+        return format(obj, "f")
     if isinstance(obj, dict):
         return {k: _make_serializable(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
