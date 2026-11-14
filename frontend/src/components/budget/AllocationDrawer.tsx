@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Loader2, Save } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { isNonNegativeMoneyInput, parseMoneyInput, toCents } from "@/lib/money";
 
 interface AllocationDrawerProps {
   open: boolean;
@@ -24,7 +25,7 @@ interface AllocationDrawerProps {
   categoryId: number | null;
   categoryName: string;
   categoryIcon: string;
-  currentPlanned: number;
+  currentPlanned: string;
   year: number;
   month: number;
 }
@@ -43,7 +44,7 @@ export function AllocationDrawer({
   const isMobile = useIsMobile();
 
   const mutation = useMutation({
-    mutationFn: (newAmount: number) => {
+    mutationFn: (newAmount: string) => {
       if (!categoryId) throw new Error("No category selected");
       return api.setBudgetLimit(year, month, categoryId, newAmount);
     },
@@ -103,16 +104,16 @@ function AllocationForm({
 }: { 
   categoryIcon: string; 
   categoryName: string; 
-  currentPlanned: number; 
-  onSave: (amount: number) => void;
+  currentPlanned: string; 
+  onSave: (amount: string) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const [amount, setAmount] = useState<string>(currentPlanned > 0 ? currentPlanned.toString() : "");
+  const [amount, setAmount] = useState<string>(toCents(currentPlanned) > 0n ? currentPlanned : "");
 
   const handleSave = () => {
-    const parsedAmount = parseFloat(amount.replace(",", "."));
-    if (isNaN(parsedAmount) || parsedAmount < 0) {
+    const parsedAmount = parseMoneyInput(amount);
+    if (parsedAmount === null || !isNonNegativeMoneyInput(parsedAmount)) {
       toast.error(t("budget.allocation_drawer.amount_error"));
       return;
     }
@@ -139,8 +140,8 @@ function AllocationForm({
           <div className="relative">
             <Input
               id="planned-amount"
-              type="number"
-              step="0.01"
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               className="text-3xl font-black h-16 rounded-2xl pr-16 bg-muted/30 border-muted focus:bg-background transition-colors"
               value={amount}

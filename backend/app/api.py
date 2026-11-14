@@ -43,6 +43,7 @@ from .auth import get_current_user, get_current_user_optional, hash_password, ve
 from .demo_seed import seed_demo_environment
 from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
 from .config import settings
+from .money import format_money, quantize_money, quantize_quantity, quantize_unit_price, MoneyDecimal
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -549,7 +550,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         _set_scan_status(scan_id, ScanStatus.OCR_OK)
 
         merchant = data.get("merchant_name") or "Unknown"
-        total = data.get("total_amount", 0.0)
+        total = quantize_money(data.get("total_amount", Decimal("0.00")))
 
         validation = data.get("_validation", {})
         val_is_valid = validation.get("is_valid", True)
@@ -643,18 +644,18 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             cat_source = item_raw.get("category_source")
             orig = item_raw.get("original_price")
             fin = item_raw.get("final_price")
-            raw_disc = float(item_raw.get("discount_total", 0.0))
-            discount_val = -abs(raw_disc) if raw_disc != 0.0 else 0.0
+            raw_disc = quantize_money(item_raw.get("discount_total", Decimal("0.00")))
+            discount_val = -abs(raw_disc) if raw_disc != Decimal("0.00") else Decimal("0.00")
             session.add(TransactionLine(
                 name=item_raw.get("name", "Unknown item"),
-                price=float(item_raw.get("price", 0.0)),
-                quantity=float(item_raw.get("quantity", 1.0)),
+                price=quantize_unit_price(item_raw.get("price", Decimal("0.00"))),
+                quantity=quantize_quantity(item_raw.get("quantity", Decimal("1"))),
                 category_id=cat_id,
                 category_source=cat_source,
                 transaction_id=transaction.id,
-                original_price=float(orig) if orig is not None else None,
+                original_price=quantize_unit_price(orig) if orig is not None else None,
                 discount_total=discount_val,
-                final_price=float(fin) if fin is not None else None,
+                final_price=quantize_unit_price(fin) if fin is not None else None,
                 is_adjustment=bool(item_raw.get("is_adjustment", False)),
             ))
 
@@ -692,12 +693,12 @@ async def process_transaction_in_background(transaction_id: int, scan_id: int, i
 
 
 
-def _check_envelope_balance_and_alert(session: Session, transaction: Transaction, delta_amount: float):
+def _check_envelope_balance_and_alert(session: Session, transaction: Transaction, delta_amount: Decimal | float):
     if transaction.type != "expense" or not transaction.budget_id:
         return
 
     # 1. Gather all categories and their amount in this transaction
-    category_amounts = {}
+    category_amounts: dict[int, Decimal] = {}
 
     lines = session.exec(
         select(TransactionLine).where(TransactionLine.transaction_id == transaction.id)
@@ -706,10 +707,11 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
     if lines:
         for line in lines:
             if line.category_id is not None:
-                category_amounts[line.category_id] = category_amounts.get(line.category_id, 0.0) + (line.price * line.quantity)
+                line_total = quantize_money(Decimal(str(line.price)) * Decimal(str(line.quantity)))
+                category_amounts[line.category_id] = category_amounts.get(line.category_id, Decimal("0.00")) + line_total
     else:
         if transaction.category_id is not None:
-            category_amounts[transaction.category_id] = transaction.total_amount
+            category_amounts[transaction.category_id] = quantize_money(transaction.total_amount)
 
     if not category_amounts:
         return
@@ -731,14 +733,14 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
     # 2. Check each category's balance
     for cat_id, amt in category_amounts.items():
         planned = session.exec(
-            select(EnvelopeAllocation.amount).where(
+            select(col(EnvelopeAllocation.amount)).where(
                 EnvelopeAllocation.budget_id == transaction.budget_id,
                 EnvelopeAllocation.category_id == cat_id,
                 EnvelopeAllocation.year == year,
                 EnvelopeAllocation.month == month
             )
         ).first()
-        planned_dec = Decimal(str(planned)) if planned is not None else Decimal("0.00")
+        planned_dec = quantize_money(planned) if planned is not None else Decimal("0.00")
         # Sum spent from transactions without lines in this category
         spent_no_lines = session.scalar(
             select(func.sum(Transaction.total_amount)).where(
@@ -749,7 +751,7 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
                 col(Transaction.category_id) == cat_id,
                 ~col(Transaction.id).in_(select(TransactionLine.transaction_id).where(col(TransactionLine.transaction_id).is_not(None)))
             )
-        ) or 0.0
+        ) or Decimal("0.00")
 
         # Sum spent from transaction lines in this category
         spent_with_lines = session.scalar(
@@ -762,12 +764,12 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
                 extract('month', col(Transaction.date)) == month,
                 col(TransactionLine.category_id) == cat_id
             )
-        ) or 0.0
+        ) or Decimal("0.00")
 
-        spent_dec = Decimal(str(spent_no_lines)) + Decimal(str(spent_with_lines))
+        spent_dec = quantize_money(spent_no_lines) + quantize_money(spent_with_lines)
 
         remaining = planned_dec - spent_dec
-        delta_dec = Decimal(str(amt))
+        delta_dec = quantize_money(amt)
         remaining_before = remaining + delta_dec
 
         if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
@@ -786,7 +788,7 @@ def _check_envelope_balance_and_alert(session: Session, transaction: Transaction
                     continue
                 alert_msg = json.dumps({
                     "type": "zeroed_envelope",
-                    "remaining": float(remaining)
+                    "remaining": format_money(remaining)
                 })
                 alert = BudgetAlert(
                     budget_id=transaction.budget_id,
@@ -810,9 +812,9 @@ def create_manual_transaction(
         raise HTTPException(status_code=404, detail="Budget not found")
     validate_transaction_accounts(session, current_budget.id, data.account_id, data.transfer_id)
     total = (
-        sum(line.price * line.quantity for line in data.lines)
+        quantize_money(sum((line.price * line.quantity for line in data.lines), Decimal("0.00")))
         if data.lines
-        else data.total_amount
+        else quantize_money(data.total_amount)
     )
 
     # Resolve category from account if not provided
@@ -866,13 +868,17 @@ def create_manual_transaction(
                 price=line_data.price,
                 quantity=line_data.quantity,
                 category_id=line_data.category_id,
+                original_price=line_data.original_price,
+                discount_total=line_data.discount_total,
+                final_price=line_data.final_price,
+                is_adjustment=line_data.is_adjustment,
                 transaction_id=transaction.id,
             ))
     elif data.type != "transfer" or final_category_id is not None:
         session.add(TransactionLine(
             name=data.note or ("Transfer" if data.type == "transfer" else "Manual entry"),
             price=data.total_amount,
-            quantity=1.0,
+            quantity=Decimal("1"),
             category_id=final_category_id,
             transaction_id=transaction.id,
         ))
@@ -921,7 +927,7 @@ def create_transfer(
 
     transaction = Transaction(
         merchant_name=merchant_name,
-        total_amount=round(data.amount, 2),
+        total_amount=quantize_money(data.amount),
         currency=data.currency,
         date=data.date or datetime.now(timezone.utc),
         category_id=data.category_id,
@@ -1742,10 +1748,8 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
     for match in pattern.finditer(text):
         date_str, posting_date, mid_text, amount_str = match.groups()
 
-        # Clean amount: "1 234,56" -> "1234.56"
-        clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
         try:
-            amount = float(clean_amount)
+            amount = quantize_money(amount_str)
         except ValueError:
             continue
 
@@ -1799,7 +1803,7 @@ def parse_ing_pdf_text(text: str) -> list[dict]:
     return transactions
 
 
-def detect_transaction_type(merchant: str, title: str, amount: float, user_names: list[str]) -> str:
+def detect_transaction_type(merchant: str, title: str, amount: Decimal | float, user_names: list[str]) -> str:
     """
     Heurystyka do oznaczania transferów wewnętrznych i przelewów P2P.
     """
@@ -1879,7 +1883,7 @@ async def import_transactions(
                 currency = row["currency"]
 
                 # Unique hash for deduplication
-                raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
+                raw_hash = f"{date_str}_{format_money(amount)}_{merchant}_{title}".strip()
                 row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
 
                 rows_to_process.append({
@@ -1947,10 +1951,9 @@ async def import_transactions(
                 if not date_str or not amount_str:
                     continue
 
-                clean_amount = amount_str.replace(",", ".").replace(" ", "").replace("\xa0", "")
-                amount = float(clean_amount)
+                amount = quantize_money(amount_str)
 
-                raw_hash = f"{date_str}_{amount}_{merchant}_{title}".strip()
+                raw_hash = f"{date_str}_{format_money(amount)}_{merchant}_{title}".strip()
                 row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
 
                 rows_to_process.append({
@@ -2070,7 +2073,7 @@ async def import_transactions(
 
         # Use pre-parsed date if available
         t_date = parsed_dates[i] if i < len(parsed_dates) else datetime.now(timezone.utc)
-        t_amount = abs(row_data["amount"])
+        t_amount = quantize_money(abs(row_data["amount"]))
 
         # --- SMART DEDUPLICATION (Gap Analysis / MVP) ---
         # Look for match in pre-fetched candidates
@@ -2084,7 +2087,7 @@ async def import_transactions(
             candidate_date = cand.date
             if candidate_date is not None and candidate_date.tzinfo is None:
                 candidate_date = candidate_date.replace(tzinfo=timezone.utc)
-            if cand.total_amount == t_amount and candidate_date and d_start <= candidate_date <= d_end:
+            if quantize_money(cand.total_amount) == t_amount and candidate_date and d_start <= candidate_date <= d_end:
                 existing_duplicate = cand
                 manual_candidates.remove(cand) # Don't match the same receipt twice
                 break
@@ -2170,7 +2173,7 @@ def set_budget_limit(
     if not category or category.budget_id != current_budget.id:
         raise HTTPException(status_code=404, detail="Category not found in this budget")
 
-    if limit_data.amount < 0:
+    if limit_data.amount < Decimal("0"):
         raise HTTPException(status_code=400, detail="Limit amount must be non-negative")
 
     # Check for existing allocation
@@ -2246,7 +2249,7 @@ def get_summary(
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
-    regular_income = session.scalar(income_stmt) or 0.0
+    regular_income = session.scalar(income_stmt) or Decimal("0.00")
 
     # Inflow from Tracking (Off-Budget) to On-Budget account
     tracking_income_stmt = (
@@ -2262,8 +2265,8 @@ def get_summary(
             col(dest_acc.is_on_budget).is_(True),
         )
     )
-    tracking_income = session.scalar(tracking_income_stmt) or 0.0
-    total_income = round(float(regular_income) + float(tracking_income), 2)
+    tracking_income = session.scalar(tracking_income_stmt) or Decimal("0.00")
+    total_income = quantize_money(regular_income) + quantize_money(tracking_income)
 
     # 2. Calculate total spent (from expenses)
     expense_stmt = select(func.sum(Transaction.total_amount)).where(
@@ -2272,7 +2275,7 @@ def get_summary(
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
-    regular_spent = session.scalar(expense_stmt) or 0.0
+    regular_spent = session.scalar(expense_stmt) or Decimal("0.00")
 
     # Outflow from On-Budget to Tracking (Off-Budget) account
     tracking_expense_stmt = (
@@ -2288,8 +2291,8 @@ def get_summary(
             col(dest_acc.is_on_budget).is_(False),
         )
     )
-    tracking_spent = session.scalar(tracking_expense_stmt) or 0.0
-    total_spent = round(float(regular_spent) + float(tracking_spent), 2)
+    tracking_spent = session.scalar(tracking_expense_stmt) or Decimal("0.00")
+    total_spent = quantize_money(regular_spent) + quantize_money(tracking_spent)
 
     # 3. Retrieve category allocations (planning)
     allocations_stmt = select(EnvelopeAllocation).where(
@@ -2298,7 +2301,7 @@ def get_summary(
         EnvelopeAllocation.month == month
     )
     allocations = session.exec(allocations_stmt).all()
-    total_planned = sum(a.amount for a in allocations)
+    total_planned = sum((quantize_money(a.amount) for a in allocations), Decimal("0.00"))
 
     # Calculate category expenses breakdown
     no_lines_stmt = select(
@@ -2349,18 +2352,18 @@ def get_summary(
     )
     spent_tracking_cat = dict(session.exec(tracking_cat_stmt).all())
 
-    spent_by_category = {}
+    spent_by_category: dict[int, Decimal] = {}
     for cat_id, amt in spent_no_lines.items():
-        if cat_id is not None:
-            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+        if cat_id is not None and amt is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + quantize_money(amt)
 
     for cat_id, amt in spent_with_lines.items():
-        if cat_id is not None:
-            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+        if cat_id is not None and amt is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + quantize_money(amt)
 
     for cat_id, amt in spent_tracking_cat.items():
-        if cat_id is not None:
-            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + Decimal(str(amt))
+        if cat_id is not None and amt is not None:
+            spent_by_category[cat_id] = spent_by_category.get(cat_id, Decimal("0.00")) + quantize_money(amt)
 
 
     # Build the category summary items
@@ -2370,7 +2373,7 @@ def get_summary(
         select(Category).where(Category.budget_id == current_budget.id)
     ).all()
 
-    allocations_by_cat = {a.category_id: Decimal(str(a.amount)) for a in allocations}
+    allocations_by_cat = {a.category_id: quantize_money(a.amount) for a in allocations}
 
     for cat in all_categories:
         if cat.id is None:
@@ -2383,9 +2386,9 @@ def get_summary(
             categories_summary.append(CategoryBudgetSummaryItem(
                 category_id=cat.id,
                 category_name=cat.name,
-                planned=float(planned),
-                spent=float(spent),
-                remaining=float(planned - spent)
+                planned=planned,
+                spent=spent,
+                remaining=planned - spent
             ))
 
     net_cash_flow = total_income - total_spent
@@ -2635,16 +2638,16 @@ async def create_account(
     if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
     validate_account_category(session, current_budget.id, account_data.category_id)
-    init_balance = account_data.initial_balance
+    init_balance = quantize_money(account_data.initial_balance)
     account = Account(**account_data.model_dump(exclude={"initial_balance"}), budget_id=current_budget.id)
-    account.initial_balance = 0.0 # Prevent double counting
+    account.initial_balance = Decimal("0.00") # Prevent double counting
     account.current_balance = init_balance
     session.add(account)
     session.commit()
     session.refresh(account)
 
-    if init_balance != 0:
-        tx_type = "income" if init_balance > 0 else "expense"
+    if init_balance != Decimal("0.00"):
+        tx_type = "income" if init_balance > Decimal("0.00") else "expense"
         tx = Transaction(
             merchant_name="Saldo początkowe",
             total_amount=abs(init_balance),
@@ -2663,8 +2666,8 @@ async def create_account(
         session.refresh(tx)
         line = TransactionLine(
             name="Saldo początkowe",
-            price=abs(init_balance),
-            quantity=1.0,
+            price=quantize_unit_price(abs(init_balance)),
+            quantity=Decimal("1"),
             transaction_id=tx.id,
             is_adjustment=True
         )
@@ -2717,7 +2720,7 @@ async def delete_account(
     return None
 
 class AccountReconcileRequest(SQLModel):
-    real_balance: float
+    real_balance: MoneyDecimal
 
 @router.post("/accounts/{account_id}/reconcile", response_model=AccountRead)
 async def reconcile_account(
@@ -2731,9 +2734,9 @@ async def reconcile_account(
     if not account or account.budget_id != current_budget.id:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    diff = data.real_balance - account.current_balance
-    if abs(diff) > 0.001:
-        tx_type = "income" if diff > 0 else "expense"
+    diff = quantize_money(data.real_balance) - quantize_money(account.current_balance)
+    if diff != Decimal("0.00"):
+        tx_type = "income" if diff > Decimal("0.00") else "expense"
         tx = Transaction(
             merchant_name="Rekonsyliacja",
             total_amount=abs(diff),
@@ -2752,8 +2755,8 @@ async def reconcile_account(
         session.refresh(tx)
         line = TransactionLine(
             name="Wyrównanie salda",
-            price=abs(diff),
-            quantity=1.0,
+            price=quantize_unit_price(abs(diff)),
+            quantity=Decimal("1"),
             transaction_id=tx.id,
             is_adjustment=True
         )

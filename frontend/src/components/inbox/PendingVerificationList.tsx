@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { TransactionRead as Transaction } from "@/client";
 import { getStatusLabel, getStatusVariant, isInProgress } from "@/lib/receiptStatus";
 import { t } from "@/lib/i18n";
+import { formatMoneyFixed } from "@/lib/money";
 
 interface PendingVerificationListProps {
   transactions: Transaction[];
@@ -60,7 +61,7 @@ export function PendingVerificationList({
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-sm font-bold">
-                    {(tx.total_amount ?? 0).toFixed(2)} {tx.currency}
+                    {formatMoneyFixed(tx.total_amount ?? "0.00")} {tx.currency}
                   </div>
                   <div className="mt-2 flex justify-end">
                     {variant === "in-progress" && (

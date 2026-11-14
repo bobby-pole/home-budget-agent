@@ -9,6 +9,7 @@ import type { TransactionRead } from "@/client";
 import { CalendarDays } from "lucide-react";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { addMoney, formatDecimalLocale } from "@/lib/money";
 
 interface MonthlySummaryModalProps {
   transactions: TransactionRead[];
@@ -22,13 +23,13 @@ export function MonthlySummaryModal({
   onClose,
 }: MonthlySummaryModalProps) {
   // Aggregate data by Year-Month
-  const monthlyData: Record<string, number> = {};
+  const monthlyData: Record<string, string> = {};
 
   transactions.forEach((r) => {
     if (r.date && (!r.receipt_scan || r.receipt_scan.status === "done")) {
       const date = new Date(r.date);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-      monthlyData[key] = (monthlyData[key] || 0) + (r.total_amount ?? 0);
+      monthlyData[key] = addMoney(monthlyData[key] ?? "0.00", r.total_amount ?? "0.00");
     }
   });
 
@@ -66,10 +67,7 @@ export function MonthlySummaryModal({
                     {formatMonthKey(key)}
                   </span>
                   <span className="font-bold text-primary">
-                    {amount.toLocaleString(getIntlLocale(), {
-                      style: "currency",
-                      currency: "PLN",
-                    })}
+                    {formatDecimalLocale(amount, getIntlLocale(), { currency: "PLN" })}
                   </span>
                 </div>
               ))

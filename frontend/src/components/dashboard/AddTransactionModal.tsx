@@ -19,6 +19,7 @@ import { transactionSchema, type TransactionFormInput, type TransactionFormValue
 import { TransactionHeaderSection } from "./transaction/TransactionHeaderSection";
 import { TransactionMetaSection } from "./transaction/TransactionMetaSection";
 import { ItemsPanel, type ManualItem } from "./transaction/ItemsPanel";
+import { addMoney, computeLineTotal } from "@/lib/money";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -39,7 +40,10 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
   });
 
   const hasItems = items.length > 0;
-  const computedTotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const computedTotal = items.reduce(
+    (sum, i) => addMoney(sum, computeLineTotal(i.price, i.quantity, "0.00")),
+    "0.00",
+  );
 
   const form = useForm<TransactionFormInput, unknown, TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -87,7 +91,7 @@ export function AddTransactionModal({ open, onOpenChange }: AddTransactionModalP
     mutationFn: (values: TransactionFormValues) =>
       api.createManualTransaction({
         merchant_name: values.merchant_name,
-        total_amount: hasItems ? computedTotal : (values.total_amount ?? 0),
+        total_amount: hasItems ? computedTotal : (values.total_amount ?? "0.00"),
         currency: values.currency,
         date: values.date
           ? values.date.includes("T")

@@ -102,7 +102,7 @@ describe("api service", () => {
     it("createManualTransaction — wysyła POST /transactions/manual", async () => {
       const payload = {
         merchant_name: "Sklep",
-        total_amount: 25.5,
+        total_amount: "25.50",
         currency: "PLN",
         lines: [],
       };

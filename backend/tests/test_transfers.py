@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
@@ -33,7 +34,7 @@ def _get_or_create_category_id(client: TestClient) -> int:
     return created.json()["id"]
 
 
-def _balance(session: Session, account_id: int) -> float:
+def _balance(session: Session, account_id: int) -> Decimal:
     account = session.get(Account, account_id)
     assert account is not None
     session.refresh(account)
@@ -64,21 +65,21 @@ def test_create_transfer_endpoint(client: TestClient, session: Session):
     assert data["type"] == "transfer"
     assert data["account_id"] == source["id"]
     assert data["transfer_id"] == destination["id"]
-    assert data["total_amount"] == 250.0
+    assert data["total_amount"] == "250.00"
     assert "Checking Account" in data["merchant_name"]
     assert "Savings Account" in data["merchant_name"]
 
     # Balances updated
-    assert _balance(session, source["id"]) == 750.0
-    assert _balance(session, destination["id"]) == 1250.0
+    assert _balance(session, source["id"]) == Decimal("750.00")
+    assert _balance(session, destination["id"]) == Decimal("1250.00")
 
     # 2. Delete transfer via DELETE /api/transfers/{id}
     del_res = client.delete(f"/api/transfers/{data['id']}")
     assert del_res.status_code == 204
 
     # Balances reverted atomically
-    assert _balance(session, source["id"]) == 1000.0
-    assert _balance(session, destination["id"]) == 1000.0
+    assert _balance(session, source["id"]) == Decimal("1000.00")
+    assert _balance(session, destination["id"]) == Decimal("1000.00")
 
 
 def test_transfer_validation_errors(client: TestClient, session: Session):
@@ -182,13 +183,13 @@ def test_tracking_account_transfers_in_summary(client: TestClient):
     assert outflow_res.status_code == 200
 
     summary_after_outflow = client.get(f"/api/budget/{year}/{month}/summary").json()
-    assert summary_after_outflow["total_spent"] == round(spent_before + 400.0, 2)
+    assert Decimal(summary_after_outflow["total_spent"]) == Decimal(spent_before) + Decimal("400.00")
     assert summary_after_outflow["total_income"] == income_before
 
     # Category spent should reflect the tracking transfer
     cat_item = next((c for c in summary_after_outflow["categories"] if c["category_id"] == cat_id), None)
     assert cat_item is not None
-    assert cat_item["spent"] >= 400.0
+    assert Decimal(cat_item["spent"]) >= Decimal("400.00")
 
     # 2. Inflow from tracking: Tracking -> Checking (treated as income into budget)
     inflow_res = client.post(
@@ -203,7 +204,7 @@ def test_tracking_account_transfers_in_summary(client: TestClient):
     assert inflow_res.status_code == 200
 
     summary_after_inflow = client.get(f"/api/budget/{year}/{month}/summary").json()
-    assert summary_after_inflow["total_income"] == round(income_before + 150.0, 2)
+    assert Decimal(summary_after_inflow["total_income"]) == Decimal(income_before) + Decimal("150.00")
 
 
 def test_get_transactions_filter_by_account_id(client: TestClient):

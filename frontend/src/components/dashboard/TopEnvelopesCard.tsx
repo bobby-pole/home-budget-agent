@@ -7,12 +7,13 @@ import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { type DecimalInput, formatDecimalLocale, subtractMoney, toCents } from "@/lib/money";
 
 interface EnvelopeData {
   id: number;
   name: string;
-  spent: number;
-  limit: number;
+  spent: DecimalInput;
+  limit: DecimalInput;
   color: string;
   icon?: string;
 }
@@ -43,9 +44,12 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
         <div className="divide-y divide-border/50 px-6">
           {envelopes.length > 0 ? (
             envelopes.map((env) => {
-              const percentage = Math.min(Math.round((env.spent / env.limit) * 100), 100);
+              const spentCents = toCents(env.spent);
+              const limitCents = toCents(env.limit);
+              const percentage = limitCents > 0n ? Math.min(Math.round((Number(spentCents) / Number(limitCents)) * 100), 100) : 0;
               const isOverLimit = percentage >= 100;
-              const remaining = env.limit - env.spent;
+              const remainingStr = subtractMoney(env.limit, env.spent);
+              const remainingCents = toCents(remainingStr);
 
               return (
                 <div key={env.id} className="py-5 space-y-3 first:pt-2 last:pb-2 group">
@@ -67,9 +71,9 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                         </span>
                         <span className={cn(
                           "text-xs font-bold tracking-tight",
-                          remaining < 0 ? "text-destructive font-black animate-pulse" : "text-muted-foreground"
+                          remainingCents < 0n ? "text-destructive font-black animate-pulse" : "text-muted-foreground"
                         )}>
-                          {t("dashboard.top_envelopes.remaining_prefix")} {remaining.toLocaleString(getIntlLocale())} {t("common.currency")}
+                          {t("dashboard.top_envelopes.remaining_prefix")} {formatDecimalLocale(remainingStr, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {t("common.currency")}
                         </span>
                       </div>
                     </div>
@@ -77,10 +81,10 @@ export function TopEnvelopesCard({ envelopes, isLoading }: TopEnvelopesCardProps
                     {/* Spent & Limit */}
                     <div className="flex flex-col items-end text-right">
                       <span className="text-base font-black tracking-tight">
-                        {env.spent.toLocaleString(getIntlLocale())} {t("common.currency")}
+                        {formatDecimalLocale(env.spent, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })} {t("common.currency")}
                       </span>
                       <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-70">
-                        {t("dashboard.top_envelopes.limit_prefix")} {env.limit.toLocaleString(getIntlLocale())}
+                        {t("dashboard.top_envelopes.limit_prefix")} {formatDecimalLocale(env.limit, getIntlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 

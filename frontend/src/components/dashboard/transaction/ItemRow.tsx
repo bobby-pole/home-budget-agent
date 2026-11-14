@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
+import { computeLineTotal, formatMoneyFixed } from "@/lib/money";
 
 export interface ManualItem {
   id: string;
   name: string;
-  price: number;
-  quantity: number;
+  price: string;
+  quantity: string;
   category_id: number | null;
 }
 
@@ -44,7 +45,7 @@ export function ItemRow({ item, currency, onRemove }: ItemRowProps) {
         {item.quantity} {t("transactions.items_panel.quantity_unit")}
       </span>
       <span className="font-semibold shrink-0 w-24 text-right tabular-nums">
-        {(item.price * item.quantity).toFixed(2)} {currency}
+        {formatMoneyFixed(computeLineTotal(item.price, item.quantity, "0.00"))} {currency}
       </span>
       <Button
         type="button"

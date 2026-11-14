@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import type { TransactionRead, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
+import { formatDecimalLocale } from "@/lib/money";
 import { useAuth } from "@/context/AuthContext";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import { t } from "@/lib/i18n";
@@ -163,7 +164,7 @@ export function RecentTransactionsList({
                       isTransferNeutral ? "text-blue-600 dark:text-blue-400" :
                       isIncome ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"
                     )}>
-                      {isIncome ? "+" : isTransferNeutral ? "" : "-"}{(tx.total_amount ?? 0).toLocaleString(getIntlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {isIncome ? "+" : isTransferNeutral ? "" : "-"}{formatDecimalLocale(tx.total_amount ?? "0.00", getIntlLocale())}
                     </span>
                     <span className="text-[10px] text-muted-foreground font-bold tracking-tight">
                       {tx.currency ?? "PLN"}

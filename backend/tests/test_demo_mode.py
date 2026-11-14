@@ -2,6 +2,7 @@
 import pytest
 from unittest.mock import patch
 from datetime import datetime, timezone
+from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlmodel import Session, col, select
 
@@ -148,10 +149,10 @@ def test_demo_budget_summary_auto_seeds_new_month(client: TestClient, session: S
     assert response.status_code == 200, response.text
     summary = response.json()
 
-    assert summary["total_income"] == 7000.00
-    assert summary["total_spent"] == 6500.00
-    assert summary["net_cash_flow"] == 500.00
-    assert summary["total_planned"] == 6500.00
+    assert summary["total_income"] == "7000.00"
+    assert summary["total_spent"] == "6500.00"
+    assert summary["net_cash_flow"] == "500.00"
+    assert summary["total_planned"] == "6500.00"
 
 
 def test_auth_demo_endpoint(client: TestClient, session: Session):
@@ -364,7 +365,7 @@ async def test_demo_mode_ocr_mock(session: Session):
         session.refresh(tx)
 
         assert tx.merchant_name == "Biedronka (Live Pipeline)"
-        assert tx.total_amount == 47.90
+        assert tx.total_amount == Decimal("47.90")
         assert scan.status in (ScanStatus.CATEGORIZATION_OK.value, ScanStatus.NEEDS_REVIEW.value, ScanStatus.PARSING_OK.value)
 
         lines = session.exec(select(TransactionLine).where(col(TransactionLine.transaction_id) == tx.id)).all()
@@ -638,8 +639,8 @@ async def test_process_scan_sample_receipts_exact_totals_and_lines_sum(session: 
 
     with patch("app.api.operations_engine", session.get_bind()):
         for sample_id, expected_total, expected_count in [
-            ("biedronka", 101.74, 13),
-            ("lidl", 138.75, 26),
+            ("biedronka", Decimal("101.74"), 13),
+            ("lidl", Decimal("138.75"), 26),
         ]:
             tx = Transaction(
                 merchant_name=f"Sample {sample_id}",
@@ -666,20 +667,20 @@ async def test_process_scan_sample_receipts_exact_totals_and_lines_sum(session: 
             await _process_scan(scan.id, tx.id, scan.image_path)
 
             session.refresh(tx)
-            assert tx.total_amount == pytest.approx(expected_total, abs=0.01)
+            assert abs(tx.total_amount - expected_total) <= Decimal("0.01")
 
             lines = session.exec(select(TransactionLine).where(TransactionLine.transaction_id == tx.id)).all()
             assert len(lines) == expected_count
 
-            calculated_sum = 0.0
+            calculated_sum = Decimal("0.00")
             for line in lines:
-                assert line.discount_total <= 0.0
+                assert line.discount_total <= Decimal("0.00")
                 if line.is_adjustment:
                     calculated_sum += (line.original_price or line.price)
                 else:
                     unit = line.original_price or line.price
                     calculated_sum += (unit * line.quantity + line.discount_total)
 
-            assert calculated_sum == pytest.approx(expected_total, abs=0.01)
+            assert abs(calculated_sum - expected_total) <= Decimal("0.01")
 
 

@@ -232,12 +232,12 @@ def test_to_dict_structure():
     assert d["merchant_name"] == "Lidl"
     assert d["date"] == "2026-04-18"
     assert d["currency"] == "PLN"
-    assert d["total_amount"] == 3.49
+    assert d["total_amount"] == Decimal("3.49")
     assert len(d["items"]) == 1
     item = d["items"][0]
     assert item["name"] == "Mleko"
-    assert item["price"] == 3.49
-    assert item["quantity"] == 1.0
+    assert item["price"] == Decimal("3.49")
+    assert item["quantity"] == Decimal("1")
     assert item["category"] is None
     assert item["is_adjustment"] is False
 
@@ -325,10 +325,10 @@ def test_to_dict_includes_discount_fields():
     ])
     d = receipt.to_dict()
     item = d["items"][0]
-    assert item["original_price"] == 4.99
-    assert item["discount_total"] == -0.27
+    assert item["original_price"] == Decimal("4.99")
+    assert item["discount_total"] == Decimal("-0.27")
     # final_price * quantity ≈ 14.70
-    assert abs(item["final_price"] * item["quantity"] - 14.70) < 0.01
+    assert abs(item["final_price"] * item["quantity"] - Decimal("14.70")) < Decimal("0.01")
 
 
 def test_to_dict_no_discount_fields_are_none():
@@ -339,7 +339,7 @@ def test_to_dict_no_discount_fields_are_none():
     ])
     item = receipt.to_dict()["items"][0]
     assert item["original_price"] is None
-    assert item["discount_total"] == 0.0
+    assert item["discount_total"] == Decimal("0")
     assert item["final_price"] is None
     assert item["is_adjustment"] is False
 

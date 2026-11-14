@@ -1,3 +1,4 @@
+from decimal import Decimal
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
@@ -33,7 +34,7 @@ def _create_transaction(client: TestClient, account_id: int, amount: float, tran
     return response.json()
 
 
-def _balance(session: Session, account_id: int) -> float:
+def _balance(session: Session, account_id: int) -> Decimal:
     account = session.get(Account, account_id)
     assert account is not None
     session.refresh(account)
@@ -66,13 +67,13 @@ def test_account_crud_validates_input_and_soft_deletes(client: TestClient, sessi
 
 def test_initial_balance_creates_adjustment_transaction(client: TestClient, session: Session):
     created = _create_account(client, "Opening balance", initial_balance=125.5)
-    assert created["current_balance"] == 125.5
+    assert created["current_balance"] == "125.50"
 
     opening_transaction = session.exec(
         select(Transaction).where(Transaction.account_id == created["id"])
     ).one()
     assert opening_transaction.type == "income"
-    assert opening_transaction.total_amount == 125.5
+    assert opening_transaction.total_amount == Decimal("125.50")
     assert opening_transaction.note == "Auto-generated initial balance"
 
 

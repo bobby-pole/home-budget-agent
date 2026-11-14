@@ -13,8 +13,8 @@ export function makeTransactionLine(overrides?: Partial<TransactionLineRead>): T
   return {
     id: 1,
     name: "Mleko",
-    price: 3.99,
-    quantity: 2,
+    price: "3.99",
+    quantity: "2",
     category_id: null,
     ...overrides,
   };
@@ -25,7 +25,7 @@ export function makeTransaction(overrides?: Partial<TransactionRead>): Transacti
     id: 1,
     merchant_name: "Biedronka",
     date: "2024-01-15T10:00:00Z",
-    total_amount: 49.99,
+    total_amount: "49.99",
     currency: "PLN",
     type: "expense",
     is_manual: false,

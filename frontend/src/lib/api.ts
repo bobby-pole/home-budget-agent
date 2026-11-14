@@ -182,7 +182,7 @@ export const api = {
   updateTransactionLine: async (
     transactionId: number,
     lineId: number,
-    data: { name?: string; price?: number; quantity?: number; category_id?: number | null }
+    data: { name?: string; price?: string; quantity?: string; category_id?: number | null }
   ) => {
     const response = await apiClient.patch(`/transactions/${transactionId}/lines/${lineId}`, data);
     return response.data;
@@ -208,7 +208,7 @@ export const api = {
 
   createManualTransaction: async (data: {
     merchant_name: string;
-    total_amount: number;
+    total_amount: string;
     currency: string;
     date?: string;
     category_id?: number;
@@ -217,7 +217,7 @@ export const api = {
     note?: string;
     tag_ids?: number[];
     type?: string;
-    lines?: Array<{ name: string; price: number; quantity: number; category_id?: number | null }>;
+    lines?: Array<{ name: string; price: string; quantity: string; category_id?: number | null }>;
   }): Promise<Transaction> => {
     const response = await apiClient.post<Transaction>("/transactions/manual", data);
     return response.data;
@@ -226,7 +226,7 @@ export const api = {
   createTransfer: async (data: {
     source_account_id: number;
     destination_account_id: number;
-    amount: number;
+    amount: string;
     currency?: string;
     date?: string;
     note?: string;
@@ -252,7 +252,7 @@ export const api = {
     return response.data;
   },
 
-  setBudgetLimit: async (year: number, month: number, category_id: number, amount: number) => {
+  setBudgetLimit: async (year: number, month: number, category_id: number, amount: string) => {
     const response = await apiClient.put(`/budget/${year}/${month}/limits/${category_id}`, { amount });
     return response.data;
   },
@@ -359,7 +359,7 @@ export const api = {
     return response.data;
   },
 
-  reconcileAccount: async (id: number, real_balance: number) => {
+  reconcileAccount: async (id: number, real_balance: string) => {
     const response = await apiClient.post<AccountRead>(`/accounts/${id}/reconcile`, { real_balance });
     return response.data;
   },

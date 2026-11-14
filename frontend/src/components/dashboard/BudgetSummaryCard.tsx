@@ -5,12 +5,13 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import { type DecimalInput, formatDecimalLocale, toCents } from "@/lib/money";
 
 interface BudgetSummaryCardProps {
-  remaining: number;
-  planned: number;
-  spent: number;
-  income: number;
+  remaining: DecimalInput;
+  planned: DecimalInput;
+  spent: DecimalInput;
+  income: DecimalInput;
   onAddTransaction: () => void;
 }
 
@@ -21,9 +22,13 @@ export function BudgetSummaryCard({
   income,
   onAddTransaction,
 }: BudgetSummaryCardProps) {
-  const isOverBudget = remaining < 0;
+  const remainingCents = toCents(remaining);
+  const plannedCents = toCents(planned);
+  const spentCents = toCents(spent);
+  const incomeCents = toCents(income);
+  const isOverBudget = remainingCents < 0n;
 
-  if (planned === 0 && spent === 0 && income === 0) {
+  if (plannedCents === 0n && spentCents === 0n && incomeCents === 0n) {
     return (
       <Card className="rounded-[32px] border border-dashed border-border p-8 bg-muted/30">
         <div className="flex flex-col items-center justify-center text-center space-y-4">
@@ -46,7 +51,7 @@ export function BudgetSummaryCard({
 
   // Calculate progress for BudgetStatusSummary (spent vs income)
   // If income is 0, progress is 0% to avoid confusion.
-  const progressPercentage = income > 0 ? Math.min(Math.round((spent / income) * 100), 100) : 0;
+  const progressPercentage = incomeCents > 0n ? Math.min(Math.round((Number(spentCents) / Number(incomeCents)) * 100), 100) : 0;
 
   return (
     <Card className="rounded-[32px] border-border/50 shadow-sm overflow-hidden bg-gradient-to-br from-indigo-50/80 via-white to-blue-50/50 dark:from-indigo-950/30 dark:via-background dark:to-blue-900/20">
@@ -71,7 +76,7 @@ export function BudgetSummaryCard({
             "text-4xl md:text-5xl font-black tracking-tighter",
             isOverBudget ? "text-destructive" : "text-primary"
           )}>
-            {remaining.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
+            {formatDecimalLocale(remaining, getIntlLocale(), { currency: "PLN" })}
           </h2>
           <p className="text-sm md:text-base font-medium text-muted-foreground mt-1">
             {t("dashboard.budget_summary.available_subtitle")}
@@ -99,7 +104,7 @@ export function BudgetSummaryCard({
               {t("dashboard.budget_summary.income_label")}
             </span>
             <div className="mt-1 font-black text-xl md:text-2xl text-emerald-600 dark:text-emerald-400 tracking-tighter">
-              {income.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
+              {formatDecimalLocale(income, getIntlLocale(), { currency: "PLN" })}
             </div>
           </div>
           
@@ -108,7 +113,7 @@ export function BudgetSummaryCard({
               {t("dashboard.budget_summary.spent_label")}
             </span>
             <div className="mt-1 font-black text-xl md:text-2xl text-destructive tracking-tighter">
-              {spent.toLocaleString(getIntlLocale(), { style: "currency", currency: "PLN" })}
+              {formatDecimalLocale(spent, getIntlLocale(), { currency: "PLN" })}
             </div>
           </div>
         </div>

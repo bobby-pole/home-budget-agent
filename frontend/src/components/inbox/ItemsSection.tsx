@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/select";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
+import {
+  computeLineTotal,
+  formatDecimalLocale,
+  parseQuantityInput,
+  toCents,
+  type DecimalInput,
+} from "@/lib/money";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import type { CategoryRead } from "@/client";
 import type { VerificationFormValues } from "./VerificationCard";
@@ -45,27 +52,24 @@ interface ItemsSectionProps {
 
 const blankItem: LineFormShape = {
   name: "",
-  unit_price: 0,
-  quantity: 1,
-  discount_total: 0,
+  unit_price: "0.00",
+  quantity: "1",
+  discount_total: "0.00",
   category_id: "",
   is_adjustment: false,
 };
 
 const blankAdjustment: LineFormShape = {
   name: "",
-  unit_price: 0,
-  quantity: 1,
-  discount_total: 0,
+  unit_price: "0.00",
+  quantity: "1",
+  discount_total: "0.00",
   category_id: "",
   is_adjustment: true,
 };
 
-function formatMoney(value: number): string {
-  return value.toLocaleString(getIntlLocale(), {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+function formatMoney(value: DecimalInput): string {
+  return formatDecimalLocale(value, getIntlLocale());
 }
 
 export function ItemsSection({
@@ -190,12 +194,12 @@ function ItemRow({
   const name = useWatch({ control: form.control, name: `lines.${index}.name` }) || "";
   const categoryId = useWatch({ control: form.control, name: `lines.${index}.category_id` }) || "";
   const categorySource = useWatch({ control: form.control, name: `lines.${index}.category_source` }) || "";
-  const unitPrice = useWatch({ control: form.control, name: `lines.${index}.unit_price` }) ?? 0;
-  const qty = useWatch({ control: form.control, name: `lines.${index}.quantity` }) ?? 1;
-  const discount = useWatch({ control: form.control, name: `lines.${index}.discount_total` }) ?? 0;
+  const unitPrice = useWatch({ control: form.control, name: `lines.${index}.unit_price` }) ?? "0.00";
+  const qty = useWatch({ control: form.control, name: `lines.${index}.quantity` }) ?? "1";
+  const discount = useWatch({ control: form.control, name: `lines.${index}.discount_total` }) ?? "0.00";
 
-  const gross = (Number(unitPrice) || 0) * (Number(qty) || 0);
-  const total = gross + (Number(discount) || 0);
+  const gross = computeLineTotal(unitPrice, qty, "0.00");
+  const total = computeLineTotal(unitPrice, qty, discount);
 
   const selectedCategory = categories.find((c) => c.id.toString() === categoryId);
 
@@ -236,12 +240,12 @@ function ItemRow({
               )}
             </span>
             <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1.5 mt-0.5">
-              {qty !== 1 && (
+              {parseQuantityInput(qty) !== "1" && (
                 <span className="tabular-nums">
                   {qty} × {formatMoney(unitPrice)} {t("common.currency")}
                 </span>
               )}
-              {discount < 0 && (
+              {toCents(discount) < 0n && (
                 <span className="text-emerald-600 dark:text-emerald-400 tabular-nums">
                   {t("inbox.verification_card.label_discount")}: {formatMoney(discount)} {t("common.currency")}
                 </span>
@@ -375,10 +379,9 @@ function ItemRow({
                 <FormControl>
                   <div className="relative">
                     <Input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums"
                       title={t("inbox.verification_card.label_unit_price")}
                     />
@@ -397,10 +400,9 @@ function ItemRow({
                 <FormControl>
                   <div className="relative">
                     <Input
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       {...field}
-                      onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums"
                       title={t("inbox.verification_card.label_quantity")}
                     />
@@ -428,15 +430,9 @@ function ItemRow({
                   <FormControl>
                     <div className="relative">
                       <Input
-                        type="number"
-                        step="0.01"
-                        max={0}
+                        type="text"
+                        inputMode="decimal"
                         {...field}
-                        onChange={(e) => {
-                          const raw = parseFloat(e.target.value);
-                          // discount is always ≤ 0; clamp positive input
-                          field.onChange(isNaN(raw) ? 0 : Math.min(0, raw));
-                        }}
                         className="h-8 text-xs bg-muted/20 pr-5 text-right tabular-nums text-emerald-600 dark:text-emerald-400"
                       />
                       <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{t("common.currency")}</span>
@@ -539,10 +535,9 @@ function AdjustmentRow({ form, index, onRemove }: AdjustmentRowProps) {
             <FormControl>
               <div className="relative">
                 <Input
-                  type="number"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                   className="h-8 text-xs bg-transparent border-amber-500/20 pr-5 text-right tabular-nums font-semibold text-amber-700 dark:text-amber-400"
                 />
                 <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] text-amber-700/60">{t("common.currency")}</span>

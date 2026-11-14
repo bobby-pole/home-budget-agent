@@ -3262,14 +3262,18 @@
             "default": "PLN"
           },
           "initial_balance": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Initial Balance",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "current_balance": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Current Balance",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "is_on_budget": {
             "type": "boolean",
@@ -3321,14 +3325,18 @@
             "default": "PLN"
           },
           "initial_balance": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Initial Balance",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "current_balance": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Current Balance",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "is_on_budget": {
             "type": "boolean",
@@ -3377,8 +3385,10 @@
       "AccountReconcileRequest": {
         "properties": {
           "real_balance": {
-            "type": "number",
-            "title": "Real Balance"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Real Balance",
+            "example": "10.99"
           }
         },
         "type": "object",
@@ -3661,16 +3671,22 @@
             "title": "Category Name"
           },
           "planned": {
-            "type": "number",
-            "title": "Planned"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Planned",
+            "example": "10.99"
           },
           "spent": {
-            "type": "number",
-            "title": "Spent"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Spent",
+            "example": "10.99"
           },
           "remaining": {
-            "type": "number",
-            "title": "Remaining"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Remaining",
+            "example": "10.99"
           }
         },
         "type": "object",
@@ -4050,9 +4066,11 @@
             "title": "Year"
           },
           "amount": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Amount",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           }
         },
         "type": "object",
@@ -4067,8 +4085,10 @@
       "EnvelopeAllocationUpdate": {
         "properties": {
           "amount": {
-            "type": "number",
-            "title": "Amount"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Amount",
+            "example": "10.99"
           }
         },
         "type": "object",
@@ -4231,8 +4251,10 @@
             "title": "Merchant Name"
           },
           "total_amount": {
-            "type": "number",
-            "title": "Total Amount"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Total Amount",
+            "example": "10.99"
           },
           "currency": {
             "type": "string",
@@ -4337,20 +4359,28 @@
             "title": "Month"
           },
           "total_planned": {
-            "type": "number",
-            "title": "Total Planned"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Total Planned",
+            "example": "10.99"
           },
           "total_spent": {
-            "type": "number",
-            "title": "Total Spent"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Total Spent",
+            "example": "10.99"
           },
           "net_cash_flow": {
-            "type": "number",
-            "title": "Net Cash Flow"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Net Cash Flow",
+            "example": "10.99"
           },
           "total_income": {
-            "type": "number",
-            "title": "Total Income"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Total Income",
+            "example": "10.99"
           },
           "categories": {
             "items": {
@@ -4602,13 +4632,17 @@
             "title": "Name"
           },
           "price": {
-            "type": "number",
-            "title": "Price"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+            "title": "Price",
+            "example": "10.99"
           },
           "quantity": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
             "title": "Quantity",
-            "default": 1.0
+            "default": "1",
+            "example": "1"
           },
           "category_id": {
             "anyOf": [
@@ -4635,7 +4669,9 @@
           "original_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4644,14 +4680,18 @@
             "title": "Original Price"
           },
           "discount_total": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Discount Total",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "final_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4701,13 +4741,17 @@
             "title": "Name"
           },
           "price": {
-            "type": "number",
-            "title": "Price"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+            "title": "Price",
+            "example": "10.99"
           },
           "quantity": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
             "title": "Quantity",
-            "default": 1.0
+            "default": "1",
+            "example": "1"
           },
           "category_id": {
             "anyOf": [
@@ -4723,7 +4767,9 @@
           "original_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4732,14 +4778,18 @@
             "title": "Original Price"
           },
           "discount_total": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Discount Total",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "final_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4767,13 +4817,17 @@
             "title": "Name"
           },
           "price": {
-            "type": "number",
-            "title": "Price"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+            "title": "Price",
+            "example": "10.99"
           },
           "quantity": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
             "title": "Quantity",
-            "default": 1.0
+            "default": "1",
+            "example": "1"
           },
           "category_id": {
             "anyOf": [
@@ -4800,7 +4854,9 @@
           "original_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4809,14 +4865,18 @@
             "title": "Original Price"
           },
           "discount_total": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Discount Total",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "final_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4858,7 +4918,9 @@
           "price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4869,7 +4931,10 @@
           "quantity": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "1",
+                "gt": 0
               },
               {
                 "type": "null"
@@ -4891,7 +4956,9 @@
           "original_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4902,7 +4969,9 @@
           "discount_total": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4913,7 +4982,9 @@
           "final_price": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
+                "example": "10.99"
               },
               {
                 "type": "null"
@@ -4955,9 +5026,11 @@
             "title": "Date"
           },
           "total_amount": {
-            "type": "number",
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
             "title": "Total Amount",
-            "default": 0.0
+            "default": "0.00",
+            "example": "10.99"
           },
           "currency": {
             "type": "string",
@@ -5130,7 +5203,10 @@
           "total_amount": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "string",
+                "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+                "example": "10.99",
+                "ge": 0
               },
               {
                 "type": "null"
@@ -5243,9 +5319,10 @@
             "title": "Destination Account Id"
           },
           "amount": {
-            "type": "number",
-            "exclusiveMinimum": 0.0,
-            "title": "Amount"
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Amount",
+            "example": "10.99"
           },
           "currency": {
             "type": "string",

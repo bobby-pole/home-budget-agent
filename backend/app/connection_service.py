@@ -341,7 +341,7 @@ class ConnectionService:
 
         tx = Transaction(
             merchant_name=canonical.merchant_name,
-            total_amount=float(canonical.total_amount),
+            total_amount=canonical.total_amount,
             currency=canonical.currency,
             date=tx_date,
             is_manual=False,
@@ -365,6 +365,8 @@ class ConnectionService:
         )
         session.add(scan)
 
+        from app.money import quantize_money, quantize_quantity, quantize_unit_price
+
         cat_name_to_id = {c.name.lower(): c.id for c in db_categories if c.id is not None}
         for item_raw in receipt_dict.get("items", []):
             cat_name = str(item_raw.get("category") or "").strip().lower()
@@ -374,14 +376,14 @@ class ConnectionService:
             session.add(
                 TransactionLine(
                     name=str(item_raw.get("name") or "Pozycja"),
-                    price=float(item_raw.get("price", 0.0)),
-                    quantity=float(item_raw.get("quantity", 1.0)),
+                    price=quantize_unit_price(item_raw.get("price", 0)),
+                    quantity=quantize_quantity(item_raw.get("quantity", 1)),
                     category_id=cat_id,
                     category_source=item_raw.get("category_source"),
                     transaction_id=tx.id,
-                    original_price=float(orig) if orig is not None else None,
-                    discount_total=float(item_raw.get("discount_total", 0.0)),
-                    final_price=float(fin) if fin is not None else None,
+                    original_price=quantize_unit_price(orig) if orig is not None else None,
+                    discount_total=quantize_money(item_raw.get("discount_total", 0)),
+                    final_price=quantize_unit_price(fin) if fin is not None else None,
                     is_adjustment=bool(item_raw.get("is_adjustment", False)),
                 )
             )

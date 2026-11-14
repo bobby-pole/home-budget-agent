@@ -11,8 +11,8 @@ const mockAccounts: AccountRead[] = [
     name: "Checking Account",
     type: "checking",
     currency: "PLN",
-    initial_balance: 1000,
-    current_balance: 3200,
+    initial_balance: "1000.00",
+    current_balance: "3200.00",
     is_on_budget: true,
     is_active: true,
   },
@@ -21,8 +21,8 @@ const mockAccounts: AccountRead[] = [
     name: "Savings Account",
     type: "savings",
     currency: "PLN",
-    initial_balance: 5000,
-    current_balance: 12000,
+    initial_balance: "5000.00",
+    current_balance: "12000.00",
     is_on_budget: true,
     is_active: true,
   },
@@ -108,5 +108,41 @@ describe("AccountsPage", () => {
 
     expect(screen.getByText(/Wyrównaj saldo konta/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Rzeczywiste saldo/i)).toBeInTheDocument();
+  });
+
+  it("rejects invalid initial_balance input without calling createAccount", async () => {
+    render(
+      <MemoryRouter>
+        <AccountsPage />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Dodaj konto/i }));
+    fireEvent.change(screen.getByLabelText(/Nazwa konta/i), { target: { value: "Test Bank" } });
+    fireEvent.change(screen.getByLabelText(/Początkowe saldo/i), { target: { value: "100abc" } });
+    fireEvent.click(screen.getByRole("button", { name: /Zapisano/i }));
+
+    expect(api.createAccount).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid reconcile balance without calling reconcileAccount", async () => {
+    render(
+      <MemoryRouter>
+        <AccountsPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Checking Account")).toBeInTheDocument();
+    });
+
+    const reconcileBtns = screen.getAllByTitle(/Wyrównaj saldo/i);
+    fireEvent.click(reconcileBtns[0]);
+
+    const realInput = screen.getByLabelText(/Rzeczywiste saldo/i);
+    fireEvent.change(realInput, { target: { value: "invalid" } });
+    fireEvent.click(screen.getByRole("button", { name: /Wyrównaj/i }));
+
+    expect(api.reconcileAccount).not.toHaveBeenCalled();
   });
 });

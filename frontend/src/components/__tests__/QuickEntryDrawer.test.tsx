@@ -123,7 +123,7 @@ describe("QuickEntryDrawer", () => {
     vi.mocked(api.scanSampleReceipt).mockResolvedValue({
       id: 201,
       merchant_name: "Biedronka (Wzorzec)",
-      total_amount: 101.74,
+      total_amount: "101.74",
       currency: "PLN",
       date: "2026-11-09",
       lines: [],

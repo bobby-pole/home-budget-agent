@@ -17,6 +17,13 @@ import type { AccountRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
 import { t } from "@/lib/i18n";
+import {
+  absMoney,
+  addMoney,
+  formatDecimalLocale,
+  subtractMoney,
+  toCents,
+} from "@/lib/money";
 
 interface AccountsWidgetProps {
   accounts: AccountRead[];
@@ -79,16 +86,13 @@ export function AccountsWidget({
 
   const assets = accounts
     .filter((a) => assetTypes.includes(a.type ?? "checking"))
-    .reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
+    .reduce((sum, a) => addMoney(sum, a.current_balance ?? "0.00"), "0.00");
 
   const liabilities = accounts
     .filter((a) => liabilityTypes.includes(a.type ?? ""))
-    .reduce((sum, a) => {
-      const bal = a.current_balance ?? 0;
-      return sum + (bal < 0 ? Math.abs(bal) : bal);
-    }, 0);
+    .reduce((sum, a) => addMoney(sum, absMoney(a.current_balance ?? "0.00")), "0.00");
 
-  const netWorth = assets - liabilities;
+  const netWorth = subtractMoney(assets, liabilities);
 
   // Split accounts into On-Budget and Tracking
   const onBudgetAccounts = accounts.filter((a) => a.is_on_budget !== false);
@@ -148,13 +152,10 @@ export function AccountsWidget({
             <span
               className={cn(
                 "text-2xl font-black tabular-nums tracking-tight",
-                netWorth >= 0 ? "text-foreground" : "text-destructive"
+                toCents(netWorth) >= 0n ? "text-foreground" : "text-destructive"
               )}
             >
-              {netWorth.toLocaleString(getIntlLocale(), {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}{" "}
+              {formatDecimalLocale(netWorth, getIntlLocale())}{" "}
               <span className="text-sm font-bold text-muted-foreground">{currency}</span>
             </span>
           </div>
@@ -165,10 +166,7 @@ export function AccountsWidget({
                 {t("dashboard.accounts_widget.total_assets")}
               </span>
               <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                +{assets.toLocaleString(getIntlLocale(), {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
+                +{formatDecimalLocale(assets, getIntlLocale())}{" "}
                 {currency}
               </span>
             </div>
@@ -177,10 +175,7 @@ export function AccountsWidget({
                 {t("dashboard.accounts_widget.total_liabilities")}
               </span>
               <span className="font-bold tabular-nums text-rose-500">
-                -{liabilities.toLocaleString(getIntlLocale(), {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{" "}
+                -{formatDecimalLocale(liabilities, getIntlLocale())}{" "}
                 {currency}
               </span>
             </div>
@@ -232,7 +227,7 @@ export function AccountsWidget({
                 <div className="space-y-1.5">
                   {onBudgetAccounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
-                    const isNegative = (acc.current_balance ?? 0) < 0;
+                    const isNegative = toCents(acc.current_balance ?? "0.00") < 0n;
 
                     return (
                       <button
@@ -267,13 +262,7 @@ export function AccountsWidget({
                               isNegative ? "text-destructive" : "text-foreground"
                             )}
                           >
-                            {(acc.current_balance ?? 0).toLocaleString(
-                              getIntlLocale(),
-                              {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }
-                            )}
+                            {formatDecimalLocale(acc.current_balance ?? "0.00", getIntlLocale())}
                           </span>
                           <span className="text-[10px] text-muted-foreground block font-medium">
                             {acc.currency}
@@ -295,7 +284,7 @@ export function AccountsWidget({
                 <div className="space-y-1.5">
                   {trackingAccounts.map((acc) => {
                     const isSelected = selectedAccountId === acc.id;
-                    const isNegative = (acc.current_balance ?? 0) < 0;
+                    const isNegative = toCents(acc.current_balance ?? "0.00") < 0n;
 
                     return (
                       <button
@@ -330,13 +319,7 @@ export function AccountsWidget({
                               isNegative ? "text-destructive" : "text-foreground"
                             )}
                           >
-                            {(acc.current_balance ?? 0).toLocaleString(
-                              getIntlLocale(),
-                              {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              }
-                            )}
+                            {formatDecimalLocale(acc.current_balance ?? "0.00", getIntlLocale())}
                           </span>
                           <span className="text-[10px] text-muted-foreground block font-medium">
                             {acc.currency}
