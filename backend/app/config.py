@@ -1,4 +1,6 @@
 import os
+import sys
+from typing import Optional
 
 
 class Settings:
@@ -7,6 +9,39 @@ class Settings:
     DEMO_MODE: bool = os.getenv("DEMO_MODE", "false").lower() == "true"
     DEMO_USER_EMAIL: str = "demo@rachownik.app"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+
+    # Durable import scheduler / worker settings (#257)
+    IMPORT_WORKER_ROLE: str = os.getenv("IMPORT_WORKER_ROLE", "trusted_local")
+    IMPORT_WORKER_ENABLED: Optional[bool] = (
+        val.lower() == "true"
+        if (val := os.getenv("IMPORT_WORKER_ENABLED")) is not None
+        else None
+    )
+
+    def is_import_worker_enabled(self) -> bool:
+        """Evaluate worker activation dynamically so pytest collection never freezes True."""
+        if self.IMPORT_WORKER_ENABLED is not None:
+            return self.IMPORT_WORKER_ENABLED
+        raw = os.getenv("IMPORT_WORKER_ENABLED")
+        if raw is not None:
+            return raw.lower() == "true"
+        if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+            return False
+        return True
+    IMPORT_WORKER_POLL_INTERVAL_SECONDS: float = float(
+        os.getenv("IMPORT_WORKER_POLL_INTERVAL_SECONDS", "5.0")
+    )
+    IMPORT_WORKER_LEASE_SECONDS: int = int(os.getenv("IMPORT_WORKER_LEASE_SECONDS", "120"))
+    IMPORT_WORKER_MAX_ATTEMPTS: int = int(os.getenv("IMPORT_WORKER_MAX_ATTEMPTS", "5"))
+    IMPORT_WORKER_BASE_BACKOFF_SECONDS: int = int(
+        os.getenv("IMPORT_WORKER_BASE_BACKOFF_SECONDS", "30")
+    )
+    IMPORT_WORKER_MAX_BACKOFF_SECONDS: int = int(
+        os.getenv("IMPORT_WORKER_MAX_BACKOFF_SECONDS", "3600")
+    )
+    IMPORT_SYNC_INTERVAL_SECONDS: int = int(
+        os.getenv("IMPORT_SYNC_INTERVAL_SECONDS", "21600")
+    )
 
 
 settings = Settings()

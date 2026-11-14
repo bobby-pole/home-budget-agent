@@ -19,6 +19,14 @@ from app.adapters.lidl_poc_client import (
 )
 from app.adapters.receipt_adapters import LidlPlusReceiptAdapter
 from app.core.encryption import DecryptionError, EncryptionKeyError, get_encryption_service
+from app.import_scheduler import (
+    SyncExecutionOutcome,
+    cancel_pending_jobs_for_connection,
+    complete_pending_jobs_for_connection,
+    enqueue_connection_sync_job,
+    get_provider_policy,
+    sanitize_cursor,
+)
 from app.ingestion_service import ingest_receipt_result
 from app.models import (
     BudgetMember,
@@ -31,6 +39,7 @@ from app.models import (
     ExternalReceiptConnection,
     ExternalReceiptConnectionCreate,
     ExternalReceiptConnectionRead,
+    ImportJob,
     User,
 )
 
@@ -280,10 +289,12 @@ class ConnectionService:
         connection.consented_at = now
         connection.status = ConnectionStatus.ACTIVE
         connection.last_error_code = None
+        connection.next_sync_at = now
         connection.updated_at = now
         session.add(connection)
         session.commit()
         session.refresh(connection)
+        enqueue_connection_sync_job(session, connection, next_retry_at=now, commit=True)
         return to_read_dto(connection)
 
     @staticmethod
@@ -319,6 +330,202 @@ class ConnectionService:
         return outcome.imported, outcome.skipped
 
     @staticmethod
+    def _classify_merchant_error(
+        exc: MerchantRequestError,
+        *,
+        is_token_refresh: bool = False,
+    ) -> tuple[str, ConnectionErrorCode, Optional[int]]:
+        """Classify a provider HTTP/network failure as transient or permanent."""
+        status_code = exc.status_code
+        retry_after = exc.retry_after_seconds
+        if is_token_refresh and status_code in (400, 401, 403):
+            return ("permanent", ConnectionErrorCode.AUTH_EXPIRED, None)
+        if not is_token_refresh and status_code in (401, 403):
+            return ("permanent", ConnectionErrorCode.AUTH_EXPIRED, None)
+        if status_code == 429:
+            return ("transient", ConnectionErrorCode.RATE_LIMITED, retry_after)
+        if status_code is not None and status_code >= 500:
+            return ("transient", ConnectionErrorCode.PROVIDER_UNAVAILABLE, retry_after)
+        if status_code is None:
+            return ("transient", ConnectionErrorCode.NETWORK_ERROR, None)
+        return ("permanent", ConnectionErrorCode.SYNC_FAILED, None)
+
+    @staticmethod
+    def _safe_lidl_cursor(entries: list[dict[str, object]], previous_cursor: Optional[str]) -> Optional[str]:
+        """Build an opaque, non-secret pagination/checkpoint cursor string."""
+        if entries:
+            top_id = str(entries[0].get("id") or "").strip()
+            if top_id:
+                try:
+                    return sanitize_cursor(f"latest:{top_id}")
+                except ValueError:
+                    pass
+        return previous_cursor or "page:1"
+
+    @staticmethod
+    def _parse_lidl_cursor(cursor: Optional[str]) -> tuple[int, Optional[str]]:
+        """Parse page number and known newest ticket ID from opaque cursor."""
+        if not cursor:
+            return (1, None)
+        page_number = 1
+        latest_id: Optional[str] = None
+        for part in cursor.split("|"):
+            piece = part.strip()
+            if piece.startswith("page:"):
+                suffix = piece.split(":", 1)[1].strip()
+                if suffix.isdigit() and int(suffix) >= 1:
+                    page_number = int(suffix)
+            elif piece.startswith("latest:"):
+                candidate = piece.split(":", 1)[1].strip()
+                if candidate:
+                    latest_id = candidate
+        return (page_number, latest_id)
+
+    @staticmethod
+    def execute_connection_sync(
+        session: Session,
+        conn: ExternalReceiptConnection,
+        *,
+        job: Optional[ImportJob] = None,
+        max_tickets: int = 10,
+        client_override: Optional[LidlPoCClient] = None,
+    ) -> SyncExecutionOutcome:
+        """Execute a single connector sync pass without raising HTTP errors.
+
+        Shared by both the durable background worker and manual live sync.
+        """
+        if conn.provider != "lidl":
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=ConnectionErrorCode.SYNC_FAILED,
+            )
+
+        if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=ConnectionErrorCode.REAUTH_REQUIRED,
+            )
+
+        refresh_token = ConnectionService.get_decrypted_token(session, conn)
+        if not refresh_token:
+            session.refresh(conn)
+            code = ConnectionErrorCode.TOKEN_DECRYPTION_FAILED
+            if conn.last_error_code == ConnectionErrorCode.ENCRYPTION_KEY_MISSING.value:
+                code = ConnectionErrorCode.ENCRYPTION_KEY_MISSING
+            elif conn.last_error_code == ConnectionErrorCode.REAUTH_REQUIRED.value:
+                code = ConnectionErrorCode.REAUTH_REQUIRED
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=code,
+            )
+
+        lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
+        try:
+            token_data = lidl_client.refresh_access_token(refresh_token)
+        except MerchantRequestError as exc:
+            classification, err_code, retry_after = ConnectionService._classify_merchant_error(
+                exc, is_token_refresh=True
+            )
+            return SyncExecutionOutcome(
+                error_classification=classification,
+                error_code=err_code,
+                retry_after_seconds=retry_after,
+            )
+
+        access_token = str(token_data.get("access_token") or "").strip()
+        new_refresh_token = str(token_data.get("refresh_token") or "").strip()
+        if not access_token:
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=ConnectionErrorCode.SYNC_FAILED,
+            )
+
+        # Rotate refresh token if Lidl issued a new one
+        if new_refresh_token:
+            ciphertext, key_id = get_encryption_service().encrypt(new_refresh_token)
+            conn.encrypted_refresh_token = ciphertext
+            conn.encryption_key_id = key_id
+            conn.updated_at = datetime.now(timezone.utc)
+            session.add(conn)
+            session.commit()
+
+        previous_cursor = job.cursor if job else None
+        page_number, known_latest_id = ConnectionService._parse_lidl_cursor(previous_cursor)
+        try:
+            list_payload = lidl_client.get_tickets_list(access_token, page_number=page_number)
+        except MerchantRequestError as exc:
+            classification, err_code, retry_after = ConnectionService._classify_merchant_error(
+                exc, is_token_refresh=False
+            )
+            return SyncExecutionOutcome(
+                error_classification=classification,
+                error_code=err_code,
+                retry_after_seconds=retry_after,
+            )
+
+        entries = extract_ticket_list_entries(list_payload)[:max_tickets]
+        imported_count = 0
+        skipped_count = 0
+        failed_count = 0
+        first_ticket_classification: Optional[str] = None
+        first_ticket_error_code: Optional[ConnectionErrorCode] = None
+        first_retry_after: Optional[int] = None
+
+        for entry in entries:
+            ticket_id = str(entry.get("id") or "").strip()
+            if not ticket_id:
+                failed_count += 1
+                continue
+            # Stop fetching older ticket details once we reach the already-synced checkpoint.
+            if known_latest_id is not None and ticket_id == known_latest_id:
+                break
+            try:
+                raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
+                imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
+                    session,
+                    conn.budget_id,
+                    conn.owner_user_id,
+                    ticket_id,
+                    raw_ticket,
+                    connection_id=conn.id,
+                )
+                if imported:
+                    imported_count += 1
+                elif skipped:
+                    skipped_count += 1
+            except MerchantRequestError as exc:
+                failed_count += 1
+                if first_ticket_classification is None:
+                    (
+                        first_ticket_classification,
+                        first_ticket_error_code,
+                        first_retry_after,
+                    ) = ConnectionService._classify_merchant_error(exc, is_token_refresh=False)
+            except TicketMappingError:
+                failed_count += 1
+                if first_ticket_error_code is None:
+                    first_ticket_error_code = ConnectionErrorCode.SYNC_FAILED
+
+        if failed_count > 0:
+            return SyncExecutionOutcome(
+                imported_count=imported_count,
+                skipped_count=skipped_count,
+                failed_count=failed_count,
+                next_cursor=previous_cursor,
+                error_classification=first_ticket_classification or "transient",
+                error_code=first_ticket_error_code or ConnectionErrorCode.SYNC_FAILED,
+                retry_after_seconds=first_retry_after,
+            )
+
+        next_cursor = ConnectionService._safe_lidl_cursor(entries, previous_cursor)
+        return SyncExecutionOutcome(
+            imported_count=imported_count,
+            skipped_count=skipped_count,
+            failed_count=0,
+            next_cursor=next_cursor,
+        )
+
+    @staticmethod
     def trigger_sync_now(
         session: Session,
         budget_id: int,
@@ -329,10 +536,10 @@ class ConnectionService:
         max_tickets: int = 10,
         client_override: Optional[LidlPoCClient] = None,
     ) -> ConnectionSyncNowResponse:
-        """Queue or execute synchronization for an authorised, active connection owned by the caller."""
+        """Queue a durable sync job or execute an immediate live sync pass."""
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
-        if conn.status != ConnectionStatus.ACTIVE or not conn.encrypted_refresh_token:
+        if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Connection requires a completed authorization before synchronization",
@@ -346,104 +553,81 @@ class ConnectionService:
         session.refresh(conn)
 
         if not execute_live or conn.provider != "lidl":
+            enqueue_connection_sync_job(
+                session,
+                conn,
+                next_retry_at=now,
+                expedite_if_pending=True,
+                commit=True,
+            )
             return ConnectionSyncNowResponse(
                 connection_id=conn.id or 0,
                 status=ConnectionStatus(conn.status),
                 sync_requested_at=now,
-                message="Synchronization request recorded. Processing requires a configured provider adapter and background worker.",
+                message="Synchronization job queued for durable background worker processing.",
             )
 
-        refresh_token = ConnectionService.get_decrypted_token(session, conn)
-        if not refresh_token:
-            session.refresh(conn)
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Stored connection token could not be decrypted; re-authorization required.",
-            )
+        outcome = ConnectionService.execute_connection_sync(
+            session,
+            conn,
+            max_tickets=max_tickets,
+            client_override=client_override,
+        )
+        session.refresh(conn)
+        if (
+            outcome.error_classification is not None
+            and outcome.imported_count == 0
+            and outcome.skipped_count == 0
+            and outcome.failed_count == 0
+        ):
+            err_code = outcome.error_code or ConnectionErrorCode.SYNC_FAILED
+            if err_code in (
+                ConnectionErrorCode.ENCRYPTION_KEY_MISSING,
+                ConnectionErrorCode.TOKEN_DECRYPTION_FAILED,
+                ConnectionErrorCode.REAUTH_REQUIRED,
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Stored connection token could not be decrypted; re-authorization required.",
+                )
 
-        lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
-        try:
-            token_data = lidl_client.refresh_access_token(refresh_token)
-        except MerchantRequestError as exc:
-            if exc.status_code in (400, 401, 403):
+            if err_code == ConnectionErrorCode.AUTH_EXPIRED:
                 conn.status = ConnectionStatus.REAUTH_REQUIRED
-                conn.last_error_code = ConnectionErrorCode.AUTH_EXPIRED.value
             else:
                 conn.status = ConnectionStatus.SYNC_ERROR
-                conn.last_error_code = ConnectionErrorCode.NETWORK_ERROR.value
+            conn.last_error_code = err_code.value
             conn.updated_at = datetime.now(timezone.utc)
             session.add(conn)
             session.commit()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Lidl token refresh failed: {exc}",
-            ) from exc
-
-        access_token = str(token_data.get("access_token") or "").strip()
-        new_refresh_token = str(token_data.get("refresh_token") or "").strip()
-        if not access_token:
-            conn.status = ConnectionStatus.SYNC_ERROR
-            conn.last_error_code = ConnectionErrorCode.SYNC_FAILED.value
-            session.add(conn)
-            session.commit()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Lidl token refresh did not return an access_token",
+                detail=f"Lidl synchronization failed ({err_code.value}).",
             )
-
-        # Rotate refresh token if Lidl issued a new one
-        if new_refresh_token:
-            ciphertext, key_id = get_encryption_service().encrypt(new_refresh_token)
-            conn.encrypted_refresh_token = ciphertext
-            conn.encryption_key_id = key_id
-
-        try:
-            list_payload = lidl_client.get_tickets_list(access_token, page_number=1)
-        except MerchantRequestError as exc:
-            conn.status = ConnectionStatus.SYNC_ERROR
-            conn.last_error_code = (
-                ConnectionErrorCode.RATE_LIMITED.value
-                if exc.status_code == 429
-                else ConnectionErrorCode.SYNC_FAILED.value
-            )
-            conn.updated_at = datetime.now(timezone.utc)
-            session.add(conn)
-            session.commit()
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Failed to fetch Lidl ticket list: {exc}",
-            ) from exc
-
-        entries = extract_ticket_list_entries(list_payload)[:max_tickets]
-        imported_count = 0
-        skipped_count = 0
-        failed_count = 0
-
-        for entry in entries:
-            ticket_id = str(entry.get("id") or "").strip()
-            if not ticket_id:
-                failed_count += 1
-                continue
-            try:
-                raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
-                imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
-                    session, budget_id, user.id or 0, ticket_id, raw_ticket, connection_id=conn.id
-                )
-                if imported:
-                    imported_count += 1
-                elif skipped:
-                    skipped_count += 1
-            except (MerchantRequestError, TicketMappingError):
-                failed_count += 1
 
         finish_now = datetime.now(timezone.utc)
-        conn.status = ConnectionStatus.SYNC_ERROR if failed_count else ConnectionStatus.ACTIVE
-        conn.last_error_code = ConnectionErrorCode.SYNC_FAILED.value if failed_count else None
-        if not failed_count:
+        conn.status = (
+            ConnectionStatus.SYNC_ERROR if outcome.failed_count else ConnectionStatus.ACTIVE
+        )
+        conn.last_error_code = (
+            ConnectionErrorCode.SYNC_FAILED.value if outcome.failed_count else None
+        )
+        if outcome.failed_count:
+            conn.next_sync_at = None
+        else:
             conn.last_success_at = finish_now
+            policy = get_provider_policy(conn.provider)
+            conn.next_sync_at = finish_now + timedelta(
+                seconds=max(60, policy.sync_interval_seconds)
+            )
+            if conn.id is not None:
+                complete_pending_jobs_for_connection(
+                    session,
+                    connection_id=conn.id,
+                    next_cursor=outcome.next_cursor,
+                    now=finish_now,
+                    commit=False,
+                )
         conn.sync_requested_at = None
-        # Scheduling is delivered by #257; do not advertise a nonexistent next run.
-        conn.next_sync_at = None
         conn.updated_at = finish_now
         session.add(conn)
         session.commit()
@@ -453,10 +637,13 @@ class ConnectionService:
             connection_id=conn.id or 0,
             status=ConnectionStatus(conn.status),
             sync_requested_at=finish_now,
-            message=f"Synchronizacja zakończona: pobrano {imported_count} nowych paragonów (pominięto duplikatów: {skipped_count}, błędów: {failed_count}).",
-            imported_count=imported_count,
-            skipped_count=skipped_count,
-            failed_count=failed_count,
+            message=(
+                f"Synchronizacja zakończona: pobrano {outcome.imported_count} nowych paragonów "
+                f"(pominięto duplikatów: {outcome.skipped_count}, błędów: {outcome.failed_count})."
+            ),
+            imported_count=outcome.imported_count,
+            skipped_count=outcome.skipped_count,
+            failed_count=outcome.failed_count,
         )
 
     @staticmethod
@@ -468,8 +655,17 @@ class ConnectionService:
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         conn.status = ConnectionStatus.REAUTH_REQUIRED
         conn.last_error_code = ConnectionErrorCode.REAUTH_REQUIRED.value
+        conn.next_sync_at = None
+        conn.sync_requested_at = None
         conn.updated_at = datetime.now(timezone.utc)
         session.add(conn)
+        if conn.id is not None:
+            cancel_pending_jobs_for_connection(
+                session,
+                connection_id=conn.id,
+                error_code=ConnectionErrorCode.REAUTH_REQUIRED,
+                commit=False,
+            )
         session.commit()
         session.refresh(conn)
         return to_read_dto(conn)
@@ -489,6 +685,8 @@ class ConnectionService:
         conn.last_error_code = ConnectionErrorCode.PROVIDER_REVOCATION_UNAVAILABLE.value
         conn.updated_at = datetime.now(timezone.utc)
         session.add(conn)
+        if conn.id is not None:
+            cancel_pending_jobs_for_connection(session, connection_id=conn.id, commit=False)
         session.commit()
         session.refresh(conn)
         return ConnectionDisconnectResponse(
@@ -501,7 +699,7 @@ class ConnectionService:
     @staticmethod
     def get_decrypted_token(session: Session, conn: ExternalReceiptConnection) -> Optional[str]:
         """Return a worker-only token and fail visibly if it cannot be decrypted."""
-        if conn.status != ConnectionStatus.ACTIVE or not conn.encrypted_refresh_token:
+        if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
             return None
 
         try:

@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any, List, Optional
 from datetime import date, datetime, timezone
 from pydantic import field_validator
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, DateTime, event, select, text, update, Boolean
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, DateTime, TypeDecorator, event, select, text, update, Boolean
 from sqlmodel import Field, Relationship, SQLModel, col
 from sqlmodel._compat import SQLModelConfig
 
@@ -43,6 +43,25 @@ def ensure_tz_aware(v: Any) -> Optional[datetime]:
     elif isinstance(v, date):
         return datetime.combine(v, datetime.min.time(), tzinfo=timezone.utc)
     return v
+
+
+class UTCDateTime(TypeDecorator):
+    """Normalize datetimes to UTC on bind and restore tzinfo on SQLite reads."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> Optional[datetime]:
+        dt = ensure_tz_aware(value)
+        if isinstance(dt, datetime):
+            return dt.astimezone(timezone.utc)
+        return None
+
+    def process_result_value(self, value: Any, dialect: Any) -> Optional[datetime]:
+        dt = ensure_tz_aware(value)
+        if isinstance(dt, datetime):
+            return dt.astimezone(timezone.utc)
+        return None
 
 
 class ScanStatus(str, Enum):
@@ -569,6 +588,117 @@ class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
 
     budget: Optional[Budget] = Relationship(back_populates="receipt_connections")
     owner: Optional[User] = Relationship(back_populates="receipt_connections")
+
+
+# ─── ImportJob & Provider Rate Limits (Durable Scheduler #257) ───────────────
+
+
+class ImportJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ImportJob(SQLModel, table=True):
+    """Durable SQLite-backed job queue entry for external source synchronization.
+
+    Privacy boundary: never store plaintext OAuth tokens, encryption keys,
+    authorization codes, PKCE verifiers, raw receipts, or personal transaction
+    text in cursor, last_error_code, or any other column.
+    """
+
+    __tablename__: str = "import_jobs"  # type: ignore
+    __table_args__ = (
+        Index("ix_import_jobs_claimable", "status", "next_retry_at", "lease_expires_at"),
+        Index("ix_import_jobs_connection_status", "connection_id", "status"),
+        Index("ix_import_jobs_provider_status", "provider", "status"),
+        Index(
+            "uq_import_jobs_active_connection_type",
+            "connection_id",
+            "job_type",
+            unique=True,
+            sqlite_where=text("status IN ('pending', 'running')"),
+            postgresql_where=text("status IN ('pending', 'running')"),
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    job_type: str = Field(default="connection_sync", index=True)
+    provider: str = Field(index=True)
+    connection_id: int = Field(foreign_key="external_receipt_connection.id", index=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+
+    status: ImportJobStatus = Field(
+        default=ImportJobStatus.PENDING,
+        sa_column=Column(String, nullable=False, index=True, server_default="pending"),
+    )
+    attempt_count: int = Field(default=0)
+    max_attempts: int = Field(default=5)
+
+    next_retry_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False, index=True),
+    )
+    cursor: Optional[str] = Field(default=None)
+    correlation_id: str = Field(index=True)
+
+    lease_owner: Optional[str] = Field(default=None, index=True)
+    lease_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(UTCDateTime(), nullable=True, index=True),
+    )
+    last_error_code: Optional[str] = Field(default=None)
+
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False),
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(UTCDateTime(), nullable=True),
+    )
+
+    @field_validator(
+        "next_retry_at",
+        "lease_expires_at",
+        "created_at",
+        "updated_at",
+        "completed_at",
+        mode="before",
+    )
+    @classmethod
+    def validate_tz_fields(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
+
+
+class ImportProviderLimit(SQLModel, table=True):
+    """Cross-worker persistent throttling & cooldown state per merchant provider."""
+
+    __tablename__: str = "import_provider_limits"  # type: ignore
+
+    provider: str = Field(primary_key=True)
+    cooldown_until: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(UTCDateTime(), nullable=True),
+    )
+    last_dispatched_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(UTCDateTime(), nullable=True),
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(UTCDateTime(), nullable=False),
+    )
+
+    @field_validator("cooldown_until", "last_dispatched_at", "updated_at", mode="before")
+    @classmethod
+    def validate_tz_fields(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
 
 
 # ─── API DTOs ────────────────────────────────────────────────────────────────
