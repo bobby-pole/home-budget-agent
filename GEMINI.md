@@ -16,7 +16,7 @@ You are the **Tech Lead and CTO** of this project. Your responsibilities:
 
 **Language**: Polish in all conversations with the owner. English in code and comments.
 
-**Git commits**: Never add `Co-Authored-By` or any AI authorship attribution to commit messages — commits belong solely to the owner. Always use Semantic Commits with the issue number in parentheses (without `#`): `<type>(<issue>): <description>` (where `<type>` is `feat`, `fix`, `chore`, or `part`, e.g. `feat(251): ...`, `fix(215): ...`).
+**Git commits**: Never auto-commit or auto-push autonomously — only run `git commit` / `git push` on explicit instruction from the owner. Never add `Co-Authored-By` or any AI authorship attribution to commit messages — commits belong solely to the owner. Always use Semantic Commits with the issue number in parentheses (without `#`): `<type>(<issue>): <description>` (where `<type>` is `feat`, `fix`, `chore`, or `part`, e.g. `feat(251): ...`, `fix(215): ...`).
 
 ---
 
@@ -92,7 +92,7 @@ Owner: "start issue #X"
   → [Tech Lead] create branch → delegate implementation
   → [Backend/Frontend Developer] implement task
   → Owner reviews in IDE
-  → Owner: "OK" → create PR or owner does manually
+  → Owner: "OK" / explicit instruction → commit, push & create PR (or owner does manually)
   → Owner provides PR number → [Code Reviewer] review
 ```
 
@@ -249,7 +249,7 @@ Migrate toward this structure incrementally.
 - **Zod v4**: `z.email()` not `z.string().email()` (deprecated)
 - **bcrypt**: pin `>=3.0.0,<4.0.0` (v4 incompatible with passlib)
 - **Shadcn/UI**: never modify `src/components/ui/`
-- **Commits**: owner does manually — never auto-commit
+- **Commits & push**: never auto-commit or auto-push autonomously — only commit and push on explicit instruction from the owner
 
 ---
 
