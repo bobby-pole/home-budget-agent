@@ -474,8 +474,8 @@ def test_alembic_source_record_migration_and_backfill(tmp_path: Path, monkeypatc
             )
         )
 
-    # 2. Upgrade to head (e9a1c3d5f702)
-    command.upgrade(alembic_cfg, "head")
+    # 2. Upgrade to target revision e9a1c3d5f702
+    command.upgrade(alembic_cfg, "e9a1c3d5f702")
 
     insp = inspect(engine)
     assert "source_record" in insp.get_table_names()
@@ -511,8 +511,8 @@ def test_alembic_source_record_migration_and_backfill(tmp_path: Path, monkeypatc
         assert by_tx[5].external_id is None
         assert by_tx[5].canonical_hash is None
 
-    # 3. Downgrade -1 back to d4f8a92c1e01
-    command.downgrade(alembic_cfg, "-1")
+    # 3. Downgrade back to d4f8a92c1e01
+    command.downgrade(alembic_cfg, "d4f8a92c1e01")
     insp_down = inspect(engine)
     assert "source_record" not in insp_down.get_table_names()
     assert "processed_via" not in {c["name"] for c in insp_down.get_columns("receiptscan")}

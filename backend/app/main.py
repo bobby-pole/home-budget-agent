@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 import asyncio
 import os
 from dotenv import load_dotenv
@@ -83,8 +83,31 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.getLogger(__name__).error("Failed to seed baseline demo environment on startup: %s", e)
     cleanup_task = asyncio.create_task(_periodic_demo_cleanup())
+    from .import_scheduler import ImportWorker, is_trusted_worker_environment
+
+    import_worker: ImportWorker | None = None
+    import_worker_task: asyncio.Task[None] | None = None
+    if settings.is_import_worker_enabled() and is_trusted_worker_environment():
+        import_worker = ImportWorker(lambda: Session(operations_engine))
+        import_worker_task = asyncio.create_task(import_worker.run_forever())
+    elif settings.is_import_worker_enabled():
+        logging.getLogger(__name__).info(
+            "Merchant import worker disabled under IMPORT_WORKER_ROLE=%s.",
+            settings.IMPORT_WORKER_ROLE,
+        )
+
     yield
     cleanup_task.cancel()
+    if import_worker is not None and import_worker_task is not None:
+        import_worker.request_shutdown()
+        try:
+            await asyncio.wait_for(import_worker_task, timeout=10.0)
+        except asyncio.TimeoutError:
+            import_worker_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await import_worker_task
+        except asyncio.CancelledError:
+            pass
 
 app = FastAPI(
     title="Smart Budget AI API",

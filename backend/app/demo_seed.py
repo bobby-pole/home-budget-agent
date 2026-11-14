@@ -33,6 +33,7 @@ from .models import (
     Category,
     EnvelopeAllocation,
     ExternalReceiptConnection,
+    ImportJob,
     RawPayloadPolicy,
     ReceiptScan,
     ScanUsageLog,
@@ -407,6 +408,7 @@ def clean_demo_data(session: Session, user: User) -> None:
             session.exec(delete(Transaction).where(col(Transaction.id).in_(t_ids)))
 
         session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
+        session.exec(delete(ImportJob).where(col(ImportJob.budget_id) == budget_id))
         session.exec(delete(ExternalReceiptConnection).where(col(ExternalReceiptConnection.budget_id) == budget_id))
         session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
         session.exec(delete(Account).where(col(Account.budget_id) == budget_id))

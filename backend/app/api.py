@@ -30,7 +30,9 @@ from .models import (
     BudgetMemberCreate, BudgetMemberRead,
     BudgetAlert, AppStatusRead, AppConfigRead,
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
+    ExternalReceiptConnection,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
+    ImportJob,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
     ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest
 )
@@ -426,6 +428,8 @@ def delete_budget(
     session.exec(delete(BudgetAlert).where(col(BudgetAlert.budget_id) == budget_id))
     session.exec(delete(EnvelopeAllocation).where(col(EnvelopeAllocation.budget_id) == budget_id))
     session.exec(delete(SourceRecord).where(col(SourceRecord.budget_id) == budget_id))
+    session.exec(delete(ImportJob).where(col(ImportJob.budget_id) == budget_id))
+    session.exec(delete(ExternalReceiptConnection).where(col(ExternalReceiptConnection.budget_id) == budget_id))
 
     transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
     for t in transactions:

@@ -19,9 +19,10 @@ import secrets
 import urllib.parse
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any, Protocol
+from email.utils import parsedate_to_datetime
+from typing import Any, Mapping, Protocol
 
 import requests
 
@@ -40,9 +41,15 @@ class OAuthCallbackError(ValueError):
 class MerchantRequestError(RuntimeError):
     """Safe HTTP error: provider response bodies are intentionally not retained."""
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        retry_after_seconds: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.retry_after_seconds = retry_after_seconds
 
 
 class TicketMappingError(ValueError):
@@ -245,11 +252,40 @@ class LidlPoCClient:
         return codes[0]
 
     @staticmethod
-    def _raise_for_status(response: HttpResponse, operation: str) -> None:
+    def _parse_retry_after_seconds(response: HttpResponse) -> int | None:
+        headers = getattr(response, "headers", None)
+        if not isinstance(headers, Mapping):
+            return None
+        raw_value: str | None = None
+        for key, value in headers.items():
+            if str(key).lower() == "retry-after":
+                raw_value = str(value).strip()
+                break
+        if not raw_value:
+            return None
+        if raw_value.isdigit():
+            return max(1, min(int(raw_value), 86400))
+        try:
+            retry_dt = parsedate_to_datetime(raw_value)
+        except (TypeError, ValueError):
+            return None
+        if retry_dt.tzinfo is None:
+            retry_dt = retry_dt.replace(tzinfo=timezone.utc)
+        delta_seconds = int((retry_dt - datetime.now(timezone.utc)).total_seconds())
+        return max(1, min(delta_seconds, 86400))
+
+    @classmethod
+    def _raise_for_status(cls, response: HttpResponse, operation: str) -> None:
         if response.status_code < 200 or response.status_code >= 300:
+            retry_after_seconds = (
+                cls._parse_retry_after_seconds(response)
+                if response.status_code in (429, 503)
+                else None
+            )
             raise MerchantRequestError(
                 f"{operation} failed with HTTP {response.status_code}",
                 status_code=response.status_code,
+                retry_after_seconds=retry_after_seconds,
             )
 
     @staticmethod
