@@ -1,0 +1,30 @@
+{
+  "dokument": {
+    "naglowek": {
+      "dataJPK": "2026-04-15T16:20:00Z"
+    },
+    "podmiot1": {
+      "NIP": "0000000000",
+      "nazwaPod": "Sklep Testowy Sp. z o.o."
+    },
+    "paragon": {
+      "nrDok": "SYN-EP-0004",
+      "zakSprzed": "2026-04-15T16:20:00Z",
+      "podsum": {
+        "waluta": "PLN"
+      },
+      "total": {
+        "zaplZwrot": 3000
+      },
+      "pozycja": [
+        {
+          "towar": {
+            "nazwa": "HERBATA CZARNA",
+            "cena": 999,
+            "ilosc": "1"
+          }
+        }
+      ]
+    }
+  }
+}

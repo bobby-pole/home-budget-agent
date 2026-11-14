@@ -5,13 +5,10 @@ import logging
 import shutil
 import os
 import hashlib
-import csv
-import io
 import re
 import time
-from pypdf import PdfReader
 from uuid import uuid4
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import json
 from decimal import Decimal
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header, Query
@@ -37,8 +34,20 @@ from .models import (
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
     ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest
 )
+from .adapters import (
+    AdapterContractError,
+    EParagonReceiptAdapter,
+    IngCsvTransactionAdapter,
+    IngPdfTransactionAdapter,
+    OcrPipelineReceiptAdapter,
+    parse_ing_pdf_text,
+)
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
+from .ingestion_service import (
+    apply_receipt_result_to_existing_scan,
+    ingest_transaction_batch,
+)
 from .ocr_pipeline import ReceiptSource, ReceiptSourceDetector
 from .provenance_service import (
     build_source_record,
@@ -55,7 +64,7 @@ from .auth import get_current_user, get_current_user_optional, hash_password, ve
 from .demo_seed import seed_demo_environment
 from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
 from .config import settings
-from .money import format_money, quantize_money, quantize_quantity, quantize_score, quantize_unit_price, MoneyDecimal
+from .money import format_money, quantize_money, quantize_unit_price, MoneyDecimal
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -564,136 +573,62 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
 
         _set_scan_status(scan_id, ScanStatus.OCR_OK)
 
-        merchant = data.get("merchant_name") or "Unknown"
-        total = quantize_money(data.get("total_amount", Decimal("0.00")))
-
-        validation = data.get("_validation", {})
-        val_is_valid = validation.get("is_valid", True)
-        val_issues = validation.get("issues", [])
-        val_message = validation.get("message")
-
         stage_start = time.monotonic()
         scan2 = session.get(ReceiptScan, scan_id)
         if not scan2:
             return
-        scan2.status = ScanStatus.PARSING_OK
-        scan2.processed_via = data.get("_processed_via")
-        scan2.raw_ocr_text = data.get("_raw_ocr_text")
-        scan2.reconstructed_lines = data.get("_reconstructed_lines")
 
-        raw_items = data.get("items") or []
-
-        # Empty receipt with failed validation is an unrecoverable failure
-        if not raw_items and not val_is_valid:
-            logger.warning("Validation failed on empty receipt", extra={"scan_id": scan_id, "message": val_message})
-            scan2.status = ScanStatus.FAILED
-            scan2.needs_review = True
-            scan2.validation_message = val_message or "RECEIPT_EMPTY"
-            transaction.merchant_name = merchant
-            transaction.total_amount = total
-            transaction.currency = data.get("currency", "PLN")
-            update_scan_source_metadata(session, receipt_scan_id=scan_id, quality="0.00")
-            session.add(scan2)
-            session.add(transaction)
-            session.commit()
-            logger.info(
-                "Parsing stage completed (empty receipt failure)",
-                extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
-            )
-            return
-
-        logger.info(
-            "Parsing stage completed",
-            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+        is_eparagon_scan = (
+            any(sr.source_type == SourceType.E_RECEIPT for sr in (scan2.source_records or []))
+            or data.get("_processed_via")
+            in ("eparagon_json_adapter", "biedronka_json_parser", "zabka_json_parser")
         )
-
-        stage_start = time.monotonic()
-        transaction.merchant_name = merchant
-        transaction.total_amount = total
-        transaction.currency = data.get("currency", "PLN")
-
-        # Determine if needs_review should be set:
-        # 1. Sum mismatch or any validation issue
-        # 2. Line item confidence below threshold (0.85)
-        # 3. Overall validation confidence below threshold (0.85)
-        CONFIDENCE_THRESHOLD = 0.85
-        has_val_issues = bool(val_issues) or (not val_is_valid)
-        has_low_confidence_item = any(
-            item.get("confidence") is not None and float(item.get("confidence")) < CONFIDENCE_THRESHOLD
-            for item in raw_items
+        adapter_result = OcrPipelineReceiptAdapter.from_pipeline_output(
+            data,
+            file_hash=scan2.content_hash,
+            raw_payload_policy=(
+                RawPayloadPolicy.CANONICAL_ONLY
+                if is_eparagon_scan
+                else RawPayloadPolicy.EPHEMERAL_IMAGE
+            ),
         )
-        val_confidence = validation.get("confidence")
-        has_low_val_confidence = (
-            val_confidence is not None and float(val_confidence) < CONFIDENCE_THRESHOLD
+        if is_eparagon_scan and os.path.exists(image_path):
+            try:
+                with open(image_path, "rb") as ep_file:
+                    ep_bytes = ep_file.read()
+                ep_result = EParagonReceiptAdapter().extract(
+                    ep_bytes,
+                    budget_id=transaction.budget_id or 0,
+                    raw_payload_policy=RawPayloadPolicy.CANONICAL_ONLY,
+                )
+                adapter_result.warnings = list(
+                    dict.fromkeys([*ep_result.warnings, *adapter_result.warnings])
+                )
+                adapter_result.quality = min(adapter_result.quality, ep_result.quality)
+            except AdapterContractError as ep_err:
+                logger.warning(
+                    "EParagonReceiptAdapter metadata check failed",
+                    extra={"scan_id": scan_id, "error": str(ep_err)},
+                )
+        uploader_is_demo = is_demo_user(transaction.uploader) if transaction.uploader else settings.DEMO_MODE
+        final_status = apply_receipt_result_to_existing_scan(
+            session,
+            scan=scan2,
+            transaction=transaction,
+            result=adapter_result,
+            db_categories=db_categories,
+            is_demo_uploader=settings.DEMO_MODE or uploader_is_demo,
         )
-
-        requires_review = has_val_issues or has_low_confidence_item or has_low_val_confidence
-
-        if requires_review:
-            scan2.status = ScanStatus.NEEDS_REVIEW
-            scan2.needs_review = True
-            scan2.validation_message = val_message or (
-                "LOW_CONFIDENCE" if (has_low_confidence_item or has_low_val_confidence) else None
+        if final_status == ScanStatus.FAILED:
+            logger.warning(
+                "Validation failed on empty receipt",
+                extra={"scan_id": scan_id, "message": adapter_result.validation_message},
             )
         else:
-            scan2.status = ScanStatus.CATEGORIZATION_OK
-            scan2.needs_review = False
-            scan2.validation_message = None
-
-        ai_date_str = data.get("date")
-        if ai_date_str:
-            try:
-                parsed_dt = datetime.strptime(ai_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-                now_utc = datetime.now(timezone.utc)
-                uploader_is_demo = is_demo_user(transaction.uploader) if transaction.uploader else settings.DEMO_MODE
-                if (settings.DEMO_MODE or uploader_is_demo) and (parsed_dt.year != now_utc.year or parsed_dt.month != now_utc.month):
-                    transaction.date = now_utc
-                    scan2.original_date = ai_date_str
-                else:
-                    transaction.date = parsed_dt
-            except (ValueError, TypeError):
-                logger.warning("Could not parse AI date", extra={"scan_id": scan_id, "date": ai_date_str})
-
-        cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
-        for item_raw in raw_items:
-            category_name = item_raw.get("category", "")
-            cat_id = cat_name_to_id.get(category_name.lower()) if category_name else None
-            cat_source = item_raw.get("category_source")
-            orig = item_raw.get("original_price")
-            fin = item_raw.get("final_price")
-            raw_disc = quantize_money(item_raw.get("discount_total", Decimal("0.00")))
-            discount_val = -abs(raw_disc) if raw_disc != Decimal("0.00") else Decimal("0.00")
-            session.add(TransactionLine(
-                name=item_raw.get("name", "Unknown item"),
-                price=quantize_unit_price(item_raw.get("price", Decimal("0.00"))),
-                quantity=quantize_quantity(item_raw.get("quantity", Decimal("1"))),
-                category_id=cat_id,
-                category_source=cat_source,
-                transaction_id=transaction.id,
-                original_price=quantize_unit_price(orig) if orig is not None else None,
-                discount_total=discount_val,
-                final_price=quantize_unit_price(fin) if fin is not None else None,
-                is_adjustment=bool(item_raw.get("is_adjustment", False)),
-            ))
-
-        if val_confidence is not None:
-            try:
-                clamped_conf = max(Decimal("0"), min(Decimal("1"), Decimal(str(val_confidence))))
-                update_scan_source_metadata(
-                    session,
-                    receipt_scan_id=scan_id,
-                    quality=quantize_score(clamped_conf),
-                )
-            except Exception:
-                pass
-
-        session.add(transaction)
-        session.add(scan2)
-        session.commit()
-        logger.info(
-            "Categorization stage completed",
-            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
-        )
+            logger.info(
+                "Categorization stage completed",
+                extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+            )
         if scan2.needs_review:
             logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
         else:
@@ -1878,78 +1813,8 @@ async def delete_transaction(
 
 # --- IMPORT ---
 
-def parse_ing_pdf_text(text: str) -> list[dict]:
-    """
-    Robust multiline parser for ING individual bank statements.
-    Refined to strictly separate Contractor, Title, and Amount.
-    """
-    transactions = []
-
-    # 1. Pattern starts with two dates (DD.MM.YYYY)
-    # 2. Mid text is captured lazily
-    # 3. Amount is strictly matched: optional minus, then 1-3 digits, then optional groups of 3 digits separated by space, then comma, then 2 digits.
-    # This prevents merging long transaction IDs with the amount.
-    pattern = re.compile(
-        r"(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})\s+(.*?)\s+(-?\d{1,3}(?:[\s\xa0]\d{3})*[.,]\d{2})\s+PLN",
-        re.DOTALL | re.MULTILINE
-    )
-
-    for match in pattern.finditer(text):
-        date_str, posting_date, mid_text, amount_str = match.groups()
-
-        try:
-            amount = quantize_money(amount_str)
-        except ValueError:
-            continue
-
-        # Convert DD.MM.YYYY -> YYYY-MM-DD
-        try:
-            d_parts = date_str.split(".")
-            iso_date = f"{d_parts[2]}-{d_parts[1]}-{d_parts[0]}"
-        except IndexError:
-            continue
-
-        # --- CLEANING MID_TEXT (Separating Contractor and Title) ---
-        lines = [line.strip() for line in mid_text.split("\n") if line.strip()]
-
-        # Noise filters for technical bank data:
-        noise_patterns = [
-            r"^\d{8}-\d+.*",           # Technical IDs (10500031-...)
-            r"^\d{10,}.*",             # Long unspaced account numbers or IDs
-            r"^\d{2}[\s\xa0]\d{4}.*",  # Spaced account numbers
-            r"^Nazwa i adres.*",       # Field labels
-            r"^Data księgowania.*",    # Header leftovers
-            r"^Szczegóły / nr.*",      # Header leftovers
-            r"^(TR\.KART|TR\.BLIK|PRZELEW|P\.BLIK|ST\.ZLEC)$", # Transaction types (Details column)
-        ]
-
-        clean_lines = []
-        for line in lines:
-            # Check if line is purely technical noise
-            is_noise = any(re.match(p, line, re.IGNORECASE) for p in noise_patterns)
-            if not is_noise:
-                # Remove static labels if they appear inline
-                line = re.sub(r"Nazwa i adres (odbiorcy|płatnika):\s*", "", line, flags=re.IGNORECASE)
-                clean_lines.append(line.strip())
-
-        if not clean_lines:
-            merchant = "Przelew/Transakcja"
-            title = mid_text.strip().replace("\n", " ")[:100]
-        else:
-            # First line is usually the Contractor/Merchant
-            merchant = clean_lines[0]
-            # Rest is the Title/Description
-            title = " ".join(clean_lines[1:]) if len(clean_lines) > 1 else merchant
-
-        transactions.append({
-            "date": iso_date,
-            "merchant": merchant[:100],
-            "title": title[:200],
-            "amount": amount,
-            "currency": "PLN"
-        })
-
-    return transactions
+# parse_ing_pdf_text moved to app.adapters.transaction_adapters (#259) and re-exported here for callers.
+_ = parse_ing_pdf_text
 
 
 def detect_transaction_type(merchant: str, title: str, amount: Decimal | float, user_names: list[str]) -> str:
@@ -2011,335 +1876,35 @@ async def import_transactions(
         user_names.append(f"{name_parts[0]} {name_parts[1]}")
         user_names.append(f"{name_parts[1]} {name_parts[0]}")
 
-    rows_to_process = []
-
-    if filename.lower().endswith(".pdf"):
-        # --- PDF Functional Parsing ---
-        try:
-            reader = PdfReader(io.BytesIO(content))
-            full_text = ""
-            for page in reader.pages:
-                full_text += page.extract_text() + "\n"
-
-            # Use regex-based parser (no AI here)
-            extracted_rows = parse_ing_pdf_text(full_text)
-
-            for row in extracted_rows:
-                date_str = row["date"]
-                merchant = row["merchant"]
-                title = row["title"]
-                amount = row["amount"]
-                currency = row["currency"]
-
-                # Unique hash for deduplication
-                raw_hash = f"{date_str}_{format_money(amount)}_{merchant}_{title}".strip()
-                row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
-
-                rows_to_process.append({
-                    "date_str": date_str,
-                    "amount": amount,
-                    "merchant": merchant,
-                    "title": title,
-                    "currency": currency,
-                    "hash": row_hash
-                })
-        except Exception as e:
-            print(f"❌ PDF Parse Error: {e}")
-            raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
-
-    else:
-        # --- CSV Parsing logic (ING fallback) ---
-        text_content = ""
-        for encoding in ["utf-8", "windows-1250", "iso-8859-2"]:
-            try:
-                text_content = content.decode(encoding)
-                break
-            except UnicodeDecodeError:
-                continue
-
-        if not text_content:
-            raise HTTPException(status_code=400, detail="Could not decode CSV file. Use UTF-8 or Windows-1250.")
-
-        f = io.StringIO(text_content)
-        try:
-            dialect = csv.Sniffer().sniff(text_content[:2000]) if len(text_content) > 10 else "excel"
-        except Exception:
-            dialect = "excel"
-
-        reader = csv.DictReader(f, dialect=dialect)
-        headers = reader.fieldnames or []
-
-        ing_keys = {
-            "date": ["Data transakcji", "Transaction date", "Data"],
-            "merchant": ["Dane kontrahenta", "Contractor details", "Kontrahent"],
-            "title": ["Tytuł", "Title", "Opis"],
-            "amount": ["Kwota transakcji (waluta)", "Transaction amount", "Kwota"],
-            "currency": ["Waluta", "Currency"]
-        }
-
-        def find_key(headers, targets):
-            for h in headers:
-                for t in targets:
-                    if t.lower() in h.lower():
-                        return h
-            return None
-
-        mapped_keys = {k: find_key(headers, v) for k, v in ing_keys.items()}
-
-        if not mapped_keys["date"] or not mapped_keys["amount"]:
-             raise HTTPException(status_code=400, detail=f"Required columns not found. Headers: {headers}")
-
-        for row in reader:
-            try:
-                date_str = row.get(mapped_keys["date"])
-                merchant = row.get(mapped_keys["merchant"], "")
-                title = row.get(mapped_keys["title"], "")
-                amount_str = row.get(mapped_keys["amount"], "0")
-                currency = row.get(mapped_keys["currency"], "PLN")
-
-                if not date_str or not amount_str:
-                    continue
-
-                amount = quantize_money(amount_str)
-
-                raw_hash = f"{date_str}_{format_money(amount)}_{merchant}_{title}".strip()
-                row_hash = hashlib.sha256(raw_hash.encode()).hexdigest()
-
-                rows_to_process.append({
-                    "date_str": date_str,
-                    "amount": amount,
-                    "merchant": merchant,
-                    "title": title,
-                    "currency": currency,
-                    "hash": row_hash
-                })
-            except (ValueError, TypeError):
-                continue
-
-    # --- Common processing (Deduplication, AI Categorization) ---
-
-    if not rows_to_process:
-        return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
-
-    hashes_to_check = [r["hash"] for r in rows_to_process]
-
-    existing_legacy_hashes = set(session.exec(
-        select(Transaction.import_hash).where(
-            Transaction.budget_id == current_budget.id,
-            col(Transaction.import_hash).in_(hashes_to_check)
-        )
-    ).all())
-    existing_source_hashes = set(session.exec(
-        select(SourceRecord.canonical_hash).where(
-            SourceRecord.budget_id == current_budget.id,
-            col(SourceRecord.canonical_hash).in_(hashes_to_check)
-        )
-    ).all())
-    seen_hashes = {h for h in (existing_legacy_hashes | existing_source_hashes) if h}
-
-    final_rows = []
-    skipped_count = 0
-    for row_item in rows_to_process:
-        if row_item["hash"] in seen_hashes:
-            skipped_count += 1
-        else:
-            seen_hashes.add(row_item["hash"])
-            final_rows.append(row_item)
-
-    if not final_rows:
-        return {"created": 0, "skipped": skipped_count, "failed": 0, "summary": f"All {len(rows_to_process)} transactions already imported."}
-
-    # Prepare for AI Categorization (Batching with Local Cache)
     is_pdf = filename.lower().endswith(".pdf")
-    unique_descriptions = list(set([f"{r['merchant']} {r['title']}".strip() for r in final_rows]))
+    adapter = IngPdfTransactionAdapter() if is_pdf else IngCsvTransactionAdapter()
+    assert current_budget.id is not None
+    assert current_user.id is not None
 
-    db_categories = session.exec(select(Category).where((Category.budget_id == current_budget.id) | (Category.is_system))).all()
-    cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
-    cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
-    id_to_cat_name = {c.id: c.name for c in db_categories}
-
-    ai_mapping = {}
-
-    if not is_pdf:
-        # --- LOCAL CACHE: Check history for these descriptions ---
-        # Fetch recent transactions with categories to learn from them
-        history_stmt = select(Transaction.merchant_name, Transaction.category_id).where(
-            Transaction.budget_id == current_budget.id,
-            Transaction.category_id is not None
-        ).order_by(desc(Transaction.date)).limit(500)
-        history = session.exec(history_stmt).all()
-
-        # Map: "description" -> "category_name"
-        local_mapping = {h[0].lower(): id_to_cat_name.get(h[1]) for h in history if h[1] in id_to_cat_name}
-
-        descriptions_to_query = []
-
-        for desc_text in unique_descriptions:
-            cached_cat = local_mapping.get(desc_text.lower())
-            if cached_cat:
-                ai_mapping[desc_text] = cached_cat
-            else:
-                descriptions_to_query.append(desc_text)
-
-        # AI Batching ONLY for unknown descriptions
-        if descriptions_to_query:
-            print(f"🧠 Asking AI for {len(descriptions_to_query)} new descriptions...")
-            for i in range(0, len(descriptions_to_query), 50):
-                batch = descriptions_to_query[i : i+50]
-                ai_mapping.update(AIService.categorize_descriptions(batch, categories=cat_dicts))
-        else:
-            print("⚡ All descriptions found in local cache. Skipping AI.")
-    else:
-        print("📄 PDF import detected. Skipping auto-categorization as requested.")
-
-    # --- PRE-FETCH MANUAL CANDIDATES for Deduplication (Optimized) ---
-    parsed_dates = []
-    for r in final_rows:
-        try:
-            if "-" in r["date_str"]:
-                parsed_dates.append(datetime.strptime(r["date_str"], "%Y-%m-%d").replace(tzinfo=timezone.utc))
-            else:
-                parsed_dates.append(datetime.strptime(r["date_str"], "%d.%m.%Y").replace(tzinfo=timezone.utc))
-        except ValueError:
-            pass
-
-    manual_candidates = []
-    if parsed_dates:
-        min_date = min(parsed_dates) - timedelta(days=2)
-        max_date = max(parsed_dates) + timedelta(days=2)
-
-        candidates_stmt = select(Transaction).where(
-            Transaction.budget_id == current_budget.id,
-            Transaction.is_manual,
-            col(Transaction.import_hash).is_(None),
-            col(Transaction.date) >= min_date,
-            col(Transaction.date) <= max_date
+    try:
+        batch = adapter.extract_transactions(
+            content,
+            budget_id=current_budget.id,
+            filename=filename,
+            raw_payload_policy=RawPayloadPolicy.NONE,
         )
-        manual_candidates = list(session.exec(candidates_stmt).all())
+    except AdapterContractError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
 
-    created_count = 0
-    for i, row_data in enumerate(final_rows):
-        desc_key = f"{row_data['merchant']} {row_data['title']}".strip()
-        if is_pdf:
-            cat_id = None
-        else:
-            cat_name = ai_mapping.get(desc_key, "Other")
-            cat_id = cat_name_to_id.get(cat_name.lower())
-
-        t_type = detect_transaction_type(
-            merchant=row_data["merchant"],
-            title=row_data["title"],
-            amount=row_data["amount"],
-            user_names=user_names
-        )
-
-        # Use pre-parsed date if available
-        t_date = parsed_dates[i] if i < len(parsed_dates) else datetime.now(timezone.utc)
-        t_amount = quantize_money(abs(row_data["amount"]))
-
-        # --- SMART DEDUPLICATION (Gap Analysis / MVP) ---
-        # Look for match in pre-fetched candidates
-        existing_duplicate = None
-        d_start = t_date - timedelta(days=2)
-        d_end = t_date + timedelta(days=2)
-
-        for cand in manual_candidates:
-            # Match if same amount and within 2 days window
-            # Older SQLite/SQLModel versions return naive stored datetimes.
-            candidate_date = cand.date
-            if candidate_date is not None and candidate_date.tzinfo is None:
-                candidate_date = candidate_date.replace(tzinfo=timezone.utc)
-            if quantize_money(cand.total_amount) == t_amount and candidate_date and d_start <= candidate_date <= d_end:
-                existing_duplicate = cand
-                break
-
-        bank_provider = "ing_pdf" if is_pdf else "ing_csv"
-        bank_adapter_version = "ing_pdf_v1" if is_pdf else "ing_csv_v1"
-        assert current_budget.id is not None
-
-        try:
-            with session.begin_nested():
-                if existing_duplicate:
-                    # Auto-Merge: Powiązanie paragonu z wpisem z banku
-                    existing_duplicate.import_hash = row_data["hash"]
-                    # Aktualizacja typu, o ile paragon był np. "expense", a skrypt wykrył "transfer"
-                    if existing_duplicate.type == "expense" and t_type == "transfer":
-                        existing_duplicate.type = "transfer"
-
-                    # Wzbogacenie notatki o dane z banku, żeby nie stracić oryginalnego tytułu przelewu
-                    bank_note = f"[Bank: {row_data['title']}]"
-                    if existing_duplicate.note:
-                        if "[Bank:" not in existing_duplicate.note:
-                            existing_duplicate.note = f"{existing_duplicate.note} {bank_note}"
-                    else:
-                        existing_duplicate.note = bank_note
-
-                    existing_duplicate.status = TransactionStatus.CLEARED
-                    session.add(existing_duplicate)
-                    session.flush()
-                    target_tx = existing_duplicate
-                else:
-                    target_tx = Transaction(
-                        merchant_name=row_data["merchant"] or row_data["title"] or "Bank Transaction",
-                        total_amount=t_amount,
-                        currency=row_data["currency"],
-                        date=t_date,
-                        is_manual=False,
-                        type=t_type,
-                        status=TransactionStatus.CLEARED,
-                        uploaded_by=current_user.id,
-                        budget_id=current_budget.id,
-                        category_id=cat_id,
-                        note=row_data["title"],
-                        import_hash=row_data["hash"],
-                    )
-                    session.add(target_tx)
-                    session.flush()
-
-                if target_tx.id is not None:
-                    session.add(
-                        build_source_record(
-                            budget_id=current_budget.id,
-                            transaction_id=target_tx.id,
-                            source_type=SourceType.BANK_CSV,
-                            provider=bank_provider,
-                            external_id=None,
-                            canonical_hash=row_data["hash"],
-                            adapter_version=bank_adapter_version,
-                            quality="0.95",
-                            raw_payload_policy=RawPayloadPolicy.NONE,
-                        )
-                    )
-                    session.flush()
-        except IntegrityError:
-            raced = find_existing_source_record(
-                session,
-                budget_id=current_budget.id,
-                provider=bank_provider,
-                canonical_hash=row_data["hash"],
-            )
-            if raced is not None:
-                skipped_count += 1
-                continue
-            raise
-
-        if existing_duplicate is not None:
-            manual_candidates.remove(existing_duplicate)
-            print(f"🪄 Auto-Merge: Złączono paragon {existing_duplicate.id} z wyciągiem bankowym ({t_amount} {row_data['currency']}).")
-        created_count += 1
-
-    session.commit()
-    return {
-        "created": created_count,
-        "skipped": skipped_count,
-        "failed": 0,
-        "summary": {
-            "code": "CSV_IMPORT_COMPLETE",
-            "imported": created_count,
-            "skipped": skipped_count,
-            "filename": filename
-        }
-    }
+    return ingest_transaction_batch(
+        session,
+        batch,
+        budget_id=current_budget.id,
+        user_id=current_user.id,
+        filename=filename,
+        enable_ai_categorization=not is_pdf,
+        tx_type_classifier=lambda item: detect_transaction_type(
+            merchant=item.transaction.counterparty,
+            title=item.transaction.title,
+            amount=item.transaction.amount,
+            user_names=user_names,
+        ),
+    )
 
 
 # --- BUDGET ---

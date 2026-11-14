@@ -1,0 +1,18 @@
+{
+  "id": "SYNTHETIC-LIDL-CONF-INVALID-004",
+  "date": "2026-04-15T09:05:00Z",
+  "storeCode": "PL9999",
+  "currency": "PLN",
+  "totalAmount": "25,00",
+  "totalAmountNumeric": 25.00,
+  "itemsLine": [
+    {
+      "description": "MASLO EKSTRA 200G",
+      "quantity": "1",
+      "currentUnitPrice": "7,99",
+      "extendedAmount": "7,99",
+      "taxGroupName": "A",
+      "discounts": []
+    }
+  ]
+}

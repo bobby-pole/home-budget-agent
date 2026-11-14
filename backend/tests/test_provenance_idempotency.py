@@ -316,7 +316,7 @@ def test_lidl_ingestion_idempotency_and_race_recovery(client: TestClient, sessio
     assert (imported2, skipped2) == (False, True)
 
     # Simulate race condition: bypass initial pre-check so IntegrityError triggers inside savepoint
-    import app.connection_service as cs_mod
+    import app.ingestion_service as ing_mod
 
     calls = {"count": 0}
     orig_find = find_existing_source_record
@@ -327,8 +327,8 @@ def test_lidl_ingestion_idempotency_and_race_recovery(client: TestClient, sessio
             return None  # Pretend not found before insert race
         return orig_find(sess, **kwargs)
 
-    monkeypatch.setattr(cs_mod, "find_existing_source_record", race_find)
-    monkeypatch.setattr(cs_mod, "has_legacy_scan_duplicate", lambda *a, **kw: None)
+    monkeypatch.setattr(ing_mod, "find_existing_source_record", race_find)
+    monkeypatch.setattr(ing_mod, "has_legacy_scan_duplicate", lambda *a, **kw: None)
 
     imported3, skipped3 = ConnectionService._ingest_lidl_canonical_receipt(
         session, budget.id, user.id, "tkt-lidl-001", MOCK_LIDL_V3_TICKET
