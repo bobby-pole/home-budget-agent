@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.adapters.lidl_poc_client import (
@@ -32,11 +32,19 @@ from app.models import (
     ExternalReceiptConnection,
     ExternalReceiptConnectionCreate,
     ExternalReceiptConnectionRead,
+    RawPayloadPolicy,
     ReceiptScan,
     ScanStatus,
+    SourceType,
     Transaction,
     TransactionLine,
     User,
+)
+from app.provenance_service import (
+    build_source_record,
+    compute_canonical_hash,
+    find_existing_source_record,
+    has_legacy_scan_duplicate,
 )
 
 
@@ -298,21 +306,24 @@ class ConnectionService:
         user_id: int,
         ticket_id: str,
         raw_ticket: dict,
+        *,
+        connection_id: Optional[int] = None,
     ) -> tuple[bool, bool]:
-        """Map a Lidl v3 ticket to CanonicalReceipt and persist it in ReceiptScan/Transaction inbox.
+        """Map a Lidl v3 ticket to CanonicalReceipt and persist it with SourceRecord idempotency.
 
         Returns (imported, skipped). Raises TicketMappingError on invalid payload.
         """
-        content_hash = hashlib.sha256(f"lidl_plus:{budget_id}:{ticket_id}".encode("utf-8")).hexdigest()
-        existing_scan = session.exec(
-            select(ReceiptScan).where(
-                ReceiptScan.content_hash == content_hash,
-                ReceiptScan.transaction_id.in_(  # type: ignore
-                    select(Transaction.id).where(Transaction.budget_id == budget_id)
-                ),
-            )
-        ).first()
-        if existing_scan:
+        ticket_id = ticket_id.strip()
+        content_hash = compute_canonical_hash(f"lidl_plus:{budget_id}:{ticket_id}")
+        if find_existing_source_record(
+            session,
+            budget_id=budget_id,
+            provider="lidl_plus",
+            external_id=ticket_id,
+            canonical_hash=content_hash,
+        ) or has_legacy_scan_duplicate(
+            session, budget_id=budget_id, content_hash=content_hash
+        ):
             return False, True
 
         canonical = lidl_ticket_to_canonical(raw_ticket)
@@ -339,54 +350,86 @@ class ConnectionService:
         except ValueError:
             tx_date = datetime.now(timezone.utc)
 
-        tx = Transaction(
-            merchant_name=canonical.merchant_name,
-            total_amount=canonical.total_amount,
-            currency=canonical.currency,
-            date=tx_date,
-            is_manual=False,
-            type="expense",
-            uploaded_by=user_id,
-            budget_id=budget_id,
-            import_hash=content_hash,
-            note=f"Lidl Plus #{ticket_id}",
-        )
-        session.add(tx)
-        session.flush()  # Persist the receipt and all its lines in one transaction.
-
-        needs_review = canonical.get("validation_status") != "verified"
-        scan = ReceiptScan(
-            transaction_id=tx.id or 0,
-            image_path=None,
-            status=ScanStatus.NEEDS_REVIEW.value if needs_review else ScanStatus.CATEGORIZATION_OK.value,
-            content_hash=content_hash,
-            needs_review=needs_review,
-            validation_message=canonical.get("validation_error"),
-        )
-        session.add(scan)
-
         from app.money import quantize_money, quantize_quantity, quantize_unit_price
 
         cat_name_to_id = {c.name.lower(): c.id for c in db_categories if c.id is not None}
-        for item_raw in receipt_dict.get("items", []):
-            cat_name = str(item_raw.get("category") or "").strip().lower()
-            cat_id = cat_name_to_id.get(cat_name) if cat_name else None
-            orig = item_raw.get("original_price")
-            fin = item_raw.get("final_price")
-            session.add(
-                TransactionLine(
-                    name=str(item_raw.get("name") or "Pozycja"),
-                    price=quantize_unit_price(item_raw.get("price", 0)),
-                    quantity=quantize_quantity(item_raw.get("quantity", 1)),
-                    category_id=cat_id,
-                    category_source=item_raw.get("category_source"),
-                    transaction_id=tx.id,
-                    original_price=quantize_unit_price(orig) if orig is not None else None,
-                    discount_total=quantize_money(item_raw.get("discount_total", 0)),
-                    final_price=quantize_unit_price(fin) if fin is not None else None,
-                    is_adjustment=bool(item_raw.get("is_adjustment", False)),
+        needs_review = canonical.get("validation_status") != "verified"
+
+        try:
+            with session.begin_nested():
+                tx = Transaction(
+                    merchant_name=canonical.merchant_name,
+                    total_amount=canonical.total_amount,
+                    currency=canonical.currency,
+                    date=tx_date,
+                    is_manual=False,
+                    type="expense",
+                    uploaded_by=user_id,
+                    budget_id=budget_id,
+                    import_hash=content_hash,
+                    note=f"Lidl Plus #{ticket_id}",
                 )
-            )
+                session.add(tx)
+                session.flush()  # Persist the receipt and all its lines in one transaction.
+
+                scan = ReceiptScan(
+                    transaction_id=tx.id or 0,
+                    image_path=None,
+                    status=ScanStatus.NEEDS_REVIEW.value if needs_review else ScanStatus.CATEGORIZATION_OK.value,
+                    processed_via="lidl_plus_v3",
+                    content_hash=content_hash,
+                    needs_review=needs_review,
+                    validation_message=canonical.get("validation_error"),
+                )
+                session.add(scan)
+                session.flush()
+
+                for item_raw in receipt_dict.get("items", []):
+                    cat_name = str(item_raw.get("category") or "").strip().lower()
+                    cat_id = cat_name_to_id.get(cat_name) if cat_name else None
+                    orig = item_raw.get("original_price")
+                    fin = item_raw.get("final_price")
+                    session.add(
+                        TransactionLine(
+                            name=str(item_raw.get("name") or "Pozycja"),
+                            price=quantize_unit_price(item_raw.get("price", 0)),
+                            quantity=quantize_quantity(item_raw.get("quantity", 1)),
+                            category_id=cat_id,
+                            category_source=item_raw.get("category_source"),
+                            transaction_id=tx.id,
+                            original_price=quantize_unit_price(orig) if orig is not None else None,
+                            discount_total=quantize_money(item_raw.get("discount_total", 0)),
+                            final_price=quantize_unit_price(fin) if fin is not None else None,
+                            is_adjustment=bool(item_raw.get("is_adjustment", False)),
+                        )
+                    )
+
+                session.add(
+                    build_source_record(
+                        budget_id=budget_id,
+                        transaction_id=tx.id,
+                        receipt_scan_id=scan.id,
+                        connection_id=connection_id,
+                        source_type=SourceType.MERCHANT_API,
+                        provider="lidl_plus",
+                        external_id=ticket_id,
+                        canonical_hash=content_hash,
+                        adapter_version="lidl_plus_v3",
+                        quality="1.00",
+                        raw_payload_policy=RawPayloadPolicy.CANONICAL_ONLY,
+                    )
+                )
+                session.flush()
+        except IntegrityError:
+            if find_existing_source_record(
+                session,
+                budget_id=budget_id,
+                provider="lidl_plus",
+                external_id=ticket_id,
+                canonical_hash=content_hash,
+            ):
+                return False, True
+            raise
 
         session.commit()
         return True, False
@@ -500,7 +543,7 @@ class ConnectionService:
             try:
                 raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
                 imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
-                    session, budget_id, user.id or 0, ticket_id, raw_ticket
+                    session, budget_id, user.id or 0, ticket_id, raw_ticket, connection_id=conn.id
                 )
                 if imported:
                     imported_count += 1

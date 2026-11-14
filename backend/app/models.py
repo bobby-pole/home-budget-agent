@@ -4,11 +4,11 @@ from decimal import Decimal
 from typing import Any, List, Optional
 from datetime import date, datetime, timezone
 from pydantic import field_validator
-from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, event, select, text, update, Boolean
+from sqlalchemy import UniqueConstraint, Index, String, Column, JSON, Numeric, DateTime, event, select, text, update, Boolean
 from sqlmodel import Field, Relationship, SQLModel, col
 from sqlmodel._compat import SQLModelConfig
 
-from app.money import MoneyDecimal, QuantityDecimal, UnitPriceDecimal, quantize_money
+from app.money import MoneyDecimal, QuantityDecimal, ScoreDecimal, UnitPriceDecimal, quantize_money
 
 
 def ensure_tz_aware(v: Any) -> Optional[datetime]:
@@ -75,6 +75,21 @@ class TransactionStatus(str, Enum):
     CLEARED = "cleared"
     UNCLEARED = "uncleared"
     PENDING = "pending"
+
+
+class SourceType(str, Enum):
+    MERCHANT_API = "MERCHANT_API"
+    E_RECEIPT = "E_RECEIPT"
+    BANK_CSV = "BANK_CSV"
+    OCR_PHOTO = "OCR_PHOTO"
+    MANUAL = "MANUAL"
+
+
+class RawPayloadPolicy(str, Enum):
+    NONE = "none"
+    EPHEMERAL_IMAGE = "ephemeral_image"
+    RETAINED_IMAGE = "retained_image"
+    CANONICAL_ONLY = "canonical_only"
 
 
 # ─── User ─────────────────────────────────────────────────────────────────────
@@ -321,6 +336,10 @@ class Transaction(TransactionBase, table=True):
         back_populates="transfers_in",
         sa_relationship_kwargs={"foreign_keys": "[Transaction.transfer_id]"}
     )
+    source_records: List["SourceRecord"] = Relationship(
+        back_populates="transaction",
+        sa_relationship_kwargs={"lazy": "selectin", "passive_deletes": True},
+    )
 
 
 # ─── ReceiptScan ──────────────────────────────────────────────────────────────
@@ -334,6 +353,7 @@ class ReceiptScan(SQLModel, table=True):
     status: str = Field(
         sa_column=Column(String, index=True, nullable=False, default=ScanStatus.QUEUED.value),
     )
+    processed_via: Optional[str] = Field(default=None)
     error_message: Optional[str] = Field(default=None)
     content_hash: Optional[str] = Field(default=None, index=True)
     keep_image: bool = Field(default=False)
@@ -348,6 +368,71 @@ class ReceiptScan(SQLModel, table=True):
     )
 
     transaction: Optional[Transaction] = Relationship(back_populates="receipt_scan")
+    source_records: List["SourceRecord"] = Relationship(
+        back_populates="receipt_scan",
+        sa_relationship_kwargs={"lazy": "selectin", "passive_deletes": True},
+    )
+
+
+# ─── SourceRecord (Provenance & Idempotency) ─────────────────────────────────
+
+class SourceRecord(SQLModel, table=True):
+    """Immutable provenance and idempotency anchor for every ingested or manual financial record."""
+
+    __tablename__: str = "source_record"  # type: ignore
+    __table_args__ = (
+        Index(
+            "uq_source_record_budget_provider_external_id",
+            "budget_id",
+            "provider",
+            "external_id",
+            unique=True,
+            sqlite_where=text("external_id IS NOT NULL"),
+            postgresql_where=text("external_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_source_record_budget_canonical_hash",
+            "budget_id",
+            "canonical_hash",
+            unique=True,
+            sqlite_where=text("canonical_hash IS NOT NULL"),
+            postgresql_where=text("canonical_hash IS NOT NULL"),
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    budget_id: int = Field(foreign_key="budget.id", index=True)
+    transaction_id: Optional[int] = Field(
+        default=None, foreign_key="transaction.id", index=True, ondelete="CASCADE"
+    )
+    receipt_scan_id: Optional[int] = Field(
+        default=None, foreign_key="receiptscan.id", index=True, ondelete="SET NULL"
+    )
+    connection_id: Optional[int] = Field(
+        default=None, foreign_key="external_receipt_connection.id", index=True, ondelete="SET NULL"
+    )
+    source_type: SourceType = Field(sa_column=Column(String, index=True, nullable=False))
+    provider: str = Field(index=True)
+    external_id: Optional[str] = Field(default=None)
+    canonical_hash: Optional[str] = Field(default=None)
+    adapter_version: str = Field(default="1.0")
+    acquired_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    quality: Optional[ScoreDecimal] = Field(default=None, sa_type=Numeric(5, 4))  # type: ignore[arg-type]
+    raw_payload_policy: RawPayloadPolicy = Field(
+        default=RawPayloadPolicy.NONE,
+        sa_column=Column(String, nullable=False, server_default=RawPayloadPolicy.NONE.value),
+    )
+
+    transaction: Optional[Transaction] = Relationship(back_populates="source_records")
+    receipt_scan: Optional[ReceiptScan] = Relationship(back_populates="source_records")
+
+    @field_validator("acquired_at", mode="before")
+    @classmethod
+    def validate_acquired_at_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
 
 
 # ─── ScanUsageLog (Demo Rate Limiting & Abuse Prevention) ─────────────────────
@@ -618,9 +703,26 @@ class TransactionLineRead(TransactionLineBase):
     id: int
 
 
+class SourceRecordRead(SQLModel):
+    id: int
+    budget_id: int
+    transaction_id: Optional[int] = None
+    receipt_scan_id: Optional[int] = None
+    connection_id: Optional[int] = None
+    source_type: SourceType
+    provider: str
+    external_id: Optional[str] = None
+    canonical_hash: Optional[str] = None
+    adapter_version: str
+    acquired_at: datetime
+    quality: Optional[ScoreDecimal] = None
+    raw_payload_policy: RawPayloadPolicy
+
+
 class ReceiptScanRead(SQLModel):
     id: int
     status: str
+    processed_via: Optional[str] = None
     needs_review: bool = False
     image_path: Optional[str] = None
     content_hash: Optional[str] = None
@@ -641,6 +743,7 @@ class TransactionRead(TransactionBase):
     uploaded_by: Optional[int] = None
     tags: List["TagRead"] = []
     receipt_scan: Optional[ReceiptScanRead] = None
+    source_records: List[SourceRecordRead] = []
 
 
 class TransactionCreate(TransactionBase):
