@@ -21,7 +21,10 @@ import type {
   ConnectionSyncNowResponse,
   ConnectionDisconnectResponse,
   ConnectionOAuthStartResponse,
-  ConnectionOAuthCallbackRequest
+  ConnectionOAuthCallbackRequest,
+  ReconciliationActionResponse,
+  ReconciliationListResponse,
+  ReconciliationStatus
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n";
@@ -411,6 +414,49 @@ export const api = {
 
   disconnectConnection: async (id: number): Promise<ConnectionDisconnectResponse> => {
     const response = await apiClient.post<ConnectionDisconnectResponse>(`/connections/${id}/disconnect`);
+    return response.data;
+  },
+
+  // --- RECONCILIATION ---
+
+  getReconciliationCandidates: async (
+    status?: ReconciliationStatus
+  ): Promise<ReconciliationListResponse> => {
+    const response = await apiClient.get<ReconciliationListResponse>("/reconciliation/candidates", {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  refreshReconciliationCandidates: async (
+    status?: ReconciliationStatus
+  ): Promise<ReconciliationListResponse> => {
+    const response = await apiClient.post<ReconciliationListResponse>(
+      "/reconciliation/refresh",
+      undefined,
+      { params: status ? { status } : undefined }
+    );
+    return response.data;
+  },
+
+  acceptReconciliation: async (linkId: number): Promise<ReconciliationActionResponse> => {
+    const response = await apiClient.post<ReconciliationActionResponse>(
+      `/reconciliation/${linkId}/accept`
+    );
+    return response.data;
+  },
+
+  rejectReconciliation: async (linkId: number): Promise<ReconciliationActionResponse> => {
+    const response = await apiClient.post<ReconciliationActionResponse>(
+      `/reconciliation/${linkId}/reject`
+    );
+    return response.data;
+  },
+
+  unlinkReconciliation: async (linkId: number): Promise<ReconciliationActionResponse> => {
+    const response = await apiClient.post<ReconciliationActionResponse>(
+      `/reconciliation/${linkId}/unlink`
+    );
     return response.data;
   },
 };

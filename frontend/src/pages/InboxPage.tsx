@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Inbox, Loader2, Sparkles, AlertCircle, Plus } from "lucide-react";
+import { Inbox, Loader2, Sparkles, AlertCircle, Plus, GitCompareArrows, Receipt } from "lucide-react";
 import { api } from "@/lib/api";
 import { PendingVerificationList } from "@/components/inbox/PendingVerificationList";
+import { ReconciliationPanel } from "@/components/inbox/ReconciliationPanel";
 import { VerificationCard } from "@/components/inbox/VerificationCard";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,6 +15,7 @@ import { t } from "@/lib/i18n";
 
 export function InboxPage() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"receipts" | "reconciliation">("receipts");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const isMobile = useIsMobile();
   const { setQuickEntryOpen, renderModals } = useTransactionActions();
@@ -22,6 +25,13 @@ export function InboxPage() {
     queryFn: api.getInbox,
     refetchInterval: 5000,
   });
+
+  const { data: reconciliationSummary } = useQuery({
+    queryKey: ["reconciliation", "pending"],
+    queryFn: () => api.getReconciliationCandidates("pending"),
+  });
+
+  const pendingReconciliationCount = reconciliationSummary?.pending_count ?? 0;
 
 
   // Decide which transaction to show
@@ -87,6 +97,47 @@ export function InboxPage() {
         </div>
       )}
 
+      {(!isMobile || !selectedId) && (
+        <div className="flex items-center gap-2 px-4 md:px-8 py-2.5 border-b bg-background/40 shrink-0">
+          <Button
+            variant={activeTab === "receipts" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("receipts")}
+            className="gap-2"
+          >
+            <Receipt className="h-4 w-4" />
+            <span>{t("inbox.tabs.receipts")}</span>
+            {transactions.length > 0 && (
+              <Badge variant={activeTab === "receipts" ? "secondary" : "outline"} className="text-[10px] h-4 px-1.5">
+                {transactions.length}
+              </Badge>
+            )}
+          </Button>
+          <Button
+            variant={activeTab === "reconciliation" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("reconciliation")}
+            className="gap-2"
+          >
+            <GitCompareArrows className="h-4 w-4" />
+            <span>{t("inbox.tabs.reconciliation")}</span>
+            {pendingReconciliationCount > 0 && (
+              <Badge
+                variant={activeTab === "reconciliation" ? "secondary" : "outline"}
+                className="text-[10px] h-4 px-1.5"
+              >
+                {pendingReconciliationCount}
+              </Badge>
+            )}
+          </Button>
+        </div>
+      )}
+
+      {activeTab === "reconciliation" ? (
+        <div className={cn("flex-1 flex overflow-hidden bg-muted/20", isMobile ? "p-4" : "p-8")}>
+          <ReconciliationPanel />
+        </div>
+      ) : (
       <div className={cn(
         "flex-1 flex overflow-hidden bg-muted/20",
         isMobile ? "p-0" : "p-8 gap-8"
@@ -152,6 +203,7 @@ export function InboxPage() {
           </div>
         )}
       </div>
+      )}
 
       {renderModals()}
     </div>

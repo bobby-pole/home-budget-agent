@@ -245,7 +245,81 @@
       }
     },
     "no_preview": "Preview unavailable",
-    "no_visual_rep": "Structural files (e-Receipt) do not have a visual representation."
+    "no_visual_rep": "Structural files (e-Receipt) do not have a visual representation.",
+    "tabs": {
+      "receipts": "Receipt scans",
+      "reconciliation": "Bank reconciliation"
+    },
+    "reconciliation": {
+      "title": "Safe receipt-bank reconciliation",
+      "subtitle": "Review suggested matches before linking bank entries with receipts. Nothing is merged automatically.",
+      "refresh_button": "Refresh matches",
+      "refresh_success": "Reconciliation candidates refreshed",
+      "load_error": "Failed to load reconciliation candidates",
+      "action_error": "Could not update reconciliation link",
+      "accept_button": "Accept match",
+      "reject_button": "Reject",
+      "unlink_button": "Unlink",
+      "accept_success": "Match confirmed and linked",
+      "reject_success": "Suggestion rejected",
+      "unlink_success": "Match unlinked",
+      "empty_title": "No matches in this view",
+      "empty_description": "Import a bank statement (CSV/PDF) and add receipts to review proposed links safely.",
+      "bank_side_label": "Bank entry",
+      "receipt_side_label": "Receipt / Manual entry",
+      "no_account": "Unassigned account",
+      "score_label": "Confidence",
+      "reasons_title": "Why this match was proposed",
+      "ambiguity_warning": "Multiple entries ({count}) with the same amount on this day — verify the merchant and description before linking.",
+      "filters": {
+        "pending": "Pending",
+        "accepted": "Linked",
+        "rejected": "Rejected",
+        "unlinked": "Unlinked",
+        "all": "All"
+      },
+      "status": {
+        "pending": "Pending review",
+        "accepted": "Linked",
+        "rejected": "Rejected",
+        "unlinked": "Unlinked"
+      },
+      "match_kind": {
+        "exact": "Exact match",
+        "refund": "Refund match",
+        "split_payment": "Split payment"
+      },
+      "confidence": {
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
+      },
+      "signals": {
+        "amount_exact": "Exact amount match",
+        "amount_exact_rounding": "Amount match (±0.01 rounding)",
+        "refund_amount_exact": "Exact refund amount match",
+        "refund_amount_partial": "Partial refund amount (< original total)",
+        "split_payment_pair_sum": "Bank installments sum to receipt total",
+        "split_payment_remainder": "Covers remaining unpaid receipt balance",
+        "split_payment_partial": "Partial payment toward receipt total",
+        "date_same_day": "Same calendar date",
+        "date_within_1d": "Posted within 1 day",
+        "date_within_2d": "Posted within 2 days",
+        "date_settlement_lag": "Card settlement lag (3–5 days)",
+        "refund_date_recent": "Refund settled within 7 days",
+        "refund_date_window": "Refund settled within 30 days",
+        "merchant_strong_match": "Strong merchant match",
+        "merchant_partial_match": "Partial merchant similarity",
+        "merchant_mismatch": "Merchant names do not match closely",
+        "account_exact_match": "Same account",
+        "account_mismatch": "Different accounts",
+        "account_unassigned": "Receipt has no account yet (will inherit bank account)",
+        "source_receipt_unpaired": "Unpaired verified receipt source",
+        "source_manual_unpaired": "Unpaired manual transaction",
+        "source_split_continuation": "Additional payment on partially linked receipt",
+        "same_day_equal_amount_ambiguity": "Same-day equal-amount ambiguity detected"
+      }
+    }
   },
   "transactions": {
     "page_title": "Transaction History",

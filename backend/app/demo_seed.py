@@ -398,6 +398,11 @@ def clean_demo_data(session: Session, user: User) -> None:
             budget_ids.append(b.id)
 
     for budget_id in budget_ids:
+        if budget_id is None:
+            continue
+        from .reconciliation_service import cleanup_reconciliation_for_budget
+
+        cleanup_reconciliation_for_budget(session, budget_id=budget_id)
         session.exec(delete(SourceRecord).where(col(SourceRecord.budget_id) == budget_id))
         transactions = session.exec(select(Transaction).where(col(Transaction.budget_id) == budget_id)).all()
         t_ids = [t.id for t in transactions if t.id is not None]
