@@ -1,0 +1,17 @@
+{
+  "id": "SYNTHETIC-LIDL-CONF-PARTIAL-002",
+  "date": "2026-04-13T11:30:00Z",
+  "currency": "PLN",
+  "totalAmount": "6,50",
+  "totalAmountNumeric": 6.50,
+  "itemsLine": [
+    {
+      "description": "JOGURT NATURALNY",
+      "quantity": "2",
+      "currentUnitPrice": "3,25",
+      "extendedAmount": "6,50",
+      "taxGroupName": "A",
+      "discounts": []
+    }
+  ]
+}

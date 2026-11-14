@@ -1,0 +1,20 @@
+{
+  "id": "SYNTHETIC-LIDL-CONF-DRIFT-003",
+  "date": "2026-04-14T14:00:00Z",
+  "storeCode": "PL9999",
+  "currency": "PLN",
+  "totalAmount": "5,00",
+  "totalAmountNumeric": 5.00,
+  "experimentalLoyaltyPoints": 42,
+  "v4TelemetryFlag": true,
+  "itemsLine": [
+    {
+      "description": "WODA MINERALNA 1.5L",
+      "quantity": "2",
+      "currentUnitPrice": "2,50",
+      "extendedAmount": "5,00",
+      "taxGroupName": "C",
+      "discounts": []
+    }
+  ]
+}

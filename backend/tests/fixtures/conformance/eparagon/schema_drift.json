@@ -1,0 +1,34 @@
+{
+  "dokument": {
+    "naglowek": {
+      "dataJPK": "2026-04-14T15:00:00Z"
+    },
+    "podmiot1": {
+      "NIP": "0000000000",
+      "nazwaPod": "Apteka Testowa"
+    },
+    "unexpectedWrapperExtension": {
+      "version": "2.99"
+    },
+    "paragon": {
+      "nrDok": "SYN-EP-0003",
+      "zakSprzed": "2026-04-14T15:00:00Z",
+      "podsum": {
+        "waluta": "PLN"
+      },
+      "total": {
+        "zaplZwrot": 800
+      },
+      "experimentalVendorTag": "drift",
+      "pozycja": [
+        {
+          "towar": {
+            "nazwa": "WITAMINA C",
+            "cena": 800,
+            "ilosc": "1"
+          }
+        }
+      ]
+    }
+  }
+}

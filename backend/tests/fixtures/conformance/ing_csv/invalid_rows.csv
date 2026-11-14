@@ -1,0 +1,4 @@
+Data transakcji;Dane kontrahenta;Tytuł;Kwota transakcji (waluta);Waluta
+2026-04-15;Poprawny Kontrahent;Zakup poprawny;-10,00;PLN
+2026-04-15;Kontrahent Zly Format;Niepoprawna kwota;NOT_A_NUMBER;PLN
+invalid-date;Kontrahent Zla Data;Niepoprawna data;-15,00;PLN

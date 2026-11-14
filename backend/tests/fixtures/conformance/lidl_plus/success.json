@@ -1,0 +1,34 @@
+{
+  "id": "SYNTHETIC-LIDL-CONF-001",
+  "date": "2026-04-12T10:15:00Z",
+  "storeCode": "PL9999",
+  "store": {
+    "address": "ul. Testowa 1, 00-001 Warszawa"
+  },
+  "currency": "PLN",
+  "totalAmount": "12,98",
+  "totalAmountNumeric": 12.98,
+  "itemsLine": [
+    {
+      "description": "CHLEB WIEJSKI 500G",
+      "quantity": "1",
+      "currentUnitPrice": "4,99",
+      "extendedAmount": "4,99",
+      "taxGroupName": "A",
+      "discounts": []
+    },
+    {
+      "description": "MLEKO 3.2% 1L",
+      "quantity": "2",
+      "currentUnitPrice": "4,50",
+      "extendedAmount": "9,00",
+      "taxGroupName": "A",
+      "discounts": [
+        {
+          "description": "Lidl Plus Rabat",
+          "amount": "-1,01"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "dokument": {
+    "podmiot1": {},
+    "paragon": {
+      "podsum": {
+        "waluta": "PLN"
+      },
+      "total": {
+        "zaplZwrot": 550
+      },
+      "pozycja": [
+        {
+          "towar": {
+            "nazwa": "BULKA PSZENNA",
+            "cena": 275,
+            "ilosc": "2"
+          }
+        }
+      ]
+    }
+  }
+}
