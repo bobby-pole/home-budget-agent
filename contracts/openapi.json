@@ -3029,6 +3029,67 @@
         }
       }
     },
+    "/api/connections/{connection_id}/oauth/desktop-login": {
+      "post": {
+        "summary": "Desktop Login Receipt Connection Oauth",
+        "description": "Run trusted-local interactive desktop OAuth capture without manual callback copying.",
+        "operationId": "desktop_login_receipt_connection_oauth_api_connections__connection_id__oauth_desktop_login_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalReceiptConnectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connections/{connection_id}/sync-now": {
       "post": {
         "summary": "Sync Now Receipt Connection",
@@ -3801,6 +3862,21 @@
           "environment": {
             "type": "string",
             "title": "Environment"
+          },
+          "import_worker_role": {
+            "type": "string",
+            "title": "Import Worker Role",
+            "default": "central_vps"
+          },
+          "trusted_local": {
+            "type": "boolean",
+            "title": "Trusted Local",
+            "default": false
+          },
+          "desktop_oauth_available": {
+            "type": "boolean",
+            "title": "Desktop Oauth Available",
+            "default": false
           }
         },
         "type": "object",

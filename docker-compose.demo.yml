@@ -11,6 +11,9 @@ services:
     volumes:
       - ./data-demo:/app/data
     restart: unless-stopped
+    environment:
+      - IMPORT_WORKER_ROLE=central_vps
+      - IMPORT_WORKER_ENABLED=false
     env_file:
       - .env
     networks:

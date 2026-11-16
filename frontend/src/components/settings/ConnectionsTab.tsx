@@ -45,7 +45,22 @@ export function ConnectionsTab() {
     provider: "lidl",
   });
   const [oauthSession, setOauthSession] = useState<ConnectionOAuthStartResponse | null>(null);
+  const [desktopOAuthConnectionId, setDesktopOAuthConnectionId] = useState<number | null>(null);
   const [callbackInput, setCallbackInput] = useState("");
+
+  const hasConfigEndpoint = typeof api.getAppConfig === "function";
+  const { data: appConfig, isLoading: isConfigLoading } = useQuery({
+    queryKey: ["app-config"],
+    queryFn: async () => (hasConfigEndpoint ? api.getAppConfig() : null),
+    enabled: hasConfigEndpoint,
+    staleTime: 60_000,
+  });
+
+  const isTrustedLocal = !hasConfigEndpoint
+    ? true
+    : Boolean(!isConfigLoading && appConfig?.trusted_local);
+  const showCentralVpsNotice = Boolean(hasConfigEndpoint && !isConfigLoading && appConfig && !appConfig.trusted_local);
+  const isDesktopOAuthAvailable = Boolean(isTrustedLocal && appConfig?.desktop_oauth_available);
 
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ["connections"],
@@ -70,6 +85,7 @@ export function ConnectionsTab() {
   const startOAuthMutation = useMutation({
     mutationFn: (id: number) => api.startConnectionOAuth(id),
     onSuccess: (data) => {
+      setDesktopOAuthConnectionId(null);
       setOauthSession(data);
       setCallbackInput("");
     },
@@ -82,10 +98,23 @@ export function ConnectionsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
       setOauthSession(null);
+      setDesktopOAuthConnectionId(null);
       setCallbackInput("");
       toast.success(t("settings.connections.toast_oauth_success"));
     },
-    onError: () => toast.error(t("common.error")),
+    onError: () => toast.error(t("settings.connections.toast_oauth_error")),
+  });
+
+  const desktopOAuthMutation = useMutation({
+    mutationFn: (id: number) => api.desktopLoginConnectionOAuth(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      setOauthSession(null);
+      setDesktopOAuthConnectionId(null);
+      setCallbackInput("");
+      toast.success(t("settings.connections.toast_oauth_success"));
+    },
+    onError: () => toast.error(t("settings.connections.toast_oauth_error")),
   });
 
   const syncNowMutation = useMutation({
@@ -231,6 +260,21 @@ export function ConnectionsTab() {
         </CardContent>
       </Card>
 
+      {/* Privacy Boundary Notice when running on Central VPS / Demo */}
+      {showCentralVpsNotice && (
+        <Card className="border-sky-500/30 bg-sky-50/50 dark:bg-sky-950/10">
+          <CardContent className="pt-4 pb-4 flex gap-3 text-xs text-muted-foreground">
+            <ShieldCheck className="size-5 text-sky-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-medium text-foreground">
+                {t("settings.connections.trusted_local_required_title")}
+              </div>
+              <p>{t("settings.connections.trusted_local_required_desc")}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
           {t("common.loading")}
@@ -317,8 +361,16 @@ export function ConnectionsTab() {
                     <Button
                       size="sm"
                       variant="default"
-                      disabled={startOAuthMutation.isPending}
-                      onClick={() => startOAuthMutation.mutate(conn.id)}
+                      disabled={!isTrustedLocal || startOAuthMutation.isPending || desktopOAuthMutation.isPending}
+                      onClick={() => {
+                        if (isDesktopOAuthAvailable) {
+                          setOauthSession(null);
+                          setCallbackInput("");
+                          setDesktopOAuthConnectionId(conn.id);
+                        } else {
+                          startOAuthMutation.mutate(conn.id);
+                        }
+                      }}
                       className="gap-1.5"
                     >
                       <KeyRound className="size-3.5" />
@@ -329,7 +381,7 @@ export function ConnectionsTab() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={conn.status !== "active" || !conn.has_token || syncNowMutation.isPending}
+                    disabled={!isTrustedLocal || conn.status !== "active" || !conn.has_token || syncNowMutation.isPending}
                     onClick={() => syncNowMutation.mutate(conn.id)}
                     className="gap-1.5"
                   >
@@ -381,10 +433,11 @@ export function ConnectionsTab() {
 
       {/* Lidl Plus OAuth2 PKCE Modal */}
       <Dialog
-        open={Boolean(oauthSession)}
+        open={Boolean(oauthSession) || desktopOAuthConnectionId !== null}
         onOpenChange={(open) => {
           if (!open) {
             setOauthSession(null);
+            setDesktopOAuthConnectionId(null);
             setCallbackInput("");
           }
         }}
@@ -393,8 +446,54 @@ export function ConnectionsTab() {
           <DialogHeader>
             <DialogTitle>{t("settings.connections.oauth_modal_title")}</DialogTitle>
           </DialogHeader>
+          {desktopOAuthConnectionId !== null && !oauthSession && (
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                {t("settings.connections.oauth_desktop_desc")}
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  type="button"
+                  disabled={desktopOAuthMutation.isPending}
+                  onClick={() => desktopOAuthMutation.mutate(desktopOAuthConnectionId)}
+                  className="gap-2"
+                >
+                  <KeyRound className="size-4" />
+                  {desktopOAuthMutation.isPending
+                    ? t("settings.connections.oauth_desktop_logging_in_btn")
+                    : t("settings.connections.oauth_desktop_login_btn")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={desktopOAuthMutation.isPending || startOAuthMutation.isPending}
+                  onClick={() => startOAuthMutation.mutate(desktopOAuthConnectionId)}
+                >
+                  {t("settings.connections.oauth_manual_fallback_btn")}
+                </Button>
+              </div>
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setDesktopOAuthConnectionId(null);
+                    setCallbackInput("");
+                  }}
+                >
+                  {t("settings.connections.connect_modal_cancel")}
+                </Button>
+              </div>
+            </div>
+          )}
           {oauthSession && (
             <div className="space-y-4 py-2">
+              {!isDesktopOAuthAvailable && (
+                <p className="text-xs text-muted-foreground bg-muted/60 rounded-md p-2.5">
+                  {t("settings.connections.oauth_desktop_unavailable_hint")}
+                </p>
+              )}
               <div className="space-y-2 text-sm">
                 <p className="text-muted-foreground">{t("settings.connections.oauth_step1_desc")}</p>
                 <Button
@@ -427,6 +526,7 @@ export function ConnectionsTab() {
                   variant="outline"
                   onClick={() => {
                     setOauthSession(null);
+                    setDesktopOAuthConnectionId(null);
                     setCallbackInput("");
                   }}
                 >

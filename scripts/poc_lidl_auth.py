@@ -105,59 +105,19 @@ def _load_session() -> dict[str, Any]:
 
 
 def _try_playwright_login(authorize_url: str, redirect_scheme: str = "com.lidlplus.app://") -> str | None:
-    """Attempt to capture the custom-scheme callback automatically via Playwright + CDP."""
-    try:
-        from playwright.sync_api import sync_playwright  # type: ignore
-    except ImportError:
-        return None
+    """Attempt to capture the custom-scheme callback automatically via shared Playwright + CDP helper."""
+    from app.adapters.lidl_desktop_oauth import (
+        DesktopOAuthCancelledError,
+        DesktopOAuthUnavailableError,
+        capture_lidl_oauth_callback,
+    )
 
-    captured_url: list[str] = []
     print("Opening interactive Chromium window via Playwright...")
     print("Log into your Lidl Plus account in the browser window. It will close automatically upon redirect.")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            args=["--disable-blink-features=AutomationControlled"],
-        )
-        context = browser.new_context(locale="pl-PL")
-        page = context.new_page()
-
-        # Listen on both Playwright requests and CDP Network responses (302 Location header)
-        cdp = context.new_cdp_session(page)
-        cdp.send("Network.enable")
-
-        def on_cdp_response(params: dict[str, Any]) -> None:
-            response = params.get("response", {})
-            headers = response.get("headers", {})
-            for k, v in headers.items():
-                if k.lower() == "location" and isinstance(v, str) and v.startswith(redirect_scheme):
-                    captured_url.append(v)
-
-        def on_cdp_request(params: dict[str, Any]) -> None:
-            req_url = params.get("request", {}).get("url", "")
-            if isinstance(req_url, str) and req_url.startswith(redirect_scheme):
-                captured_url.append(req_url)
-            redirect_resp = params.get("redirectResponse", {})
-            headers = redirect_resp.get("headers", {})
-            for k, v in headers.items():
-                if k.lower() == "location" and isinstance(v, str) and v.startswith(redirect_scheme):
-                    captured_url.append(v)
-
-        cdp.on("Network.responseReceived", on_cdp_response)
-        cdp.on("Network.requestWillBeSent", on_cdp_request)
-
-        def handle_request(request: Any) -> None:
-            if request.url.startswith(redirect_scheme):
-                captured_url.append(request.url)
-
-        page.on("request", handle_request)
-        page.goto(authorize_url)
-        while not captured_url:
-            page.wait_for_timeout(400)
-            if page.is_closed():
-                break
-        browser.close()
-    return captured_url[0] if captured_url else None
+    try:
+        return capture_lidl_oauth_callback(authorize_url, redirect_scheme=redirect_scheme)
+    except (DesktopOAuthUnavailableError, DesktopOAuthCancelledError):
+        return None
 
 
 def _connection_for_target(session: Any, target: dict[str, int]) -> Any:

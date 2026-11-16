@@ -7,10 +7,12 @@ import type { ExternalReceiptConnectionRead } from "@/client";
 
 vi.mock("@/lib/api", () => ({
   api: {
+    getAppConfig: vi.fn(),
     getConnections: vi.fn(),
     createConnection: vi.fn(),
     startConnectionOAuth: vi.fn(),
     completeConnectionOAuth: vi.fn(),
+    desktopLoginConnectionOAuth: vi.fn(),
     syncNowConnection: vi.fn(),
     reconnectConnection: vi.fn(),
     disconnectConnection: vi.fn(),
@@ -54,6 +56,13 @@ const mockReauthConnection: ExternalReceiptConnectionRead = {
 describe("ConnectionsTab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getAppConfig).mockResolvedValue({
+      demo_mode: false,
+      environment: "development",
+      import_worker_role: "trusted_local",
+      trusted_local: true,
+      desktop_oauth_available: false,
+    });
   });
 
   it("renders empty state when no connections configured", async () => {
@@ -144,8 +153,6 @@ describe("ConnectionsTab", () => {
       expect(api.reconnectConnection).toHaveBeenCalledWith(2);
     });
   });
-});
-
 
 it("selects a store without accepting a free-text provider", async () => {
   vi.mocked(api.getConnections).mockResolvedValue([]);
@@ -167,4 +174,70 @@ it("prevents adding an existing provider and selects the remaining store", async
   fireEvent.click(screen.getByRole("button", { name: /Dodaj połączenie sklepu/i }));
   expect(screen.getByRole("radio", { name: /Lidl Plus/ })).toBeDisabled();
   expect(screen.getByRole("radio", { name: "Biedronka" })).toBeChecked();
+});
+
+it("offers 1-click desktop OAuth login without manual callback copying when available", async () => {
+  vi.mocked(api.getAppConfig).mockResolvedValue({
+    demo_mode: false,
+    environment: "development",
+    import_worker_role: "trusted_local",
+    trusted_local: true,
+    desktop_oauth_available: true,
+  });
+  vi.mocked(api.getConnections).mockResolvedValue([
+    { ...mockReauthConnection, id: 7, provider: "lidl" },
+  ]);
+  vi.mocked(api.desktopLoginConnectionOAuth).mockResolvedValue({
+    ...mockActiveConnection,
+    id: 7,
+  });
+
+  render(<ConnectionsTab />);
+  const authorizeBtn = await screen.findByRole("button", { name: /Zaloguj z Lidl Plus/i });
+  fireEvent.click(authorizeBtn);
+
+  const desktopBtn = await screen.findByRole("button", { name: /Zaloguj w oknie desktopowym/i });
+  fireEvent.click(desktopBtn);
+
+  await waitFor(() => {
+    expect(api.desktopLoginConnectionOAuth).toHaveBeenCalledWith(7);
+  });
+});
+
+it("shows privacy boundary notice and disables authorization/sync on central VPS", async () => {
+  vi.mocked(api.getAppConfig).mockResolvedValue({
+    demo_mode: false,
+    environment: "production",
+    import_worker_role: "central_vps",
+    trusted_local: false,
+    desktop_oauth_available: false,
+  });
+  vi.mocked(api.getConnections).mockResolvedValue([
+    mockActiveConnection,
+    { ...mockReauthConnection, id: 9, provider: "lidl" },
+  ]);
+
+  render(<ConnectionsTab />);
+  expect(await screen.findByText(/Ograniczenie prywatności/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Zaloguj z Lidl Plus/i })).toBeDisabled();
+  for (const syncBtn of screen.getAllByRole("button", { name: /Synchronizuj teraz/i })) {
+    expect(syncBtn).toBeDisabled();
+  }
+});
+
+it("fails closed (buttons disabled, no false central-VPS banner) while appConfig is loading", async () => {
+  vi.mocked(api.getAppConfig).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.getConnections).mockResolvedValue([
+    mockActiveConnection,
+    { ...mockReauthConnection, id: 11, provider: "lidl" },
+  ]);
+
+  render(<ConnectionsTab />);
+  expect((await screen.findAllByText("Lidl Plus")).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/Ograniczenie prywatności/i)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Zaloguj z Lidl Plus/i })).toBeDisabled();
+  for (const syncBtn of screen.getAllByRole("button", { name: /Synchronizuj teraz/i })) {
+    expect(syncBtn).toBeDisabled();
+  }
+});
 });

@@ -654,6 +654,12 @@ class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
     consented_at: Optional[datetime] = Field(default=None)
     encrypted_refresh_token: Optional[str] = Field(default=None)
     encryption_key_id: Optional[str] = Field(default=None)
+    encrypted_oauth_attempt: Optional[str] = Field(default=None)
+    oauth_attempt_key_id: Optional[str] = Field(default=None)
+    oauth_attempt_expires_at: Optional[datetime] = Field(
+        default=None,
+        sa_column=Column(UTCDateTime(), nullable=True),
+    )
 
     last_success_at: Optional[datetime] = Field(default=None)
     next_sync_at: Optional[datetime] = Field(default=None)
@@ -1214,6 +1220,9 @@ class AppStatusRead(SQLModel):
 class AppConfigRead(SQLModel):
     demo_mode: bool
     environment: str
+    import_worker_role: str = "central_vps"
+    trusted_local: bool = False
+    desktop_oauth_available: bool = False
 
 # ─── SQLAlchemy Events ────────────────────────────────────────────────────────
 

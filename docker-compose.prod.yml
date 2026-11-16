@@ -9,6 +9,8 @@ services:
     restart: unless-stopped
     environment:
       - ENVIRONMENT=production
+      - IMPORT_WORKER_ROLE=central_vps
+      - IMPORT_WORKER_ENABLED=false
     env_file:
       - .env
     networks:

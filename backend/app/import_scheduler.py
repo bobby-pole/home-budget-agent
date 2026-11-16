@@ -94,14 +94,21 @@ def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
 
 def is_trusted_worker_environment(role: Optional[str] = None) -> bool:
     """Return True only when executing inside the owner-approved trusted local boundary."""
-    resolved_role = (role if role is not None else settings.IMPORT_WORKER_ROLE).strip().lower()
-    return resolved_role == TRUSTED_WORKER_ROLE
+    if role is not None:
+        return role.strip().lower() == TRUSTED_WORKER_ROLE
+    if settings.DEMO_MODE or os.getenv("DEMO_MODE", "false").lower() == "true":
+        return False
+    return settings.resolve_import_worker_role() == TRUSTED_WORKER_ROLE
 
 
 def assert_trusted_worker_environment(role: Optional[str] = None) -> None:
     """Refuse to run credential-bearing merchant jobs on an untrusted/central VPS host."""
     if not is_trusted_worker_environment(role):
-        resolved_role = role if role is not None else settings.IMPORT_WORKER_ROLE
+        resolved_role = (
+            role.strip().lower()
+            if role is not None
+            else settings.resolve_import_worker_role()
+        )
         raise RuntimeError(
             f"Merchant import worker cannot run under IMPORT_WORKER_ROLE={resolved_role!r}; "
             f"requires {TRUSTED_WORKER_ROLE!r}."
