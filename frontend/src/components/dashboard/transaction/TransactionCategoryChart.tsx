@@ -10,7 +10,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import {
   addMoney,
   computeLineTotal,
@@ -66,7 +66,7 @@ export function TransactionCategoryChart({ lines, currency }: TransactionCategor
       if (catId !== 0 && categories) {
         const catObj = categories.find((c) => c.id === catId);
         if (catObj) {
-          name = CATEGORY_LABELS[catObj.name] || catObj.name;
+          name = getCategoryDisplayName(catObj);
         }
       }
       return {

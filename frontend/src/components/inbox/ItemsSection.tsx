@@ -31,7 +31,7 @@ import {
   toCents,
   type DecimalInput,
 } from "@/lib/money";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import type { CategoryRead } from "@/client";
 import type { VerificationFormValues } from "./VerificationCard";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -335,7 +335,7 @@ function ItemRow({
                         <span className="flex items-center gap-2">
                           <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
                           <span className="truncate max-w-[80px]">
-                            {cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}
+                            {getCategoryDisplayName(cat)}
                           </span>
                         </span>
                       </SelectItem>

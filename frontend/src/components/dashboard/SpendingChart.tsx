@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Loader2 } from "lucide-react";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 import { addMoney, toCents, toChartNumber } from "@/lib/money";
@@ -45,7 +45,7 @@ export function SpendingChart() {
     if (categoryId == null || !categories) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "package" };
     const cat = categories.find(c => c.id === categoryId);
     if (!cat) return { name: t("spending_chart.other_category"), color: "#9ca3af", icon: "package" };
-    const displayName = cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name;
+    const displayName = getCategoryDisplayName(cat);
     return { name: displayName, color: cat.color || "#9ca3af", icon: cat.icon || "package" };
   };
 

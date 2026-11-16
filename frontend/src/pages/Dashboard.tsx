@@ -13,7 +13,7 @@ import { RecentTransactionsList } from "@/components/dashboard/RecentTransaction
 import { AccountsWidget } from "@/components/dashboard/AccountsWidget";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 import { toCents, toChartNumber } from "@/lib/money";
@@ -68,7 +68,7 @@ export function Dashboard() {
     .filter(c => toCents(c.spent) > 0n)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
-      const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
+      const displayName = getCategoryDisplayName(cat ?? c.category_name);
       return {
         name: displayName,
         value: toChartNumber(c.spent),
@@ -82,7 +82,7 @@ export function Dashboard() {
     .filter(c => toCents(c.planned) > 0n)
     .map(c => {
       const cat = categories.find(cat => cat.id === c.category_id);
-      const displayName = CATEGORY_LABELS[cat?.name || ""] || (cat?.name ?? c.category_name);
+      const displayName = getCategoryDisplayName(cat ?? c.category_name);
       return {
         id: c.category_id,
         name: displayName,

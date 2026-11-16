@@ -19,7 +19,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { SectionGrid } from "../shared/SectionGrid";
 import type { TransactionFormInput } from "./schema";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { TagPicker } from "../shared/TagPicker";
 import { useWatch } from "react-hook-form";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -128,7 +128,7 @@ export function TransactionMetaSection({ control, hideCategory = false }: Transa
                     <SelectItem key={cat.id} value={cat.id.toString()}>
                       <span className="flex items-center gap-2">
                         <CategoryIcon name={cat.icon || "package"} className="size-4 shrink-0" />
-                        <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
+                        <span>{getCategoryDisplayName(cat)}</span>
                       </span>
                     </SelectItem>
                   ))}

@@ -343,7 +343,7 @@ async def test_demo_mode_ocr_mock(session: Session):
                     "name": "Mleko Świeże 3.2% 1L",
                     "price": 3.49,
                     "quantity": 2.0,
-                    "category": "Żywność i Supermarket",
+                    "category": "Food",
                     "category_source": "ai",
                     "original_price": 3.99,
                     "discount_total": -1.0,

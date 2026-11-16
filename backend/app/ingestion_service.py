@@ -23,6 +23,7 @@ from app.adapters.contracts import (
     TransactionAdapterResult,
     TransactionBatchAdapterResult,
 )
+from app.category_service import get_budget_categories
 from app.models import (
     Category,
     ReceiptScan,
@@ -92,10 +93,8 @@ def _categorize_receipt_dict_best_effort(
     user_id: int,
     categorize: bool,
 ) -> tuple[dict[str, Any], dict[str, int]]:
-    """Load budget/system categories and run cache-first AI categorization if requested."""
-    db_categories = session.exec(
-        select(Category).where((Category.budget_id == budget_id) | (Category.is_system))
-    ).all()
+    """Load budget categories and run cache-first AI categorization if requested."""
+    db_categories = get_budget_categories(session, budget_id)
     cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories if c.id is not None]
     cat_name_to_id = {c.name.lower(): c.id for c in db_categories if c.id is not None}
 
@@ -449,9 +448,7 @@ def ingest_transaction_batch(
             "summary": f"All {len(batch.items)} transactions already imported.",
         }
 
-    db_categories = session.exec(
-        select(Category).where((Category.budget_id == budget_id) | (Category.is_system))
-    ).all()
+    db_categories = get_budget_categories(session, budget_id)
     cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
     cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
     id_to_cat_name = {c.id: c.name for c in db_categories}

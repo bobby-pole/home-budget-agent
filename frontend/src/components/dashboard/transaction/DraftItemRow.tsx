@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
 export interface NewItemDraft {
@@ -88,7 +88,7 @@ export function DraftItemRow({
             <SelectItem key={cat.id} value={String(cat.id)}>
               <span className="flex items-center gap-2">
                 <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
-                <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
+                <span>{getCategoryDisplayName(cat)}</span>
               </span>
             </SelectItem>
           ))}

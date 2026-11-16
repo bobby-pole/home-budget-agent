@@ -652,7 +652,8 @@
       "toast_saved": "Zapisano",
       "toast_save_error": "Błąd podczas zapisu",
       "toast_deleted": "Kategoria usunięta",
-      "toast_delete_error": "Nie udało się usunąć kategorii"
+      "toast_delete_error": "Nie udało się usunąć kategorii",
+      "system_category_tooltip": "Kategoria systemowa"
     },
     "tags": {
       "section_title": "Twoje tagi",
@@ -866,5 +867,29 @@
   },
   "theme": {
     "toggle": "Przełącz motyw"
+  },
+  "category_names": {
+    "Food": "Jedzenie",
+    "Housing": "Dom",
+    "Transport": "Transport",
+    "Utilities": "Rachunki",
+    "Entertainment": "Rozrywka",
+    "Health": "Zdrowie",
+    "Clothing": "Odzież",
+    "Kids": "Dzieci",
+    "Pets": "Zwierzęta",
+    "Travel": "Podróże",
+    "Education": "Edukacja",
+    "Savings": "Oszczędności",
+    "Gifts": "Prezenty",
+    "Snacks": "Przekąski",
+    "Other": "Inne",
+    "Salary": "Wypłata",
+    "FastFood": "Fast Food",
+    "Fast Food": "Fast Food",
+    "Snack": "Przekąski",
+    "Vegetables": "Jedzenie",
+    "Chemicals": "Chemia",
+    "Electronics": "Elektronika"
   }
 }

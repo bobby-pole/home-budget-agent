@@ -30,7 +30,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { TransactionDetailModal } from "./TransactionDetailModal";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { getStatusLabel, getStatusVariant } from "@/lib/receiptStatus";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
@@ -165,7 +165,7 @@ export function TransactionsTable({
                   const categoryIcon = category?.icon;
                   const categoryColor = category?.color;
                   const categoryName = category
-                    ? (CATEGORY_LABELS[category.name] || category.name)
+                    ? getCategoryDisplayName(category)
                     : null;
                   const dateLabel = transaction.date
                     ? new Date(transaction.date).toLocaleDateString(getIntlLocale(), { day: "numeric", month: "short" })
