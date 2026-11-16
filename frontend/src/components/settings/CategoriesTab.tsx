@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import type { DropResult } from "@hello-pangea/dnd";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
 export function CategoriesTab() {
@@ -111,15 +111,18 @@ export function CategoriesTab() {
 
   const handleStartEdit = (cat: Category) => {
     setEditingId(cat.id);
-    setEditName(CATEGORY_LABELS[cat.name] || cat.name);
+    setEditName(getCategoryDisplayName(cat));
     setEditColor(cat.color || "#cccccc");
     setEditIcon(cat.icon || "📦");
   };
 
   const handleSaveEdit = (id: number) => {
+    const targetCategory = categories.find((c) => c.id === id);
     updateMutation.mutate({
       id,
-      data: { name: editName, color: editColor, icon: editIcon }
+      data: targetCategory?.is_system
+        ? { color: editColor, icon: editIcon }
+        : { name: editName, color: editColor, icon: editIcon },
     });
   };
 
@@ -220,6 +223,7 @@ export function CategoriesTab() {
                     <Input 
                       value={editName} 
                       onChange={e => setEditName(e.target.value)} 
+                      disabled={Boolean(cat.is_system)}
                       className="flex-1 h-8"
                     />
                     <input 
@@ -246,8 +250,12 @@ export function CategoriesTab() {
                     >
                       <CategoryIcon name={cat.icon || "package"} className="size-4.5" />
                     </div>
-                    <span className="font-medium truncate">{CATEGORY_LABELS[cat.name] || cat.name}</span>
-                    {cat.is_system && <div title="Kategoria systemowa"><Lock className="h-3 w-3 text-muted-foreground ml-1 shrink-0" /></div>}
+                    <span className="font-medium truncate">{getCategoryDisplayName(cat)}</span>
+                    {cat.is_system && (
+                      <div title={t("settings.categories.system_category_tooltip")}>
+                        <Lock className="h-3 w-3 text-muted-foreground ml-1 shrink-0" />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -370,7 +378,7 @@ export function CategoriesTab() {
                 <SelectItem value="none">{t("settings.categories.reassign_none")}</SelectItem>
                 {parents.filter(p => p.id !== deleteCatId).map(p => (
                   <SelectItem key={p.id} value={p.id.toString()}>
-                    {t("settings.categories.reassign_to_prefix")} {p.is_system ? (CATEGORY_LABELS[p.name] || p.name) : p.name}
+                    {t("settings.categories.reassign_to_prefix")} {getCategoryDisplayName(p)}
                   </SelectItem>
                 ))}
               </SelectContent>

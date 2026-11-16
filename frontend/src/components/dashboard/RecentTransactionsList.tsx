@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
 import { formatDecimalLocale } from "@/lib/money";
 import { useAuth } from "@/context/AuthContext";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { CategoryIcon } from "@/components/CategoryIcon";
 
@@ -96,7 +96,7 @@ export function RecentTransactionsList({
               
               const category = categories.find(c => c.id === tx.category_id);
               const categoryName = category
-                ? (CATEGORY_LABELS[category.name] || category.name)
+                ? getCategoryDisplayName(category)
                 : t("dashboard.recent_transactions.no_category");
               const categoryIcon = category?.icon;
               const categoryColor = category?.color || "#9ca3af";

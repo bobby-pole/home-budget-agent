@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { Card } from "@/components/ui/card";
 import {
@@ -445,7 +446,7 @@ export function AccountsPage() {
                   </SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id.toString()}>
-                      {cat.name}
+                      {getCategoryDisplayName(cat)}
                     </SelectItem>
                   ))}
                 </SelectContent>

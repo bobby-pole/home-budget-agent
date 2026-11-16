@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n"
+import { getCategoryDisplayName } from "@/lib/constants"
 import { formatMoneyFixed } from "@/lib/money";
 import {
   LayoutDashboard,
@@ -92,7 +93,10 @@ export function AppSidebar() {
           const payload = JSON.parse(alert.message);
           if (payload.type === "zeroed_envelope") {
             title = t("alerts.zeroed_envelope_title");
-            description = t("alerts.zeroed_envelope_desc", { category: alert.category_name, remaining: formatMoneyFixed(payload.remaining) });
+            description = t("alerts.zeroed_envelope_desc", {
+              category: getCategoryDisplayName(alert.category_name),
+              remaining: formatMoneyFixed(payload.remaining),
+            });
           }
         } catch {
           // Fallback to raw string if not JSON

@@ -5,7 +5,7 @@ import { ReadyToAssignBanner } from "@/components/budget/ReadyToAssignBanner";
 import { EnvelopeGroupList, type EnvelopeItem } from "@/components/budget/EnvelopeGroupList";
 import { AddIncomeModal } from "@/components/budget/AddIncomeModal";
 import { AllocationDrawer } from "@/components/budget/AllocationDrawer";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { getIntlLocale } from "@/lib/dates";
 import { compareMoney } from "@/lib/money";
@@ -37,7 +37,7 @@ export function BudgetPage() {
 
   const envelopes: EnvelopeItem[] = categories.map(cat => {
     const summaryItem = (budgetSummary?.categories ?? []).find(c => c.category_id === cat.id);
-    const displayName = CATEGORY_LABELS[cat.name] || cat.name;
+    const displayName = getCategoryDisplayName(cat);
     return {
       categoryId: cat.id,
       categoryName: displayName,

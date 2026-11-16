@@ -652,7 +652,8 @@
       "toast_saved": "Saved",
       "toast_save_error": "Error saving",
       "toast_deleted": "Category deleted",
-      "toast_delete_error": "Failed to delete category"
+      "toast_delete_error": "Failed to delete category",
+      "system_category_tooltip": "System category"
     },
     "tags": {
       "section_title": "Your tags",
@@ -866,5 +867,29 @@
   },
   "theme": {
     "toggle": "Toggle theme"
+  },
+  "category_names": {
+    "Food": "Food",
+    "Housing": "Housing",
+    "Transport": "Transport",
+    "Utilities": "Utilities",
+    "Entertainment": "Entertainment",
+    "Health": "Health",
+    "Clothing": "Clothing",
+    "Kids": "Kids",
+    "Pets": "Pets",
+    "Travel": "Travel",
+    "Education": "Education",
+    "Savings": "Savings",
+    "Gifts": "Gifts",
+    "Snacks": "Snacks",
+    "Other": "Other",
+    "Salary": "Salary",
+    "FastFood": "Fast Food",
+    "Fast Food": "Fast Food",
+    "Snack": "Snacks",
+    "Vegetables": "Food",
+    "Chemicals": "Household Chemicals",
+    "Electronics": "Electronics"
   }
 }

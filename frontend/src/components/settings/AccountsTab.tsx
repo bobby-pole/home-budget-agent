@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { formatMoneyFixed, parseMoneyInput } from "@/lib/money";
 import { Button } from "@/components/ui/button";
@@ -214,7 +215,7 @@ export function AccountsTab() {
                     <SelectContent>
                       <SelectItem value="none">{t("settings.accounts.form.linked_envelope_none")}</SelectItem>
                       {categories.map(cat => (
-                        <SelectItem key={cat.id} value={cat.id.toString()}>{cat.name}</SelectItem>
+                        <SelectItem key={cat.id} value={cat.id.toString()}>{getCategoryDisplayName(cat)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

@@ -1,29 +1,19 @@
-export const CATEGORY_LABELS: Record<string, string> = {
-  Food: "Jedzenie",
-  Housing: "Dom",
-  Transport: "Transport",
-  Utilities: "Rachunki",
-  Entertainment: "Rozrywka",
-  Health: "Zdrowie",
-  Clothing: "Odzież",
-  Kids: "Dzieci",
-  Pets: "Zwierzęta",
-  Travel: "Podróże",
-  Education: "Edukacja",
-  Savings: "Oszczędności",
-  Gifts: "Prezenty",
-  Snacks: "Przekąski",
-  Other: "Inne",
-  Salary: "Wypłata",
-  
-  // Synonimy i mapowania AI
-  FastFood: "Fast Food",
-  "Fast Food": "Fast Food",
-  Snack: "Przekąski",
-  Vegetables: "Jedzenie",
-  Chemicals: "Chemia",
-  Electronics: "Elektronika",
-};
+import { t } from "@/lib/i18n";
+
+export function getCategoryDisplayName(
+  category: { name: string; is_system?: boolean } | string | null | undefined,
+  fallback = "",
+): string {
+  if (!category) return fallback;
+  const name = typeof category === "string" ? category : category.name;
+  if (!name) return fallback;
+  if (typeof category === "object" && category.is_system === false) {
+    return name;
+  }
+  const key = `category_names.${name}`;
+  const translated = t(key);
+  return translated !== key ? translated : name;
+}
 
 export const CATEGORY_COLORS: Record<string, string> = {
   Food: "bg-red-100 text-red-700 hover:bg-red-200",

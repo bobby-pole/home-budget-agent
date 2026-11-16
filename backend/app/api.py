@@ -76,6 +76,7 @@ from .provenance_service import (
     update_scan_source_metadata,
 )
 from .services import AIService
+from .category_service import get_budget_categories, seed_default_categories
 from .auth import get_current_user, get_current_user_optional, hash_password, verify_password, create_access_token, is_demo_user
 from .demo_seed import seed_demo_environment
 from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
@@ -107,36 +108,6 @@ def get_app_config():
 
 
 # --- DEPENDENCY: resolve current user's budget (lazy-create if missing) ---
-
-def seed_default_categories(session: Session, budget_id: int):
-    default_cats = [
-        {"name": "Food", "icon": "utensils", "color": "#f87171"},
-        {"name": "Housing", "icon": "home", "color": "#fb923c"},
-        {"name": "Transport", "icon": "car", "color": "#60a5fa"},
-        {"name": "Utilities", "icon": "lightbulb", "color": "#facc15"},
-        {"name": "Entertainment", "icon": "clapperboard", "color": "#c084fc"},
-        {"name": "Health", "icon": "heart-pulse", "color": "#4ade80"},
-        {"name": "Clothing", "icon": "shirt", "color": "#f472b6"},
-        {"name": "Kids", "icon": "toy-brick", "color": "#38bdf8"},
-        {"name": "Pets", "icon": "paw-print", "color": "#a78bfa"},
-        {"name": "Travel", "icon": "plane", "color": "#34d399"},
-        {"name": "Education", "icon": "graduation-cap", "color": "#818cf8"},
-        {"name": "Savings", "icon": "coins", "color": "#fbbf24"},
-        {"name": "Gifts", "icon": "gift", "color": "#fb7185"},
-        {"name": "Snacks", "icon": "cookie", "color": "#fcd34d"},
-        {"name": "Other", "icon": "package", "color": "#9ca3af"},
-    ]
-    for i, cat_data in enumerate(default_cats):
-        new_category = Category(
-            name=cat_data["name"],
-            icon=cat_data["icon"],
-            color=cat_data["color"],
-            is_system=True,
-            budget_id=budget_id,
-            order_index=i
-        )
-        session.add(new_category)
-    session.commit()
 
 def seed_default_account(session: Session, budget_id: int):
     if session.exec(select(Account).where(Account.budget_id == budget_id)).first():
@@ -553,11 +524,11 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
             _set_scan_status(scan_id, ScanStatus.FAILED, error_message="record not found")
             return
 
-        db_categories = session.exec(
-            select(Category).where(
-                (Category.budget_id == transaction.budget_id) | (Category.is_system)
-            )
-        ).all()
+        db_categories = (
+            get_budget_categories(session, transaction.budget_id)
+            if transaction.budget_id is not None
+            else []
+        )
         cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
 
         stage_start = time.monotonic()
@@ -1639,6 +1610,7 @@ async def verify_transaction(
         db_transaction.account_id,
         db_transaction.transfer_id,
     )
+    validate_account_category(session, current_budget.id, db_transaction.category_id)
 
     # Resolve category from account if not provided
     if not db_transaction.category_id and db_transaction.account_id:
@@ -1651,19 +1623,34 @@ async def verify_transaction(
         db_transaction.tags = list(tags)
 
     # Apply line updates
+    cache_updates: dict[str, int] = {}
     if body.lines_update:
         existing_lines = db_transaction.lines
         for i, line_data in enumerate(body.lines_update):
+            line_dict = line_data.model_dump(exclude_unset=True)
+            if "category_id" in line_dict:
+                validate_account_category(session, current_budget.id, line_dict["category_id"])
             if i < len(existing_lines):
                 db_line = existing_lines[i]
-                for key, value in line_data.model_dump(exclude_unset=True).items():
+                new_cat_id = line_dict.get("category_id")
+                category_changed = "category_id" in line_dict and new_cat_id != db_line.category_id
+                for key, value in line_dict.items():
                     setattr(db_line, key, value)
+                if category_changed:
+                    db_line.category_source = "manual"
+                    if new_cat_id is not None and db_line.name:
+                        cache_updates[db_line.name] = new_cat_id
                 session.add(db_line)
             else:
-                session.add(TransactionLine(
-                    **line_data.model_dump(exclude_unset=True),
+                new_cat_id = line_dict.get("category_id")
+                new_line = TransactionLine(
+                    **line_dict,
                     transaction_id=db_transaction.id,
-                ))
+                    category_source="manual" if new_cat_id is not None else None,
+                )
+                session.add(new_line)
+                if new_cat_id is not None and new_line.name:
+                    cache_updates[new_line.name] = new_cat_id
 
     # Persist user's keep_image decision and mark as done
     scan.keep_image = body.keep_image
@@ -1683,6 +1670,9 @@ async def verify_transaction(
     _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
 
     session.commit()
+    if cache_updates and current_user.id is not None:
+        from .cache_service import save_to_cache
+        save_to_cache(session, current_user.id, cache_updates, overwrite=True)
     if current_budget.id is not None:
         discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=True)
     session.refresh(db_transaction)
@@ -1733,6 +1723,7 @@ async def update_transaction(
         db_transaction.account_id,
         db_transaction.transfer_id,
     )
+    validate_account_category(session, current_budget.id, db_transaction.category_id)
 
     if db_transaction.type == "transfer" and db_transaction.transfer_id is not None:
         source_acc = session.get(Account, db_transaction.account_id) if db_transaction.account_id else None
@@ -1779,6 +1770,10 @@ async def update_line(
         raise HTTPException(status_code=403, detail="Not authorized to modify this line")
 
     line_data = line_update.model_dump(exclude_unset=True)
+    if "category_id" in line_data:
+        if current_budget.id is None:
+            raise HTTPException(status_code=404, detail="Budget not found")
+        validate_account_category(session, current_budget.id, line_data["category_id"])
 
     category_changed = False
     new_category_id = None
@@ -2304,6 +2299,8 @@ async def update_category(
         raise HTTPException(status_code=403, detail="Not authorized to modify this category")
 
     update_data = category_update.model_dump(exclude_unset=True)
+    if "name" in update_data and update_data["name"] != category.name:
+        category.is_system = False
     for key, value in update_data.items():
         setattr(category, key, value)
 

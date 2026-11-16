@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import { t } from "@/lib/i18n";
 import { computeLineTotal, formatMoneyFixed } from "@/lib/money";
 
@@ -28,7 +28,7 @@ export function ItemRow({ item, currency, onRemove }: ItemRowProps) {
 
   const category = categories?.find((c) => c.id === item.category_id);
   const categoryLabel = category
-    ? (CATEGORY_LABELS[category.name] || category.name)
+    ? getCategoryDisplayName(category)
     : null;
 
   return (

@@ -25,7 +25,7 @@ import { Loader2, Save, Pencil } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
-import { CATEGORY_LABELS } from "@/lib/constants";
+import { getCategoryDisplayName } from "@/lib/constants";
 import type { TransactionRead as Transaction } from "@/client";
 import { SectionGrid } from "../shared/SectionGrid";
 import { Badge } from "@/components/ui/badge";
@@ -131,7 +131,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
     const cat = categories.find((c) => c.id === categoryId);
     if (!cat) return null;
     return {
-      name: cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name,
+      name: getCategoryDisplayName(cat),
       color: cat.color || "#9ca3af",
       icon: cat.icon || "package",
     };
@@ -299,7 +299,7 @@ export function TransactionHeaderForm({ transaction }: TransactionHeaderFormProp
                             <SelectItem key={cat.id} value={String(cat.id)}>
                               <span className="flex items-center gap-2">
                                 <CategoryIcon name={cat.icon || "package"} className="size-3.5 shrink-0" />
-                                <span>{cat.is_system ? (CATEGORY_LABELS[cat.name] || cat.name) : cat.name}</span>
+                                <span>{getCategoryDisplayName(cat)}</span>
                               </span>
                             </SelectItem>
                           ))}

@@ -24,7 +24,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Inne",
+                "category": "Other",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -36,7 +36,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 14.99,
                 "discount_total": -18.0,
                 "final_price": 5.99,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -48,7 +48,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -60,7 +60,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -72,7 +72,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -84,7 +84,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -96,7 +96,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -108,7 +108,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 7.99,
                 "discount_total": -1.39,
                 "final_price": 3.9943,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -120,7 +120,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -132,7 +132,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 1.49,
                 "discount_total": -0.8,
                 "final_price": 1.29,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -144,7 +144,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 17.99,
                 "discount_total": -9.0,
                 "final_price": 13.49,
-                "category": "Drogeria i Zdrowie",
+                "category": "Health",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -156,7 +156,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 4.69,
                 "discount_total": -2.36,
                 "final_price": 3.51,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -168,7 +168,7 @@ SAMPLE_BIEDRONKA_DATA: Dict[str, Any] = {
                 "original_price": 9.99,
                 "discount_total": -9.99,
                 "final_price": 6.66,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         }
@@ -251,7 +251,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 29.99,
                 "discount_total": -15.38,
                 "final_price": 14.61,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -263,7 +263,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 29.89,
                 "discount_total": -13.66,
                 "final_price": 16.23,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -275,7 +275,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 84.9,
                 "discount_total": -9.23,
                 "final_price": 38.2828,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -287,7 +287,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 5.99,
                 "discount_total": -3.29,
                 "final_price": 2.7,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -299,7 +299,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 4.79,
                 "discount_total": -1.8,
                 "final_price": 3.89,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -311,7 +311,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 7.29,
                 "discount_total": -1.37,
                 "final_price": 5.92,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -323,7 +323,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 14.99,
                 "discount_total": -1.11,
                 "final_price": 12.1392,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -335,7 +335,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 12.99,
                 "discount_total": -0.92,
                 "final_price": 10.5556,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -347,7 +347,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 0.79,
                 "discount_total": -1.38,
                 "final_price": 0.56,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -359,7 +359,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 6.99,
                 "discount_total": -0.58,
                 "final_price": 5.6621,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -371,7 +371,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 4.99,
                 "discount_total": -0.49,
                 "final_price": 4.0347,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -383,7 +383,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 4.99,
                 "discount_total": -0.32,
                 "final_price": 4.0588,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -395,7 +395,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 9.99,
                 "discount_total": -0.98,
                 "final_price": 9.01,
-                "category": "Drogeria i Zdrowie",
+                "category": "Health",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -407,7 +407,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 9.29,
                 "discount_total": -0.91,
                 "final_price": 8.38,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -419,7 +419,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 7.49,
                 "discount_total": -0.73,
                 "final_price": 6.76,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -431,7 +431,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 6.99,
                 "discount_total": -0.68,
                 "final_price": 6.31,
-                "category": "Drogeria i Zdrowie",
+                "category": "Health",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -443,7 +443,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 6.99,
                 "discount_total": -0.68,
                 "final_price": 6.31,
-                "category": "Drogeria i Zdrowie",
+                "category": "Health",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -455,7 +455,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 3.29,
                 "discount_total": -0.64,
                 "final_price": 2.97,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -467,7 +467,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 2.99,
                 "discount_total": -0.59,
                 "final_price": 2.695,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -479,7 +479,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 5.49,
                 "discount_total": -0.54,
                 "final_price": 4.95,
-                "category": "Drogeria i Zdrowie",
+                "category": "Health",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -491,7 +491,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 3.49,
                 "discount_total": -0.34,
                 "final_price": 3.15,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -503,7 +503,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 3.49,
                 "discount_total": -0.34,
                 "final_price": 3.15,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -515,7 +515,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 3.45,
                 "discount_total": -0.34,
                 "final_price": 3.11,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -527,7 +527,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 49.9,
                 "discount_total": -0.2,
                 "final_price": 45.0,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -539,7 +539,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": 1.29,
                 "discount_total": -0.13,
                 "final_price": 1.16,
-                "category": "Żywność i Supermarket",
+                "category": "Food",
                 "category_source": "demo_fixture",
                 "is_adjustment": False
         },
@@ -551,7 +551,7 @@ SAMPLE_LIDL_DATA: Dict[str, Any] = {
                 "original_price": None,
                 "discount_total": 0.0,
                 "final_price": None,
-                "category": "Inne",
+                "category": "Other",
                 "category_source": "demo_fixture",
                 "is_adjustment": True
         }
