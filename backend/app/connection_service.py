@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -25,6 +26,7 @@ from app.import_scheduler import (
     complete_pending_jobs_for_connection,
     enqueue_connection_sync_job,
     get_provider_policy,
+    is_trusted_worker_environment,
     sanitize_cursor,
 )
 from app.ingestion_service import ingest_receipt_result
@@ -41,13 +43,12 @@ from app.models import (
     ExternalReceiptConnectionRead,
     ImportJob,
     User,
+    ensure_tz_aware,
 )
 
 
 CONNECTION_WRITE_ROLES = {"owner", "editor"}
 
-# Ephemeral in-memory store of active PKCE authorization attempts keyed by connection_id
-_PENDING_OAUTH_ATTEMPTS: dict[int, tuple[AuthorizationAttempt, datetime]] = {}
 _OAUTH_ATTEMPT_TTL = timedelta(minutes=15)
 
 
@@ -73,6 +74,117 @@ def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRea
 
 class ConnectionService:
     """Orchestrates a per-user, per-budget connection lifecycle."""
+
+    @staticmethod
+    def require_trusted_local_execution() -> None:
+        """Fail closed when merchant credential or live sync endpoints are called outside trusted_local."""
+        if not is_trusted_worker_environment():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Merchant authorization and live synchronization are restricted to the "
+                    "trusted local executor (IMPORT_WORKER_ROLE=trusted_local)."
+                ),
+            )
+
+    @staticmethod
+    def _clear_oauth_attempt(conn: ExternalReceiptConnection) -> None:
+        conn.encrypted_oauth_attempt = None
+        conn.oauth_attempt_key_id = None
+        conn.oauth_attempt_expires_at = None
+
+    @staticmethod
+    def clear_pending_oauth_attempt(
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+    ) -> None:
+        """Clear any pending PKCE authorization attempt after a cancelled/aborted desktop login."""
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        if conn.encrypted_oauth_attempt is not None or conn.oauth_attempt_expires_at is not None:
+            ConnectionService._clear_oauth_attempt(conn)
+            conn.updated_at = datetime.now(timezone.utc)
+            session.add(conn)
+            session.commit()
+
+    @staticmethod
+    def _save_oauth_attempt(
+        session: Session,
+        conn: ExternalReceiptConnection,
+        attempt: AuthorizationAttempt,
+    ) -> None:
+        payload = json.dumps(
+            {
+                "code_verifier": attempt.code_verifier,
+                "state": attempt.state,
+                "nonce": attempt.nonce,
+            }
+        )
+        try:
+            ciphertext, key_id = get_encryption_service().encrypt(payload)
+        except EncryptionKeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Store authorization is not configured on this server",
+            ) from exc
+
+        now = datetime.now(timezone.utc)
+        conn.encrypted_oauth_attempt = ciphertext
+        conn.oauth_attempt_key_id = key_id
+        conn.oauth_attempt_expires_at = now + _OAUTH_ATTEMPT_TTL
+        conn.updated_at = now
+        session.add(conn)
+        session.commit()
+
+    @staticmethod
+    def _load_oauth_attempt(
+        session: Session,
+        conn: ExternalReceiptConnection,
+    ) -> AuthorizationAttempt:
+        if not conn.encrypted_oauth_attempt or conn.oauth_attempt_expires_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No active OAuth authorization attempt found. Start authorization first.",
+            )
+
+        expires_at = ensure_tz_aware(conn.oauth_attempt_expires_at)
+        now = datetime.now(timezone.utc)
+        if not isinstance(expires_at, datetime) or expires_at <= now:
+            ConnectionService._clear_oauth_attempt(conn)
+            conn.updated_at = now
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth authorization attempt expired. Please start authorization again.",
+            )
+
+        try:
+            plaintext = get_encryption_service().decrypt(
+                conn.encrypted_oauth_attempt,
+                key_id=conn.oauth_attempt_key_id,
+            )
+            data = json.loads(plaintext)
+            verifier = str(data["code_verifier"])
+            state = str(data["state"])
+            nonce = str(data["nonce"])
+        except EncryptionKeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Store authorization is not configured on this server",
+            ) from exc
+        except (DecryptionError, KeyError, TypeError, ValueError) as exc:
+            ConnectionService._clear_oauth_attempt(conn)
+            conn.updated_at = now
+            session.add(conn)
+            session.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Stored OAuth authorization attempt is invalid. Please start authorization again.",
+            ) from exc
+
+        return AuthorizationAttempt(code_verifier=verifier, state=state, nonce=nonce)
 
     @staticmethod
     def _require_write_member(session: Session, budget_id: int, user: User) -> None:
@@ -163,7 +275,8 @@ class ConnectionService:
         user: User,
         client_override: Optional[LidlPoCClient] = None,
     ) -> ConnectionOAuthStartResponse:
-        """Generate an OAuth2 PKCE S256 authorization URL and bind it to the connection."""
+        """Generate an OAuth2 PKCE S256 authorization URL and persist the encrypted attempt."""
+        ConnectionService.require_trusted_local_execution()
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         if conn.provider != "lidl":
@@ -181,7 +294,7 @@ class ConnectionService:
         lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
         attempt = lidl_client.create_authorization_attempt()
         authorize_url = lidl_client.build_authorize_url(attempt)
-        _PENDING_OAUTH_ATTEMPTS[conn.id or 0] = (attempt, datetime.now(timezone.utc))
+        ConnectionService._save_oauth_attempt(session, conn, attempt)
         return ConnectionOAuthStartResponse(
             connection_id=conn.id or 0,
             provider=conn.provider,
@@ -198,8 +311,10 @@ class ConnectionService:
         user: User,
         data: ConnectionOAuthCallbackRequest,
         client_override: Optional[LidlPoCClient] = None,
+        allow_raw_code: bool = True,
     ) -> ExternalReceiptConnectionRead:
         """Validate callback URL/code, exchange PKCE code for tokens, and persist encrypted refresh_token."""
+        ConnectionService.require_trusted_local_execution()
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         if conn.provider != "lidl":
@@ -208,24 +323,12 @@ class ConnectionService:
                 detail=f"Live OAuth PKCE flow is currently only supported for Lidl Plus (got '{conn.provider}')",
             )
 
-        pending = _PENDING_OAUTH_ATTEMPTS.get(conn.id or 0)
-        if not pending:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No active OAuth authorization attempt found. Start authorization first.",
-            )
-        attempt, created_at = pending
-        if datetime.now(timezone.utc) - created_at > _OAUTH_ATTEMPT_TTL:
-            _PENDING_OAUTH_ATTEMPTS.pop(conn.id or 0, None)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OAuth authorization attempt expired. Please start authorization again.",
-            )
+        attempt = ConnectionService._load_oauth_attempt(session, conn)
 
         lidl_client = client_override or LidlPoCClient(get_lidl_live_config())
         try:
             code = lidl_client.validate_callback(
-                data.callback_url_or_code, attempt, allow_raw_code=True
+                data.callback_url_or_code, attempt, allow_raw_code=allow_raw_code
             )
         except OAuthCallbackError as exc:
             raise HTTPException(
@@ -236,6 +339,7 @@ class ConnectionService:
         try:
             token_payload = lidl_client.exchange_code(code, attempt)
         except MerchantRequestError as exc:
+            ConnectionService._clear_oauth_attempt(conn)
             conn.status = ConnectionStatus.REAUTH_REQUIRED
             conn.last_error_code = ConnectionErrorCode.AUTH_EXPIRED.value
             conn.updated_at = datetime.now(timezone.utc)
@@ -248,12 +352,15 @@ class ConnectionService:
 
         refresh_token = str(token_payload.get("refresh_token") or "").strip()
         if not refresh_token:
+            ConnectionService._clear_oauth_attempt(conn)
+            session.add(conn)
+            session.commit()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Provider did not return a refresh_token",
             )
 
-        _PENDING_OAUTH_ATTEMPTS.pop(conn.id or 0, None)
+        ConnectionService._clear_oauth_attempt(conn)
         scopes_str = str(token_payload.get("scope") or " ".join(lidl_client.config.scopes))
         return ConnectionService.complete_authorization(
             session,
@@ -394,6 +501,12 @@ class ConnectionService:
 
         Shared by both the durable background worker and manual live sync.
         """
+        if not is_trusted_worker_environment():
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=ConnectionErrorCode.SYNC_FAILED,
+            )
+
         if conn.provider != "lidl":
             return SyncExecutionOutcome(
                 error_classification="permanent",
@@ -537,6 +650,7 @@ class ConnectionService:
         client_override: Optional[LidlPoCClient] = None,
     ) -> ConnectionSyncNowResponse:
         """Queue a durable sync job or execute an immediate live sync pass."""
+        ConnectionService.require_trusted_local_execution()
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
@@ -653,6 +767,7 @@ class ConnectionService:
         """Move an owned connection to the authorization-required state."""
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        ConnectionService._clear_oauth_attempt(conn)
         conn.status = ConnectionStatus.REAUTH_REQUIRED
         conn.last_error_code = ConnectionErrorCode.REAUTH_REQUIRED.value
         conn.next_sync_at = None
@@ -679,6 +794,7 @@ class ConnectionService:
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
         conn.encrypted_refresh_token = None
         conn.encryption_key_id = None
+        ConnectionService._clear_oauth_attempt(conn)
         conn.status = ConnectionStatus.DISCONNECTED
         conn.sync_requested_at = None
         conn.next_sync_at = None

@@ -597,7 +597,15 @@
       "oauth_callback_placeholder": "com.lidlplus.app://callback?code=...&state=...",
       "oauth_submit_btn": "Zatwierdź i połącz",
       "oauth_submitting_btn": "Weryfikacja...",
-      "toast_oauth_success": "Połączono konto Lidl Plus! Token został zaszyfrowany."
+      "toast_oauth_success": "Połączono konto Lidl Plus! Token został zaszyfrowany.",
+      "trusted_local_required_title": "Ograniczenie prywatności (Centralny VPS / Demo)",
+      "trusted_local_required_desc": "Autoryzacja konta sklepu i pobieranie paragonów działają wyłącznie w zaufanej instancji lokalnej/domowej (IMPORT_WORKER_ROLE=trusted_local). Centralny VPS nie otrzymuje tokenów sklepowych.",
+      "oauth_desktop_desc": "Otwórz lokalne okno logowania Lidl Plus. Po udanym logowaniu okno zamknie się automatycznie i zapisze zaszyfrowaną sesję bez ręcznego kopiowania adresu callback.",
+      "oauth_desktop_login_btn": "Zaloguj w oknie desktopowym (automatyczny powrót)",
+      "oauth_desktop_logging_in_btn": "Oczekiwanie na logowanie w oknie...",
+      "oauth_manual_fallback_btn": "Przełącz na tryb ręczny (callback URL / CLI)",
+      "oauth_desktop_unavailable_hint": "Automatyczne okno desktopowe jest niedostępne na tym hoście (np. tryb headless). Skorzystaj z trybu ręcznego poniżej lub uruchom scripts/poc_lidl_auth.py na desktopie.",
+      "toast_oauth_error": "Autoryzacja nie powiodła się. Spróbuj ponownie."
     },
     "accounts": {
       "section_title": "Twoje konta",

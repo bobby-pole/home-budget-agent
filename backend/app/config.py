@@ -10,13 +10,32 @@ class Settings:
     DEMO_USER_EMAIL: str = "demo@rachownik.app"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
-    # Durable import scheduler / worker settings (#257)
-    IMPORT_WORKER_ROLE: str = os.getenv("IMPORT_WORKER_ROLE", "trusted_local")
+    # Durable import scheduler / worker settings (#257, #264)
+    _default_role: str = (
+        "central_vps"
+        if (DEMO_MODE or ENVIRONMENT.strip().lower() == "production")
+        else "trusted_local"
+    )
+    IMPORT_WORKER_ROLE: str = os.getenv("IMPORT_WORKER_ROLE", _default_role)
+    _initial_import_worker_role: str = IMPORT_WORKER_ROLE
     IMPORT_WORKER_ENABLED: Optional[bool] = (
         val.lower() == "true"
         if (val := os.getenv("IMPORT_WORKER_ENABLED")) is not None
         else None
     )
+
+    def resolve_import_worker_role(self) -> str:
+        """Resolve worker role fail-closed for production/demo unless explicitly trusted."""
+        if self.IMPORT_WORKER_ROLE != self._initial_import_worker_role:
+            return self.IMPORT_WORKER_ROLE.strip().lower()
+        if (env_role := os.getenv("IMPORT_WORKER_ROLE")) is not None:
+            return env_role.strip().lower()
+        if self.DEMO_MODE or os.getenv("DEMO_MODE", "false").lower() == "true":
+            return "central_vps"
+        env_name = (os.getenv("ENVIRONMENT") or self.ENVIRONMENT).strip().lower()
+        if env_name == "production":
+            return "central_vps"
+        return self.IMPORT_WORKER_ROLE.strip().lower()
 
     def is_import_worker_enabled(self) -> bool:
         """Evaluate worker activation dynamically so pytest collection never freezes True."""

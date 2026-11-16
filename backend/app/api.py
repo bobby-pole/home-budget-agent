@@ -101,9 +101,15 @@ def health_check():
 
 @router.get("/config", response_model=AppConfigRead)
 def get_app_config():
+    from .adapters.lidl_desktop_oauth import is_desktop_oauth_available
+    from .import_scheduler import is_trusted_worker_environment
+
     return AppConfigRead(
         demo_mode=bool(settings.DEMO_MODE),
         environment=settings.ENVIRONMENT,
+        import_worker_role=settings.resolve_import_worker_role(),
+        trusted_local=is_trusted_worker_environment(),
+        desktop_oauth_available=is_desktop_oauth_available(),
     )
 
 
@@ -2653,6 +2659,59 @@ def complete_receipt_connection_oauth(
         raise HTTPException(status_code=400, detail="Invalid budget")
     return ConnectionService.complete_oauth_callback(
         session, current_budget.id, connection_id, current_user, data
+    )
+
+
+@router.post("/connections/{connection_id}/oauth/desktop-login", response_model=ExternalReceiptConnectionRead)
+async def desktop_login_receipt_connection_oauth(
+    connection_id: int,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Run trusted-local interactive desktop OAuth capture without manual callback copying."""
+    from .adapters.lidl_desktop_oauth import (
+        DesktopOAuthCancelledError,
+        DesktopOAuthUnavailableError,
+        capture_lidl_oauth_callback,
+        is_desktop_oauth_available,
+    )
+
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    ConnectionService.require_trusted_local_execution()
+    if not is_desktop_oauth_available():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Interactive desktop browser login is unavailable on this host; "
+                "use the manual OAuth callback flow or run scripts/poc_lidl_auth.py on your desktop."
+            ),
+        )
+
+    start_res = ConnectionService.start_oauth(session, current_budget.id, connection_id, current_user)
+    try:
+        callback_url = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: capture_lidl_oauth_callback(start_res.authorize_url)
+        )
+    except DesktopOAuthUnavailableError as exc:
+        ConnectionService.clear_pending_oauth_attempt(
+            session, current_budget.id, connection_id, current_user
+        )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except DesktopOAuthCancelledError as exc:
+        ConnectionService.clear_pending_oauth_attempt(
+            session, current_budget.id, connection_id, current_user
+        )
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return ConnectionService.complete_oauth_callback(
+        session,
+        current_budget.id,
+        connection_id,
+        current_user,
+        ConnectionOAuthCallbackRequest(callback_url_or_code=callback_url),
+        allow_raw_code=False,
     )
 
 

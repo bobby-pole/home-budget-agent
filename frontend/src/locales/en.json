@@ -597,7 +597,15 @@
       "oauth_callback_placeholder": "com.lidlplus.app://callback?code=...&state=...",
       "oauth_submit_btn": "Verify & Connect",
       "oauth_submitting_btn": "Verifying...",
-      "toast_oauth_success": "Lidl Plus account connected! Token encrypted at rest."
+      "toast_oauth_success": "Lidl Plus account connected! Token encrypted at rest.",
+      "trusted_local_required_title": "Privacy Boundary Active (Central VPS / Demo)",
+      "trusted_local_required_desc": "Store authorization and receipt retrieval run only on your trusted local/home instance (IMPORT_WORKER_ROLE=trusted_local). The central VPS never receives store tokens.",
+      "oauth_desktop_desc": "Open a local Lidl Plus sign-in window. Once you sign in, the window closes automatically and stores the encrypted session without manual callback copying.",
+      "oauth_desktop_login_btn": "Sign in via Desktop Window (auto-return)",
+      "oauth_desktop_logging_in_btn": "Waiting for sign-in window...",
+      "oauth_manual_fallback_btn": "Use manual fallback (callback URL / CLI)",
+      "oauth_desktop_unavailable_hint": "Automatic desktop window capture is unavailable on this host (e.g. headless container). Use the manual callback below or run scripts/poc_lidl_auth.py on your desktop.",
+      "toast_oauth_error": "Authorization failed. Please try again."
     },
     "accounts": {
       "section_title": "Your accounts",

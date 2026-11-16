@@ -9,6 +9,7 @@ import type {
   BudgetMemberCreate,
   TransactionUpdate,
   TransactionLineUpdate,
+  AppConfigRead,
   AppStatusRead,
   UserBudgetRead,
   ChangePasswordRequest,
@@ -369,6 +370,11 @@ export const api = {
 
   // --- CONNECTIONS ---
 
+  getAppConfig: async (): Promise<AppConfigRead> => {
+    const response = await apiClient.get<AppConfigRead>("/config");
+    return response.data;
+  },
+
   getConnections: async (): Promise<ExternalReceiptConnectionRead[]> => {
     const response = await apiClient.get<ExternalReceiptConnectionRead[]>("/connections");
     return response.data;
@@ -396,6 +402,13 @@ export const api = {
     const response = await apiClient.post<ExternalReceiptConnectionRead>(
       `/connections/${id}/oauth/callback`,
       data
+    );
+    return response.data;
+  },
+
+  desktopLoginConnectionOAuth: async (id: number): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.post<ExternalReceiptConnectionRead>(
+      `/connections/${id}/oauth/desktop-login`
     );
     return response.data;
   },
