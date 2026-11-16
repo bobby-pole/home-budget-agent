@@ -2680,6 +2680,7 @@ async def desktop_login_receipt_connection_oauth(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     ConnectionService.require_trusted_local_execution()
+    ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
     if not is_desktop_oauth_available():
         raise HTTPException(
             status_code=503,

@@ -368,9 +368,12 @@ def test_per_owner_isolation_and_worker_idempotency_in_shared_budget(
         session, owner_conn, refresh_token="owner-tok", consented_scopes="openid"
     )
 
-    # Partner cannot access owner's connection
+    # Partner cannot access owner's connection (even when Playwright is unavailable on CI)
     app.dependency_overrides[get_current_user] = lambda: partner
     assert client.post(f"/api/connections/{owner_conn_id}/oauth/start").status_code == 404
+    monkeypatch.setattr(
+        "app.adapters.lidl_desktop_oauth.is_desktop_oauth_available", lambda: False
+    )
     assert client.post(f"/api/connections/{owner_conn_id}/oauth/desktop-login").status_code == 404
 
     # Partner creates & authorizes their own connection in the same budget
