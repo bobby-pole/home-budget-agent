@@ -14,6 +14,7 @@ vi.mock("@/lib/api", () => ({
     completeConnectionOAuth: vi.fn(),
     desktopLoginConnectionOAuth: vi.fn(),
     syncNowConnection: vi.fn(),
+    setConnectionEnabled: vi.fn(),
     reconnectConnection: vi.fn(),
     disconnectConnection: vi.fn(),
   },
@@ -239,5 +240,92 @@ it("fails closed (buttons disabled, no false central-VPS banner) while appConfig
   for (const syncBtn of screen.getAllByRole("button", { name: /Synchronizuj teraz/i })) {
     expect(syncBtn).toBeDisabled();
   }
+});
+
+it("pauses and resumes a connection without losing stored token state", async () => {
+  vi.mocked(api.getConnections).mockResolvedValue([
+    { ...mockActiveConnection, is_enabled: true },
+  ]);
+  vi.mocked(api.setConnectionEnabled).mockResolvedValue({
+    ...mockActiveConnection,
+    is_enabled: false,
+  });
+
+  render(<ConnectionsTab />);
+  const pauseBtn = await screen.findByRole("button", { name: /Wstrzymaj/i });
+  fireEvent.click(pauseBtn);
+
+  await waitFor(() => {
+    expect(api.setConnectionEnabled).toHaveBeenCalledWith(1, { enabled: false });
+  });
+});
+
+it("shows Lidl disabled banner and disables Lidl actions when lidl_connector_enabled is false", async () => {
+  vi.mocked(api.getAppConfig).mockResolvedValue({
+    demo_mode: false,
+    environment: "development",
+    import_worker_role: "trusted_local",
+    trusted_local: true,
+    desktop_oauth_available: false,
+    lidl_connector_enabled: false,
+  });
+  vi.mocked(api.getConnections).mockResolvedValue([
+    mockActiveConnection,
+    { ...mockReauthConnection, id: 12, provider: "lidl" },
+  ]);
+
+  render(<ConnectionsTab />);
+  expect(await screen.findByText(/Konektor Lidl Plus jest wyłączony/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Zaloguj z Lidl Plus/i })).toBeDisabled();
+  for (const syncBtn of screen.getAllByRole("button", { name: /Synchronizuj teraz/i })) {
+    expect(syncBtn).toBeDisabled();
+  }
+});
+
+it("renders human-readable error hints and allows retrying sync on sync_error", async () => {
+  vi.mocked(api.getConnections).mockResolvedValue([
+    {
+      ...mockActiveConnection,
+      status: "sync_error",
+      last_error_code: "PROVIDER_SCHEMA_CHANGED",
+    },
+    {
+      ...mockReauthConnection,
+      id: 14,
+      provider: "lidl",
+      status: "reauth_required",
+      last_error_code: "MFA_REQUIRED",
+    },
+  ]);
+
+  render(<ConnectionsTab />);
+  expect(await screen.findByText("PROVIDER_SCHEMA_CHANGED")).toBeInTheDocument();
+  expect(screen.getByText(/Sklep zmienił format danych paragonu/i)).toBeInTheDocument();
+  expect(screen.getByText("MFA_REQUIRED")).toBeInTheDocument();
+  expect(screen.getByText(/dodatkowej weryfikacji MFA/i)).toBeInTheDocument();
+
+  const syncButtons = screen.getAllByRole("button", { name: /Synchronizuj teraz/i });
+  expect(syncButtons[0]).toBeEnabled();
+});
+
+it("hides Pause button on disconnected connections and refreshes state when syncNow fails", async () => {
+  vi.mocked(api.getConnections)
+    .mockResolvedValueOnce([
+      mockActiveConnection,
+      { ...mockReauthConnection, id: 15, status: "disconnected" },
+    ])
+    .mockResolvedValueOnce([
+      { ...mockActiveConnection, status: "reauth_required", last_error_code: "MFA_REQUIRED" },
+      { ...mockReauthConnection, id: 15, status: "disconnected" },
+    ]);
+  vi.mocked(api.syncNowConnection).mockRejectedValue(new Error("502"));
+
+  render(<ConnectionsTab />);
+  await screen.findByText("Lidl Plus");
+  // Only the active connection renders the Pause button; the disconnected one does not
+  expect(screen.getAllByRole("button", { name: /Wstrzymaj/i })).toHaveLength(1);
+
+  fireEvent.click(screen.getAllByRole("button", { name: /Synchronizuj teraz/i })[0]);
+  expect(await screen.findByText("MFA_REQUIRED")).toBeInTheDocument();
 });
 });

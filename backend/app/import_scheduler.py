@@ -198,6 +198,42 @@ def _log_job_event(
     logger.log(level, "import_worker %s", " ".join(parts))
 
 
+def _format_connection_alert_message(provider: str, error_code: ConnectionErrorCode) -> str:
+    """Build a descriptive, PII-free user alert message for a permanent connector error."""
+    if error_code == ConnectionErrorCode.MFA_REQUIRED:
+        return (
+            f"Connection '{provider}' requires additional MFA / interactive sign-in verification. "
+            "Please re-authorize your account."
+        )
+    if error_code in (ConnectionErrorCode.AUTH_EXPIRED, ConnectionErrorCode.REAUTH_REQUIRED):
+        return (
+            f"Connection '{provider}' authorization expired ({error_code.value}). "
+            "Please sign in again to resume receipt imports."
+        )
+    if error_code == ConnectionErrorCode.PROVIDER_SCHEMA_CHANGED:
+        return (
+            f"Connection '{provider}' failed because the store receipt format changed "
+            f"({error_code.value}). Manual receipt uploads remain available."
+        )
+    if error_code == ConnectionErrorCode.RATE_LIMITED:
+        return (
+            f"Connection '{provider}' was rate-limited by the store ({error_code.value}) "
+            "after retries. Try again later."
+        )
+    if error_code in (
+        ConnectionErrorCode.ENCRYPTION_KEY_MISSING,
+        ConnectionErrorCode.TOKEN_DECRYPTION_FAILED,
+    ):
+        return (
+            f"Connection '{provider}' could not decrypt stored credentials ({error_code.value}). "
+            "Check server encryption configuration or re-authorize."
+        )
+    return (
+        f"Connection '{provider}' failed permanently ({error_code.value}) "
+        "and requires attention."
+    )
+
+
 def _create_connection_alert(
     session: Session,
     *,
@@ -215,10 +251,7 @@ def _create_connection_alert(
             col(BudgetAlert.is_read) == False,  # noqa: E712
         )
     ).first()
-    message = (
-        f"Connection '{conn.provider}' failed permanently ({error_code.value}) "
-        f"and requires attention."
-    )
+    message = _format_connection_alert_message(conn.provider, error_code)
     if existing_unread is not None:
         existing_unread.message = message
         existing_unread.created_at = now
@@ -354,6 +387,7 @@ def schedule_due_connections(
     due_conns = session.exec(
         select(ExternalReceiptConnection).where(
             col(ExternalReceiptConnection.status) == ConnectionStatus.ACTIVE.value,
+            col(ExternalReceiptConnection.is_enabled).is_(True),
             col(ExternalReceiptConnection.encrypted_refresh_token).is_not(None),
             col(ExternalReceiptConnection.next_sync_at).is_not(None),
             col(ExternalReceiptConnection.next_sync_at) <= current,
@@ -362,6 +396,8 @@ def schedule_due_connections(
 
     enqueued: list[ImportJob] = []
     for conn in due_conns:
+        if not settings.is_provider_enabled(conn.provider):
+            continue
         job = enqueue_connection_sync_job(session, conn, next_retry_at=current, commit=False)
         enqueued.append(job)
 
@@ -956,6 +992,7 @@ def finalize_job_failure(
                 reauth_codes = {
                     ConnectionErrorCode.AUTH_EXPIRED,
                     ConnectionErrorCode.REAUTH_REQUIRED,
+                    ConnectionErrorCode.MFA_REQUIRED,
                     ConnectionErrorCode.ENCRYPTION_KEY_MISSING,
                     ConnectionErrorCode.TOKEN_DECRYPTION_FAILED,
                 }
@@ -1011,6 +1048,31 @@ def process_claimed_job(
             error_code=ConnectionErrorCode.REAUTH_REQUIRED,
             now=current,
         )
+
+    if not conn.is_enabled or not settings.is_provider_enabled(conn.provider):
+        res = session.exec(
+            update(ImportJob)
+            .where(
+                col(ImportJob.id) == job.id,
+                col(ImportJob.status) == ImportJobStatus.RUNNING.value,
+                col(ImportJob.lease_owner) == worker_id,
+            )
+            .values(
+                status=ImportJobStatus.FAILED.value,
+                lease_owner=None,
+                lease_expires_at=None,
+                last_error_code=ConnectionErrorCode.CONNECTOR_DISABLED.value,
+                completed_at=current,
+                updated_at=current,
+            )
+        )
+        if (res.rowcount or 0) == 1:
+            session.commit()
+            session.refresh(job)
+            _log_job_event(logging.INFO, "job_skipped_connector_disabled", job=job, worker_id=worker_id)
+        else:
+            session.rollback()
+        return job
 
     executor = sync_executor or _default_sync_executor
     try:

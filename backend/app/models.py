@@ -616,12 +616,15 @@ class ConnectionStatus(str, Enum):
 class ConnectionErrorCode(str, Enum):
     AUTH_EXPIRED = "AUTH_EXPIRED"
     REAUTH_REQUIRED = "REAUTH_REQUIRED"
+    MFA_REQUIRED = "MFA_REQUIRED"
     RATE_LIMITED = "RATE_LIMITED"
     NETWORK_ERROR = "NETWORK_ERROR"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
+    PROVIDER_SCHEMA_CHANGED = "PROVIDER_SCHEMA_CHANGED"
     PROVIDER_REVOCATION_UNAVAILABLE = "PROVIDER_REVOCATION_UNAVAILABLE"
     ENCRYPTION_KEY_MISSING = "ENCRYPTION_KEY_MISSING"
     TOKEN_DECRYPTION_FAILED = "TOKEN_DECRYPTION_FAILED"
+    CONNECTOR_DISABLED = "CONNECTOR_DISABLED"
     SYNC_FAILED = "SYNC_FAILED"
 
 
@@ -633,6 +636,10 @@ class ExternalReceiptConnectionBase(SQLModel):
         sa_column=Column(String, nullable=False, index=True, server_default="reauth_required"),
     )
     last_error_code: Optional[str] = Field(default=None)
+    is_enabled: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default=text("1")),
+    )
 
 
 class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
@@ -793,6 +800,7 @@ class ExternalReceiptConnectionRead(SQLModel):
     consented_scopes: Optional[str] = None
     consented_at: Optional[datetime] = None
     status: ConnectionStatus
+    is_enabled: bool = True
     has_token: bool = False
     last_success_at: Optional[datetime] = None
     last_error_code: Optional[str] = None
@@ -800,6 +808,14 @@ class ExternalReceiptConnectionRead(SQLModel):
     sync_requested_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+class ConnectionToggleRequest(SQLModel):
+    """Enable or pause automatic synchronization for a connection without deleting credentials."""
+
+    model_config = SQLModelConfig(extra="forbid")
+
+    enabled: bool
 
 
 class ExternalReceiptConnectionCreate(SQLModel):
@@ -1223,6 +1239,7 @@ class AppConfigRead(SQLModel):
     import_worker_role: str = "central_vps"
     trusted_local: bool = False
     desktop_oauth_available: bool = False
+    lidl_connector_enabled: bool = True
 
 # ─── SQLAlchemy Events ────────────────────────────────────────────────────────
 

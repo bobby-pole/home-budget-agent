@@ -30,12 +30,28 @@ from app.lidl_parser import LidlReceiptParser
 from app.receipt_schema import CanonicalItem, CanonicalReceipt
 
 
+_MFA_OAUTH_ERRORS = frozenset(
+    {
+        "interaction_required",
+        "mfa_required",
+        "login_required",
+        "challenge_required",
+        "consent_required",
+    }
+)
+_EXPIRED_OAUTH_ERRORS = frozenset({"invalid_grant", "invalid_token"})
+
+
 class OAuthConfigurationError(ValueError):
     """Raised when a PoC is configured with an unsafe or unsupported client."""
 
 
 class OAuthCallbackError(ValueError):
     """Raised when an OAuth callback cannot be bound to an authorization attempt."""
+
+    def __init__(self, message: str, *, error_code: str | None = None) -> None:
+        super().__init__(message)
+        self.error_code = error_code
 
 
 class MerchantRequestError(RuntimeError):
@@ -46,10 +62,12 @@ class MerchantRequestError(RuntimeError):
         message: str,
         status_code: int | None = None,
         retry_after_seconds: int | None = None,
+        error_hint: str | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.retry_after_seconds = retry_after_seconds
+        self.error_hint = error_hint
 
 
 class TicketMappingError(ValueError):
@@ -239,6 +257,12 @@ class LidlPoCClient:
 
         parameters = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
         if parameters.get("error"):
+            err_token = str(parameters["error"][0] or "").strip().lower()
+            if err_token in _MFA_OAUTH_ERRORS:
+                raise OAuthCallbackError(
+                    "provider requested additional MFA or interactive verification",
+                    error_code="MFA_REQUIRED",
+                )
             raise OAuthCallbackError("provider returned an OAuth error")
         codes = parameters.get("code", [])
         states = parameters.get("state", [])
@@ -274,6 +298,31 @@ class LidlPoCClient:
         delta_seconds = int((retry_dt - datetime.now(timezone.utc)).total_seconds())
         return max(1, min(delta_seconds, 86400))
 
+    @staticmethod
+    def _extract_safe_error_hint(response: HttpResponse) -> str | None:
+        """Inspect allowlisted OAuth error tokens without retaining any response text."""
+        try:
+            payload = response.json()
+        except Exception:
+            return None
+        if not isinstance(payload, Mapping):
+            return None
+        candidates = [
+            str(payload.get(k) or "").strip().lower()
+            for k in ("error", "errorCode", "code", "error_description")
+            if payload.get(k) is not None
+        ]
+        joined = " ".join(candidates)
+        for token in _MFA_OAUTH_ERRORS:
+            if token in joined:
+                return "mfa_required"
+        if "mfa" in joined or "two-factor" in joined or "2fa" in joined:
+            return "mfa_required"
+        for token in _EXPIRED_OAUTH_ERRORS:
+            if token in joined:
+                return "auth_expired"
+        return None
+
     @classmethod
     def _raise_for_status(cls, response: HttpResponse, operation: str) -> None:
         if response.status_code < 200 or response.status_code >= 300:
@@ -282,10 +331,16 @@ class LidlPoCClient:
                 if response.status_code in (429, 503)
                 else None
             )
+            error_hint = (
+                cls._extract_safe_error_hint(response)
+                if response.status_code in (400, 401, 403)
+                else None
+            )
             raise MerchantRequestError(
                 f"{operation} failed with HTTP {response.status_code}",
                 status_code=response.status_code,
                 retry_after_seconds=retry_after_seconds,
+                error_hint=error_hint,
             )
 
     @staticmethod
@@ -411,12 +466,66 @@ def _optional_decimal(value: Any, field_name: str) -> Decimal | None:
 def _ticket_date(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise TicketMappingError("date is required")
+    cleaned = value.strip()
     try:
-        if len(value) == 10:
-            return date.fromisoformat(value).isoformat()
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).date().isoformat()
+        if len(cleaned) == 10:
+            return date.fromisoformat(cleaned).isoformat()
+        return datetime.fromisoformat(cleaned.replace("Z", "+00:00")).date().isoformat()
     except ValueError as error:
         raise TicketMappingError("date must be ISO-8601") from error
+
+
+def _ticket_timestamp_iso(value: Any) -> str | None:
+    """Return a UTC ISO-8601 timestamp when time-of-day precision is present."""
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    if len(cleaned) <= 10 or (":" not in cleaned):
+        return None
+    try:
+        dt = datetime.fromisoformat(cleaned.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat()
+
+
+def _extract_html_timestamp_iso(plain_lines: list[str]) -> str | None:
+    """Recover YYYY-MM-DD HH:MM(:SS) timestamp from Lidl HTML lines when present."""
+    for line in plain_lines:
+        match = re.search(r"(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)", line)
+        if match:
+            candidate = f"{match.group(1)}T{match.group(2)}"
+            if len(match.group(2)) == 5:
+                candidate = f"{candidate}:00"
+            parsed = _ticket_timestamp_iso(candidate)
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _finalize_lidl_canonical_receipt(
+    receipt: CanonicalReceipt,
+    ticket_obj: Mapping[str, Any],
+    *,
+    purchase_timestamp: str | None = None,
+) -> CanonicalReceipt:
+    """Apply uniform ±0.01 PLN validation and provenance hints to a Lidl receipt."""
+    difference = abs(receipt.calculated_total - receipt.total_amount)
+    receipt["validation_status"] = "verified" if difference <= Decimal("0.01") else "needs_review"
+    if difference > Decimal("0.01"):
+        receipt["validation_error"] = (
+            f"Różnica sumy pozycji ({receipt.calculated_total}) i nagłówka "
+            f"({receipt.total_amount}): {difference} PLN"
+        )
+    if ticket_obj.get("id"):
+        receipt["source_receipt_id"] = str(ticket_obj["id"])
+    if purchase_timestamp:
+        receipt["purchase_timestamp"] = purchase_timestamp
+    return receipt
 
 
 def extract_ticket_list_entries(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -508,6 +617,10 @@ def _parse_html_printed_receipt(
         if ticket_obj.get("date")
         else (parsed.date or date.today().isoformat())
     )
+    purchase_ts = (
+        _ticket_timestamp_iso(ticket_obj.get("date"))
+        or _extract_html_timestamp_iso(plain_lines)
+    )
 
     receipt = CanonicalReceipt(
         merchant_name=merchant_name,
@@ -516,16 +629,9 @@ def _parse_html_printed_receipt(
         currency="PLN",
         items=parsed.items,
     )
-    difference = abs(receipt.calculated_total - receipt.total_amount)
-    receipt["validation_status"] = "verified" if difference <= Decimal("0.01") else "needs_review"
-    if difference > Decimal("0.01"):
-        receipt["validation_error"] = (
-            f"Różnica sumy pozycji ({receipt.calculated_total}) i nagłówka "
-            f"({receipt.total_amount}): {difference} PLN"
-        )
-    if ticket_obj.get("id"):
-        receipt["source_receipt_id"] = str(ticket_obj["id"])
-    return receipt
+    return _finalize_lidl_canonical_receipt(
+        receipt, ticket_obj, purchase_timestamp=purchase_ts
+    )
 
 
 def lidl_ticket_to_canonical(raw_ticket: dict[str, Any]) -> CanonicalReceipt:
@@ -638,17 +744,6 @@ def lidl_ticket_to_canonical(raw_ticket: dict[str, Any]) -> CanonicalReceipt:
                 )
             )
 
-    # Map returned deposits / coupons if present at ticket root
-    coupons_used = ticket_obj.get("couponsUsed")
-    if isinstance(coupons_used, list):
-        for idx, coupon in enumerate(coupons_used):
-            if not isinstance(coupon, dict):
-                continue
-            disc_val = _optional_decimal(coupon.get("discountAmount"), f"couponsUsed[{idx}].discountAmount")
-            if disc_val and disc_val != Decimal("0"):
-                # Only add if not already reflected in item discounts
-                pass
-
     raw_store = (
         ticket_obj.get("storeCode")
         or (ticket_obj.get("store", {}) or {}).get("id")
@@ -662,24 +757,57 @@ def lidl_ticket_to_canonical(raw_ticket: dict[str, Any]) -> CanonicalReceipt:
         if ticket_obj.get("totalAmount") is not None
         else ticket_obj.get("totalAmountNumeric")
     )
+    total_amount = _required_decimal(raw_total, "totalAmount")
+
+    # Apply basket-level couponsUsed only when item-level discounts leave an unexplained gap.
+    coupon_items: list[CanonicalItem] = []
+    coupons_used = ticket_obj.get("couponsUsed")
+    if isinstance(coupons_used, list):
+        for idx, coupon in enumerate(coupons_used):
+            if not isinstance(coupon, dict):
+                continue
+            raw_disc = (
+                coupon.get("discountAmount")
+                if coupon.get("discountAmount") is not None
+                else coupon.get("amount")
+            )
+            disc_val = _optional_decimal(raw_disc, f"couponsUsed[{idx}].discountAmount")
+            if disc_val and disc_val != Decimal("0"):
+                coupon_name = str(
+                    coupon.get("name")
+                    or coupon.get("description")
+                    or coupon.get("title")
+                    or "Lidl Plus coupon"
+                ).strip()
+                coupon_items.append(
+                    CanonicalItem(
+                        name=coupon_name or "Lidl Plus coupon",
+                        unit_price=-abs(disc_val),
+                        quantity=Decimal("1"),
+                        discount_total=Decimal("0"),
+                        is_adjustment=True,
+                    )
+                )
 
     receipt = CanonicalReceipt(
         merchant_name=merchant_name,
         date=_ticket_date(ticket_obj.get("date")),
-        total_amount=_required_decimal(raw_total, "totalAmount"),
+        total_amount=total_amount,
         currency="PLN",
         items=items,
     )
-    difference = abs(receipt.calculated_total - receipt.total_amount)
-    receipt["validation_status"] = "verified" if difference <= Decimal("0.01") else "needs_review"
-    if difference > Decimal("0.01"):
-        receipt["validation_error"] = (
-            f"Różnica sumy pozycji ({receipt.calculated_total}) i nagłówka "
-            f"({receipt.total_amount}): {difference} PLN"
-        )
-    if ticket_obj.get("id"):
-        receipt["source_receipt_id"] = str(ticket_obj["id"])
-    return receipt
+    if coupon_items:
+        before_diff = abs(receipt.calculated_total - receipt.total_amount)
+        coupon_sum = sum((c.final_line_total for c in coupon_items), Decimal("0"))
+        after_diff = abs((receipt.calculated_total + coupon_sum) - receipt.total_amount)
+        if before_diff > Decimal("0.01") and after_diff < before_diff:
+            receipt.items.extend(coupon_items)
+
+    return _finalize_lidl_canonical_receipt(
+        receipt,
+        ticket_obj,
+        purchase_timestamp=_ticket_timestamp_iso(ticket_obj.get("date")),
+    )
 
 
 # Synthetic fixture only. A production decision requires a separately redacted,

@@ -111,7 +111,19 @@ def _categorize_receipt_dict_best_effort(
     return receipt_dict, cat_name_to_id
 
 
-def _parse_receipt_date_utc(date_str: str) -> datetime:
+def _parse_receipt_date_utc(
+    date_str: str,
+    *,
+    purchase_timestamp: Optional[str] = None,
+) -> datetime:
+    if isinstance(purchase_timestamp, str) and purchase_timestamp.strip():
+        try:
+            dt = datetime.fromisoformat(purchase_timestamp.strip().replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except ValueError:
+            pass
     try:
         return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
@@ -169,7 +181,11 @@ def ingest_receipt_result(
         categorize=categorize,
     )
 
-    tx_date = _parse_receipt_date_utc(canonical.date)
+    raw_purchase_ts = canonical.get("purchase_timestamp")
+    tx_date = _parse_receipt_date_utc(
+        canonical.date,
+        purchase_timestamp=raw_purchase_ts if isinstance(raw_purchase_ts, str) else None,
+    )
     items = receipt_dict.get("items") or []
     if not items and result.validation_status == "failed":
         scan_status = ScanStatus.FAILED.value
