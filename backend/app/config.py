@@ -62,5 +62,51 @@ class Settings:
         os.getenv("IMPORT_SYNC_INTERVAL_SECONDS", "21600")
     )
 
+    # Lidl connector controls & pagination bounds (#260)
+    LIDL_CONNECTOR_ENABLED: Optional[bool] = (
+        val.lower() == "true"
+        if (val := os.getenv("LIDL_CONNECTOR_ENABLED")) is not None
+        else None
+    )
+    _initial_lidl_connector_enabled: Optional[bool] = LIDL_CONNECTOR_ENABLED
+    LIDL_SYNC_MAX_PAGES: int = int(os.getenv("LIDL_SYNC_MAX_PAGES", "5"))
+    _initial_lidl_sync_max_pages: int = LIDL_SYNC_MAX_PAGES
+    LIDL_SYNC_MAX_TICKETS: int = int(os.getenv("LIDL_SYNC_MAX_TICKETS", "50"))
+    _initial_lidl_sync_max_tickets: int = LIDL_SYNC_MAX_TICKETS
+
+    def is_provider_enabled(self, provider: str) -> bool:
+        """Evaluate per-provider connector availability dynamically."""
+        provider_clean = (provider or "").strip().lower()
+        if provider_clean != "lidl":
+            return True
+        if self.LIDL_CONNECTOR_ENABLED != self._initial_lidl_connector_enabled:
+            return bool(self.LIDL_CONNECTOR_ENABLED)
+        raw = os.getenv("LIDL_CONNECTOR_ENABLED")
+        if raw is not None:
+            return raw.strip().lower() not in ("0", "false", "no", "off")
+        if self.LIDL_CONNECTOR_ENABLED is not None:
+            return bool(self.LIDL_CONNECTOR_ENABLED)
+        return True
+
+    def get_lidl_sync_max_pages(self) -> int:
+        if self.LIDL_SYNC_MAX_PAGES != self._initial_lidl_sync_max_pages:
+            return max(1, int(self.LIDL_SYNC_MAX_PAGES))
+        if (raw := os.getenv("LIDL_SYNC_MAX_PAGES")) is not None:
+            try:
+                return max(1, int(raw))
+            except ValueError:
+                pass
+        return max(1, int(self.LIDL_SYNC_MAX_PAGES))
+
+    def get_lidl_sync_max_tickets(self) -> int:
+        if self.LIDL_SYNC_MAX_TICKETS != self._initial_lidl_sync_max_tickets:
+            return max(1, int(self.LIDL_SYNC_MAX_TICKETS))
+        if (raw := os.getenv("LIDL_SYNC_MAX_TICKETS")) is not None:
+            try:
+                return max(1, int(raw))
+            except ValueError:
+                pass
+        return max(1, int(self.LIDL_SYNC_MAX_TICKETS))
+
 
 settings = Settings()

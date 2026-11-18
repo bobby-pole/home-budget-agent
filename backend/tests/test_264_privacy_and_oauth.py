@@ -445,7 +445,7 @@ def test_alembic_encrypted_oauth_attempt_migration_roundtrip(
     cfg.set_main_option("script_location", str(backend_dir / "alembic"))
     cfg.set_main_option("sqlalchemy.url", db_url)
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "h5c9f31d8a12")
     from sqlalchemy import create_engine
 
     engine = create_engine(db_url)

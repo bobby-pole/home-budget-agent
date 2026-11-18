@@ -23,6 +23,7 @@ import type {
   ConnectionDisconnectResponse,
   ConnectionOAuthStartResponse,
   ConnectionOAuthCallbackRequest,
+  ConnectionToggleRequest,
   ReconciliationActionResponse,
   ReconciliationListResponse,
   ReconciliationStatus
@@ -422,6 +423,17 @@ export const api = {
 
   reconnectConnection: async (id: number): Promise<ExternalReceiptConnectionRead> => {
     const response = await apiClient.post<ExternalReceiptConnectionRead>(`/connections/${id}/reconnect`);
+    return response.data;
+  },
+
+  setConnectionEnabled: async (
+    id: number,
+    data: ConnectionToggleRequest
+  ): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.patch<ExternalReceiptConnectionRead>(
+      `/connections/${id}/enabled`,
+      data
+    );
     return response.data;
   },
 

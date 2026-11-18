@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Store, RefreshCw, Unplug, Plus, ShieldCheck, AlertTriangle, Clock, ExternalLink, KeyRound } from "lucide-react";
+import { Store, RefreshCw, Unplug, Plus, ShieldCheck, AlertTriangle, Clock, ExternalLink, KeyRound, Pause, Play } from "lucide-react";
 
 const STORES = [
   { id: "lidl", name: "Lidl Plus", icon: "/brands/lidl.svg" },
@@ -60,7 +60,15 @@ export function ConnectionsTab() {
     ? true
     : Boolean(!isConfigLoading && appConfig?.trusted_local);
   const showCentralVpsNotice = Boolean(hasConfigEndpoint && !isConfigLoading && appConfig && !appConfig.trusted_local);
-  const isDesktopOAuthAvailable = Boolean(isTrustedLocal && appConfig?.desktop_oauth_available);
+  const lidlConnectorEnabled = !hasConfigEndpoint
+    ? true
+    : Boolean(!isConfigLoading && (appConfig?.lidl_connector_enabled ?? true));
+  const showLidlDisabledNotice = Boolean(
+    hasConfigEndpoint && !isConfigLoading && appConfig && appConfig.lidl_connector_enabled === false
+  );
+  const isDesktopOAuthAvailable = Boolean(
+    isTrustedLocal && lidlConnectorEnabled && appConfig?.desktop_oauth_available
+  );
 
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ["connections"],
@@ -102,7 +110,10 @@ export function ConnectionsTab() {
       setCallbackInput("");
       toast.success(t("settings.connections.toast_oauth_success"));
     },
-    onError: () => toast.error(t("settings.connections.toast_oauth_error")),
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      toast.error(t("settings.connections.toast_oauth_error"));
+    },
   });
 
   const desktopOAuthMutation = useMutation({
@@ -114,7 +125,10 @@ export function ConnectionsTab() {
       setCallbackInput("");
       toast.success(t("settings.connections.toast_oauth_success"));
     },
-    onError: () => toast.error(t("settings.connections.toast_oauth_error")),
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      toast.error(t("settings.connections.toast_oauth_error"));
+    },
   });
 
   const syncNowMutation = useMutation({
@@ -125,7 +139,10 @@ export function ConnectionsTab() {
       queryClient.invalidateQueries({ queryKey: ["status"] });
       toast.success(res.message || t("settings.connections.toast_sync_queued"));
     },
-    onError: () => toast.error(t("common.error")),
+    onError: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      toast.error(t("common.error"));
+    },
   });
 
   const reconnectMutation = useMutation({
@@ -145,6 +162,51 @@ export function ConnectionsTab() {
     },
     onError: () => toast.error(t("common.error")),
   });
+
+  const toggleEnabledMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: number; enabled: boolean }) =>
+      api.setConnectionEnabled(id, { enabled }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      toast.success(
+        variables.enabled
+          ? t("settings.connections.toast_resumed")
+          : t("settings.connections.toast_paused")
+      );
+    },
+    onError: () => toast.error(t("common.error")),
+  });
+
+  const getErrorReasonText = (code?: string | null): string | null => {
+    switch (code) {
+      case "AUTH_EXPIRED":
+        return t("settings.connections.error_reasons.AUTH_EXPIRED");
+      case "REAUTH_REQUIRED":
+        return t("settings.connections.error_reasons.REAUTH_REQUIRED");
+      case "MFA_REQUIRED":
+        return t("settings.connections.error_reasons.MFA_REQUIRED");
+      case "RATE_LIMITED":
+        return t("settings.connections.error_reasons.RATE_LIMITED");
+      case "NETWORK_ERROR":
+        return t("settings.connections.error_reasons.NETWORK_ERROR");
+      case "PROVIDER_UNAVAILABLE":
+        return t("settings.connections.error_reasons.PROVIDER_UNAVAILABLE");
+      case "PROVIDER_SCHEMA_CHANGED":
+        return t("settings.connections.error_reasons.PROVIDER_SCHEMA_CHANGED");
+      case "PROVIDER_REVOCATION_UNAVAILABLE":
+        return t("settings.connections.error_reasons.PROVIDER_REVOCATION_UNAVAILABLE");
+      case "ENCRYPTION_KEY_MISSING":
+        return t("settings.connections.error_reasons.ENCRYPTION_KEY_MISSING");
+      case "TOKEN_DECRYPTION_FAILED":
+        return t("settings.connections.error_reasons.TOKEN_DECRYPTION_FAILED");
+      case "CONNECTOR_DISABLED":
+        return t("settings.connections.error_reasons.CONNECTOR_DISABLED");
+      case "SYNC_FAILED":
+        return t("settings.connections.error_reasons.SYNC_FAILED");
+      default:
+        return null;
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -275,6 +337,21 @@ export function ConnectionsTab() {
         </Card>
       )}
 
+      {/* Independent Lidl Connector Disabled Notice */}
+      {showLidlDisabledNotice && (
+        <Card className="border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10">
+          <CardContent className="pt-4 pb-4 flex gap-3 text-xs text-muted-foreground">
+            <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="font-medium text-foreground">
+                {t("settings.connections.lidl_disabled_title")}
+              </div>
+              <p>{t("settings.connections.lidl_disabled_desc")}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
           {t("common.loading")}
@@ -315,6 +392,9 @@ export function ConnectionsTab() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {conn.is_enabled === false && (
+                      <Badge variant="secondary">{t("settings.connections.status_paused")}</Badge>
+                    )}
                     {getStatusBadge(conn.status)}
                   </div>
                 </div>
@@ -343,15 +423,22 @@ export function ConnectionsTab() {
                       </div>
                     )}
                     {conn.last_error_code && (
-                      <div className="flex justify-between text-destructive">
-                        <span>{t("settings.connections.status_sync_error")}:</span>
-                        <span className="font-mono text-[11px]">{conn.last_error_code}</span>
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-destructive">
+                          <span>{t("settings.connections.status_sync_error")}:</span>
+                          <span className="font-mono text-[11px]">{conn.last_error_code}</span>
+                        </div>
+                        {getErrorReasonText(conn.last_error_code) && (
+                          <p className="text-[11px] text-destructive/90 leading-snug">
+                            {getErrorReasonText(conn.last_error_code)}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {!conn.has_token && conn.status === "reauth_required" && (
+                {!conn.has_token && conn.status === "reauth_required" && !conn.last_error_code && (
                   <p className="text-sm text-muted-foreground">{t("settings.connections.authorization_unavailable")}</p>
                 )}
 
@@ -361,7 +448,12 @@ export function ConnectionsTab() {
                     <Button
                       size="sm"
                       variant="default"
-                      disabled={!isTrustedLocal || startOAuthMutation.isPending || desktopOAuthMutation.isPending}
+                      disabled={
+                        !isTrustedLocal ||
+                        !lidlConnectorEnabled ||
+                        startOAuthMutation.isPending ||
+                        desktopOAuthMutation.isPending
+                      }
                       onClick={() => {
                         if (isDesktopOAuthAvailable) {
                           setOauthSession(null);
@@ -381,7 +473,14 @@ export function ConnectionsTab() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={!isTrustedLocal || conn.status !== "active" || !conn.has_token || syncNowMutation.isPending}
+                    disabled={
+                      !isTrustedLocal ||
+                      conn.is_enabled === false ||
+                      (conn.provider === "lidl" && !lidlConnectorEnabled) ||
+                      (conn.status !== "active" && conn.status !== "sync_error") ||
+                      !conn.has_token ||
+                      syncNowMutation.isPending
+                    }
                     onClick={() => syncNowMutation.mutate(conn.id)}
                     className="gap-1.5"
                   >
@@ -390,6 +489,33 @@ export function ConnectionsTab() {
                       ? t("settings.connections.syncing_btn")
                       : t("settings.connections.sync_now_btn")}
                   </Button>
+
+                  {conn.status !== "disconnected" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={toggleEnabledMutation.isPending}
+                      onClick={() =>
+                        toggleEnabledMutation.mutate({
+                          id: conn.id,
+                          enabled: conn.is_enabled === false,
+                        })
+                      }
+                      className="gap-1.5"
+                    >
+                      {conn.is_enabled === false ? (
+                        <>
+                          <Play className="size-3.5" />
+                          {t("settings.connections.resume_btn")}
+                        </>
+                      ) : (
+                        <>
+                          <Pause className="size-3.5" />
+                          {t("settings.connections.pause_btn")}
+                        </>
+                      )}
+                    </Button>
+                  )}
 
                   <Button
                     size="sm"

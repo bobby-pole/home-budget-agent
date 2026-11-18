@@ -34,7 +34,7 @@ from .models import (
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
     ImportJob,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
-    ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest,
+    ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest, ConnectionToggleRequest,
     ReconciliationActionResponse, ReconciliationListResponse, ReconciliationStatus,
 )
 from .adapters import (
@@ -110,6 +110,7 @@ def get_app_config():
         import_worker_role=settings.resolve_import_worker_role(),
         trusted_local=is_trusted_worker_environment(),
         desktop_oauth_available=is_desktop_oauth_available(),
+        lidl_connector_enabled=settings.is_provider_enabled("lidl"),
     )
 
 
@@ -618,7 +619,7 @@ async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> N
         if final_status == ScanStatus.FAILED:
             logger.warning(
                 "Validation failed on empty receipt",
-                extra={"scan_id": scan_id, "message": adapter_result.validation_message},
+                extra={"scan_id": scan_id, "validation_message": adapter_result.validation_message},
             )
         else:
             logger.info(
@@ -2680,7 +2681,8 @@ async def desktop_login_receipt_connection_oauth(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     ConnectionService.require_trusted_local_execution()
-    ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
+    conn = ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
+    ConnectionService.require_provider_enabled(conn.provider)
     if not is_desktop_oauth_available():
         raise HTTPException(
             status_code=503,
@@ -2743,6 +2745,22 @@ def reconnect_receipt_connection(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     return ConnectionService.reconnect(session, current_budget.id, connection_id, current_user)
+
+
+@router.patch("/connections/{connection_id}/enabled", response_model=ExternalReceiptConnectionRead)
+def set_receipt_connection_enabled(
+    connection_id: int,
+    body: ConnectionToggleRequest,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Pause or resume automatic synchronization for an owned connection without deleting tokens."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.set_connection_enabled(
+        session, current_budget.id, connection_id, current_user, body.enabled
+    )
 
 
 @router.post("/connections/{connection_id}/disconnect", response_model=ConnectionDisconnectResponse)

@@ -456,7 +456,7 @@ def test_failed_live_sync_does_not_report_success(client: TestClient, session: S
     session.refresh(connection)
     assert connection.last_success_at is None
     assert connection.next_sync_at is None
-    assert connection.last_error_code == ConnectionErrorCode.SYNC_FAILED.value
+    assert connection.last_error_code == ConnectionErrorCode.PROVIDER_SCHEMA_CHANGED.value
 
 
 def test_receipt_and_lines_are_atomic(client: TestClient, session: Session, monkeypatch):

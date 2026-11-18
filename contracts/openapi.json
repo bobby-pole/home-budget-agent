@@ -3222,6 +3222,77 @@
         }
       }
     },
+    "/api/connections/{connection_id}/enabled": {
+      "patch": {
+        "summary": "Set Receipt Connection Enabled",
+        "description": "Pause or resume automatic synchronization for an owned connection without deleting tokens.",
+        "operationId": "set_receipt_connection_enabled_api_connections__connection_id__enabled_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalReceiptConnectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connections/{connection_id}/disconnect": {
       "post": {
         "summary": "Disconnect Receipt Connection",
@@ -3877,6 +3948,11 @@
             "type": "boolean",
             "title": "Desktop Oauth Available",
             "default": false
+          },
+          "lidl_connector_enabled": {
+            "type": "boolean",
+            "title": "Lidl Connector Enabled",
+            "default": true
           }
         },
         "type": "object",
@@ -4441,6 +4517,21 @@
         ],
         "title": "ConnectionSyncNowResponse"
       },
+      "ConnectionToggleRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "ConnectionToggleRequest",
+        "description": "Enable or pause automatic synchronization for a connection without deleting credentials."
+      },
       "EnvelopeAllocation": {
         "properties": {
           "id": {
@@ -4560,6 +4651,11 @@
           },
           "status": {
             "$ref": "#/components/schemas/ConnectionStatus"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "default": true
           },
           "has_token": {
             "type": "boolean",

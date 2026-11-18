@@ -19,6 +19,7 @@ from app.adapters.lidl_poc_client import (
     get_lidl_live_config,
 )
 from app.adapters.receipt_adapters import LidlPlusReceiptAdapter
+from app.config import settings
 from app.core.encryption import DecryptionError, EncryptionKeyError, get_encryption_service
 from app.import_scheduler import (
     SyncExecutionOutcome,
@@ -62,6 +63,7 @@ def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRea
         consented_scopes=conn.consented_scopes,
         consented_at=conn.consented_at,
         status=ConnectionStatus(conn.status),
+        is_enabled=bool(conn.is_enabled),
         has_token=bool(conn.encrypted_refresh_token),
         last_success_at=conn.last_success_at,
         last_error_code=conn.last_error_code,
@@ -84,6 +86,18 @@ class ConnectionService:
                 detail=(
                     "Merchant authorization and live synchronization are restricted to the "
                     "trusted local executor (IMPORT_WORKER_ROLE=trusted_local)."
+                ),
+            )
+
+    @staticmethod
+    def require_provider_enabled(provider: str) -> None:
+        """Fail closed with 503 when a specific connector is independently disabled."""
+        if not settings.is_provider_enabled(provider):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"The {provider.capitalize()} connector is currently disabled; "
+                    "manual receipt uploads remain available."
                 ),
             )
 
@@ -284,6 +298,7 @@ class ConnectionService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Live OAuth PKCE flow is currently only supported for Lidl Plus (got '{conn.provider}')",
             )
+        ConnectionService.require_provider_enabled(conn.provider)
         try:
             get_encryption_service().primary_key_id
         except EncryptionKeyError as exc:
@@ -322,6 +337,7 @@ class ConnectionService:
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Live OAuth PKCE flow is currently only supported for Lidl Plus (got '{conn.provider}')",
             )
+        ConnectionService.require_provider_enabled(conn.provider)
 
         attempt = ConnectionService._load_oauth_attempt(session, conn)
 
@@ -331,6 +347,13 @@ class ConnectionService:
                 data.callback_url_or_code, attempt, allow_raw_code=allow_raw_code
             )
         except OAuthCallbackError as exc:
+            if getattr(exc, "error_code", None) == ConnectionErrorCode.MFA_REQUIRED.value:
+                ConnectionService._clear_oauth_attempt(conn)
+                conn.status = ConnectionStatus.REAUTH_REQUIRED
+                conn.last_error_code = ConnectionErrorCode.MFA_REQUIRED.value
+                conn.updated_at = datetime.now(timezone.utc)
+                session.add(conn)
+                session.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=str(exc),
@@ -339,9 +362,16 @@ class ConnectionService:
         try:
             token_payload = lidl_client.exchange_code(code, attempt)
         except MerchantRequestError as exc:
+            _, err_code, _ = ConnectionService._classify_merchant_error(
+                exc, is_token_refresh=True
+            )
             ConnectionService._clear_oauth_attempt(conn)
             conn.status = ConnectionStatus.REAUTH_REQUIRED
-            conn.last_error_code = ConnectionErrorCode.AUTH_EXPIRED.value
+            conn.last_error_code = (
+                ConnectionErrorCode.MFA_REQUIRED.value
+                if err_code == ConnectionErrorCode.MFA_REQUIRED
+                else ConnectionErrorCode.AUTH_EXPIRED.value
+            )
             conn.updated_at = datetime.now(timezone.utc)
             session.add(conn)
             session.commit()
@@ -445,6 +475,8 @@ class ConnectionService:
         """Classify a provider HTTP/network failure as transient or permanent."""
         status_code = exc.status_code
         retry_after = exc.retry_after_seconds
+        if getattr(exc, "error_hint", None) == "mfa_required":
+            return ("permanent", ConnectionErrorCode.MFA_REQUIRED, None)
         if is_token_refresh and status_code in (400, 401, 403):
             return ("permanent", ConnectionErrorCode.AUTH_EXPIRED, None)
         if not is_token_refresh and status_code in (401, 403):
@@ -458,15 +490,15 @@ class ConnectionService:
         return ("permanent", ConnectionErrorCode.SYNC_FAILED, None)
 
     @staticmethod
-    def _safe_lidl_cursor(entries: list[dict[str, object]], previous_cursor: Optional[str]) -> Optional[str]:
-        """Build an opaque, non-secret pagination/checkpoint cursor string."""
-        if entries:
-            top_id = str(entries[0].get("id") or "").strip()
-            if top_id:
-                try:
-                    return sanitize_cursor(f"latest:{top_id}")
-                except ValueError:
-                    pass
+    def _safe_lidl_cursor_from_top_id(
+        top_id: Optional[str], previous_cursor: Optional[str]
+    ) -> Optional[str]:
+        """Build an opaque, non-secret checkpoint cursor string."""
+        if top_id:
+            try:
+                return sanitize_cursor(f"latest:{top_id}")
+            except ValueError:
+                pass
         return previous_cursor or "page:1"
 
     @staticmethod
@@ -494,7 +526,8 @@ class ConnectionService:
         conn: ExternalReceiptConnection,
         *,
         job: Optional[ImportJob] = None,
-        max_tickets: int = 10,
+        max_tickets: Optional[int] = None,
+        max_pages: Optional[int] = None,
         client_override: Optional[LidlPoCClient] = None,
     ) -> SyncExecutionOutcome:
         """Execute a single connector sync pass without raising HTTP errors.
@@ -511,6 +544,12 @@ class ConnectionService:
             return SyncExecutionOutcome(
                 error_classification="permanent",
                 error_code=ConnectionErrorCode.SYNC_FAILED,
+            )
+
+        if not settings.is_provider_enabled(conn.provider) or not conn.is_enabled:
+            return SyncExecutionOutcome(
+                error_classification="permanent",
+                error_code=ConnectionErrorCode.CONNECTOR_DISABLED,
             )
 
         if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
@@ -563,61 +602,124 @@ class ConnectionService:
             session.commit()
 
         previous_cursor = job.cursor if job else None
-        page_number, known_latest_id = ConnectionService._parse_lidl_cursor(previous_cursor)
-        try:
-            list_payload = lidl_client.get_tickets_list(access_token, page_number=page_number)
-        except MerchantRequestError as exc:
-            classification, err_code, retry_after = ConnectionService._classify_merchant_error(
-                exc, is_token_refresh=False
-            )
-            return SyncExecutionOutcome(
-                error_classification=classification,
-                error_code=err_code,
-                retry_after_seconds=retry_after,
-            )
+        parsed_page, known_latest_id = ConnectionService._parse_lidl_cursor(previous_cursor)
+        start_page = 1 if known_latest_id is not None else parsed_page
+        effective_max_pages = max(
+            1, max_pages if max_pages is not None else settings.get_lidl_sync_max_pages()
+        )
+        effective_max_tickets = max(
+            1, max_tickets if max_tickets is not None else settings.get_lidl_sync_max_tickets()
+        )
 
-        entries = extract_ticket_list_entries(list_payload)[:max_tickets]
         imported_count = 0
         skipped_count = 0
         failed_count = 0
+        processed_details = 0
+        newest_top_id: Optional[str] = None
+        seen_ticket_ids: set[str] = set()
         first_ticket_classification: Optional[str] = None
         first_ticket_error_code: Optional[ConnectionErrorCode] = None
         first_retry_after: Optional[int] = None
 
-        for entry in entries:
-            ticket_id = str(entry.get("id") or "").strip()
-            if not ticket_id:
-                failed_count += 1
-                continue
-            # Stop fetching older ticket details once we reach the already-synced checkpoint.
-            if known_latest_id is not None and ticket_id == known_latest_id:
-                break
+        for current_page in range(start_page, start_page + effective_max_pages):
             try:
-                raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
-                imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
-                    session,
-                    conn.budget_id,
-                    conn.owner_user_id,
-                    ticket_id,
-                    raw_ticket,
-                    connection_id=conn.id,
-                )
-                if imported:
-                    imported_count += 1
-                elif skipped:
-                    skipped_count += 1
+                list_payload = lidl_client.get_tickets_list(access_token, page_number=current_page)
             except MerchantRequestError as exc:
+                classification, err_code, retry_after = ConnectionService._classify_merchant_error(
+                    exc, is_token_refresh=False
+                )
+                if imported_count == 0 and skipped_count == 0 and failed_count == 0:
+                    return SyncExecutionOutcome(
+                        error_classification=classification,
+                        error_code=err_code,
+                        retry_after_seconds=retry_after,
+                    )
                 failed_count += 1
                 if first_ticket_classification is None:
-                    (
-                        first_ticket_classification,
-                        first_ticket_error_code,
-                        first_retry_after,
-                    ) = ConnectionService._classify_merchant_error(exc, is_token_refresh=False)
-            except TicketMappingError:
-                failed_count += 1
-                if first_ticket_error_code is None:
-                    first_ticket_error_code = ConnectionErrorCode.SYNC_FAILED
+                    first_ticket_classification = classification
+                    first_ticket_error_code = err_code
+                    first_retry_after = retry_after
+                break
+
+            page_entries = extract_ticket_list_entries(list_payload)
+            if not page_entries:
+                break
+
+            if newest_top_id is None:
+                candidate_top = str(page_entries[0].get("id") or "").strip()
+                if candidate_top:
+                    newest_top_id = candidate_top
+
+            new_ids_on_page = 0
+            reached_known_latest = False
+            hit_ticket_cap = False
+            abort_sync = False
+
+            for entry in page_entries:
+                ticket_id = str(entry.get("id") or "").strip()
+                if not ticket_id:
+                    failed_count += 1
+                    if first_ticket_classification is None:
+                        first_ticket_classification = "permanent"
+                        first_ticket_error_code = ConnectionErrorCode.PROVIDER_SCHEMA_CHANGED
+                    continue
+                if known_latest_id is not None and ticket_id == known_latest_id:
+                    reached_known_latest = True
+                    break
+                if ticket_id in seen_ticket_ids:
+                    continue
+                seen_ticket_ids.add(ticket_id)
+                new_ids_on_page += 1
+
+                if processed_details >= effective_max_tickets:
+                    hit_ticket_cap = True
+                    break
+                processed_details += 1
+
+                try:
+                    raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
+                    imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
+                        session,
+                        conn.budget_id,
+                        conn.owner_user_id,
+                        ticket_id,
+                        raw_ticket,
+                        connection_id=conn.id,
+                    )
+                    if imported:
+                        imported_count += 1
+                    elif skipped:
+                        skipped_count += 1
+                except MerchantRequestError as exc:
+                    failed_count += 1
+                    classification, err_code, retry_after = ConnectionService._classify_merchant_error(
+                        exc, is_token_refresh=False
+                    )
+                    if first_ticket_classification is None:
+                        first_ticket_classification = classification
+                        first_ticket_error_code = err_code
+                        first_retry_after = retry_after
+                    if err_code in (
+                        ConnectionErrorCode.RATE_LIMITED,
+                        ConnectionErrorCode.AUTH_EXPIRED,
+                        ConnectionErrorCode.MFA_REQUIRED,
+                    ):
+                        abort_sync = True
+                        break
+                except TicketMappingError:
+                    failed_count += 1
+                    if first_ticket_classification is None:
+                        first_ticket_classification = "permanent"
+                        first_ticket_error_code = ConnectionErrorCode.PROVIDER_SCHEMA_CHANGED
+
+            if abort_sync or reached_known_latest or hit_ticket_cap or new_ids_on_page == 0:
+                break
+
+            raw_total_count = list_payload.get("totalCount")
+            raw_page_size = list_payload.get("size") or list_payload.get("pageSize")
+            if isinstance(raw_total_count, int) and isinstance(raw_page_size, int) and raw_page_size > 0:
+                if current_page * raw_page_size >= raw_total_count:
+                    break
 
         if failed_count > 0:
             return SyncExecutionOutcome(
@@ -630,7 +732,9 @@ class ConnectionService:
                 retry_after_seconds=first_retry_after,
             )
 
-        next_cursor = ConnectionService._safe_lidl_cursor(entries, previous_cursor)
+        next_cursor = ConnectionService._safe_lidl_cursor_from_top_id(
+            newest_top_id, previous_cursor
+        )
         return SyncExecutionOutcome(
             imported_count=imported_count,
             skipped_count=skipped_count,
@@ -646,13 +750,20 @@ class ConnectionService:
         user: User,
         *,
         execute_live: bool = False,
-        max_tickets: int = 10,
+        max_tickets: Optional[int] = None,
+        max_pages: Optional[int] = None,
         client_override: Optional[LidlPoCClient] = None,
     ) -> ConnectionSyncNowResponse:
         """Queue a durable sync job or execute an immediate live sync pass."""
         ConnectionService.require_trusted_local_execution()
         ConnectionService._require_write_member(session, budget_id, user)
         conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        ConnectionService.require_provider_enabled(conn.provider)
+        if not conn.is_enabled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Connection synchronization is currently paused; resume it before syncing.",
+            )
         if conn.status not in (ConnectionStatus.ACTIVE, ConnectionStatus.SYNC_ERROR) or not conn.encrypted_refresh_token:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -685,6 +796,7 @@ class ConnectionService:
             session,
             conn,
             max_tickets=max_tickets,
+            max_pages=max_pages,
             client_override=client_override,
         )
         session.refresh(conn)
@@ -705,11 +817,13 @@ class ConnectionService:
                     detail="Stored connection token could not be decrypted; re-authorization required.",
                 )
 
-            if err_code == ConnectionErrorCode.AUTH_EXPIRED:
+            if err_code in (ConnectionErrorCode.AUTH_EXPIRED, ConnectionErrorCode.MFA_REQUIRED):
                 conn.status = ConnectionStatus.REAUTH_REQUIRED
             else:
                 conn.status = ConnectionStatus.SYNC_ERROR
             conn.last_error_code = err_code.value
+            conn.sync_requested_at = None
+            conn.next_sync_at = None
             conn.updated_at = datetime.now(timezone.utc)
             session.add(conn)
             session.commit()
@@ -719,15 +833,21 @@ class ConnectionService:
             )
 
         finish_now = datetime.now(timezone.utc)
-        conn.status = (
-            ConnectionStatus.SYNC_ERROR if outcome.failed_count else ConnectionStatus.ACTIVE
-        )
-        conn.last_error_code = (
-            ConnectionErrorCode.SYNC_FAILED.value if outcome.failed_count else None
-        )
         if outcome.failed_count:
+            err_code = outcome.error_code or ConnectionErrorCode.SYNC_FAILED
+            if err_code in (
+                ConnectionErrorCode.AUTH_EXPIRED,
+                ConnectionErrorCode.MFA_REQUIRED,
+                ConnectionErrorCode.REAUTH_REQUIRED,
+            ):
+                conn.status = ConnectionStatus.REAUTH_REQUIRED
+            else:
+                conn.status = ConnectionStatus.SYNC_ERROR
+            conn.last_error_code = err_code.value
             conn.next_sync_at = None
         else:
+            conn.status = ConnectionStatus.ACTIVE
+            conn.last_error_code = None
             conn.last_success_at = finish_now
             policy = get_provider_policy(conn.provider)
             conn.next_sync_at = finish_now + timedelta(
@@ -759,6 +879,45 @@ class ConnectionService:
             skipped_count=outcome.skipped_count,
             failed_count=outcome.failed_count,
         )
+
+    @staticmethod
+    def set_connection_enabled(
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+        enabled: bool,
+    ) -> ExternalReceiptConnectionRead:
+        """Pause or resume automatic synchronization without removing stored credentials."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        now = datetime.now(timezone.utc)
+        conn.is_enabled = bool(enabled)
+        conn.updated_at = now
+        if not conn.is_enabled:
+            conn.sync_requested_at = None
+            conn.next_sync_at = None
+            session.add(conn)
+            if conn.id is not None:
+                cancel_pending_jobs_for_connection(
+                    session,
+                    connection_id=conn.id,
+                    error_code=ConnectionErrorCode.CONNECTOR_DISABLED,
+                    commit=False,
+                )
+        else:
+            if conn.last_error_code == ConnectionErrorCode.CONNECTOR_DISABLED.value:
+                conn.last_error_code = None
+            if (
+                conn.status == ConnectionStatus.ACTIVE
+                and conn.encrypted_refresh_token
+                and conn.next_sync_at is None
+            ):
+                conn.next_sync_at = now
+            session.add(conn)
+        session.commit()
+        session.refresh(conn)
+        return to_read_dto(conn)
 
     @staticmethod
     def reconnect(
