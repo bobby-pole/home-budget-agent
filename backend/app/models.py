@@ -96,6 +96,17 @@ class TransactionStatus(str, Enum):
     PENDING = "pending"
 
 
+class ReviewStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class AutoMergePolicy(str, Enum):
+    AUTO = "auto"
+    MANUAL = "manual"
+
+
 class SourceType(str, Enum):
     MERCHANT_API = "MERCHANT_API"
     E_RECEIPT = "E_RECEIPT"
@@ -309,6 +320,10 @@ class TransactionBase(SQLModel):
         default=TransactionStatus.UNCLEARED,
         sa_column=Column(String, index=True, nullable=False, server_default=TransactionStatus.UNCLEARED.value),
     )
+    review_status: ReviewStatus = Field(
+        default=ReviewStatus.APPROVED,
+        sa_column=Column(String, index=True, nullable=False, server_default=ReviewStatus.APPROVED.value),
+    )
     import_hash: Optional[str] = Field(default=None, index=True)
     account_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
     transfer_id: Optional[int] = Field(default=None, foreign_key="account.id", index=True)
@@ -331,6 +346,14 @@ class Transaction(TransactionBase, table=True):
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
     category_id: Optional[int] = Field(default=None, foreign_key="category.id")
     reconciled_into_id: Optional[int] = Field(default=None, foreign_key="transaction.id", index=True)
+    rejected_at: Optional[datetime] = Field(default=None, sa_column=Column(UTCDateTime(), nullable=True))
+    rejection_reason: Optional[str] = Field(default=None)
+    import_batch_id: Optional[str] = Field(default=None, index=True)
+
+    @field_validator("rejected_at", mode="before")
+    @classmethod
+    def validate_rejected_at_tz(cls, v: Any) -> Optional[datetime]:
+        return ensure_tz_aware(v)
 
     lines: List["TransactionLine"] = Relationship(
         back_populates="transaction",
@@ -466,6 +489,7 @@ class ReconciliationMatchKind(str, Enum):
     EXACT = "exact"
     REFUND = "refund"
     SPLIT_PAYMENT = "split_payment"
+    RECEIPT_DUPLICATE = "receipt_duplicate"
 
 
 class ReconciliationLink(SQLModel, table=True):
@@ -640,6 +664,18 @@ class ExternalReceiptConnectionBase(SQLModel):
         default=True,
         sa_column=Column(Boolean, nullable=False, server_default=text("1")),
     )
+    default_account_id: Optional[int] = Field(
+        default=None, foreign_key="account.id", ondelete="SET NULL", index=True
+    )
+    auto_merge_policy: AutoMergePolicy = Field(
+        default=AutoMergePolicy.AUTO,
+        sa_column=Column(String, nullable=False, server_default=AutoMergePolicy.AUTO.value),
+    )
+    auto_approve_clean: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default=text("1")),
+    )
+    sync_from_date: Optional[date] = Field(default=None)
 
 
 class ExternalReceiptConnection(ExternalReceiptConnectionBase, table=True):
@@ -801,6 +837,12 @@ class ExternalReceiptConnectionRead(SQLModel):
     consented_at: Optional[datetime] = None
     status: ConnectionStatus
     is_enabled: bool = True
+    default_account_id: Optional[int] = None
+    auto_merge_policy: AutoMergePolicy = AutoMergePolicy.AUTO
+    auto_approve_clean: bool = True
+    sync_from_date: Optional[date] = None
+    budget_first_month_date: Optional[date] = None
+    suggested_account_id: Optional[int] = None
     has_token: bool = False
     last_success_at: Optional[datetime] = None
     last_error_code: Optional[str] = None
@@ -808,6 +850,17 @@ class ExternalReceiptConnectionRead(SQLModel):
     sync_requested_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+
+
+class ConnectionSettingsUpdate(SQLModel):
+    """Update connector account, duplicate merge policy, and sync date range."""
+
+    model_config = SQLModelConfig(extra="forbid")
+
+    default_account_id: Optional[int] = None
+    auto_merge_policy: Optional[AutoMergePolicy] = None
+    auto_approve_clean: Optional[bool] = None
+    sync_from_date: Optional[date] = None
 
 
 class ConnectionToggleRequest(SQLModel):
@@ -967,12 +1020,62 @@ class TransactionRead(TransactionBase):
     note: Optional[str] = None
     category_id: Optional[int] = None
     reconciled_into_id: Optional[int] = None
+    rejected_at: Optional[datetime] = None
+    rejection_reason: Optional[str] = None
+    import_batch_id: Optional[str] = None
+    suggested_account_id: Optional[int] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None
     tags: List["TagRead"] = []
     receipt_scan: Optional[ReceiptScanRead] = None
     source_records: List[SourceRecordRead] = []
+
+
+class BankCsvPreviewRow(SQLModel):
+    date: datetime
+    merchant_name: str
+    title: str
+    amount: MoneyDecimal
+    currency: str = "PLN"
+    detected_type: str
+    is_duplicate: bool = False
+
+
+class BankCsvPreviewResponse(SQLModel):
+    filename: str
+    total_rows: int
+    new_count: int
+    duplicate_count: int
+    suggested_account_id: Optional[int] = None
+    warnings: List[str] = []
+    rows: List[BankCsvPreviewRow] = []
+
+
+class InboxBulkApproveRequest(SQLModel):
+    model_config = SQLModelConfig(extra="forbid")
+
+    transaction_ids: List[int]
+    account_id: int
+
+
+class InboxBulkActionResponse(SQLModel):
+    approved_count: int
+    skipped_ids: List[int] = []
+    errors: List[dict[str, Any]] = []
+
+
+class InboxRejectRequest(SQLModel):
+    model_config = SQLModelConfig(extra="forbid")
+
+    reason: Optional[str] = None
+
+
+class DuplicateMergeRequest(SQLModel):
+    model_config = SQLModelConfig(extra="forbid")
+
+    keep_transaction_id: Optional[int] = None
+    account_id: Optional[int] = None
 
 
 class ReconciliationTransactionSummary(SQLModel):
@@ -1292,10 +1395,15 @@ def recalculate_account_balance(connection: Any, acc_id: int) -> None:
             split_bank_ids.add(bank_tx_id)
     split_target_ids = set(split_bank_by_target.keys())
 
-    regular_filter = col(Transaction.reconciled_into_id).is_(None)
+    approved_filter = col(Transaction.review_status) == ReviewStatus.APPROVED.value
+    regular_filter = (col(Transaction.reconciled_into_id).is_(None)) & approved_filter
     if split_target_ids:
         regular_filter = regular_filter & col(Transaction.id).not_in(split_target_ids)
-    out_filter = or_(regular_filter, col(Transaction.id).in_(split_bank_ids)) if split_bank_ids else regular_filter
+    out_filter = (
+        or_(regular_filter, (col(Transaction.id).in_(split_bank_ids)) & approved_filter)
+        if split_bank_ids
+        else regular_filter
+    )
 
     res_out = connection.execute(
         select(col(Transaction.type), col(Transaction.total_amount)).where(
@@ -1311,6 +1419,7 @@ def recalculate_account_balance(connection: Any, acc_id: int) -> None:
                 col(Transaction.account_id) == acc_id,
                 col(Transaction.id).in_(split_target_ids),
                 col(Transaction.reconciled_into_id).is_(None),
+                approved_filter,
             )
         ).fetchall()
 
@@ -1324,7 +1433,8 @@ def recalculate_account_balance(connection: Any, acc_id: int) -> None:
         if needed_bank_ids:
             bank_rows = connection.execute(
                 select(col(Transaction.id), col(Transaction.total_amount)).where(
-                    col(Transaction.id).in_(needed_bank_ids)
+                    col(Transaction.id).in_(needed_bank_ids),
+                    approved_filter,
                 )
             ).fetchall()
             for b_id, b_amt in bank_rows:
@@ -1336,6 +1446,7 @@ def recalculate_account_balance(connection: Any, acc_id: int) -> None:
             col(Transaction.transfer_id) == acc_id,
             col(Transaction.type) == "transfer",
             col(Transaction.reconciled_into_id).is_(None),
+            approved_filter,
         )
     ).scalars().all()
 

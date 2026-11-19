@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.adapters.lidl_poc_client import (
     AuthorizationAttempt,
@@ -30,19 +30,24 @@ from app.import_scheduler import (
     is_trusted_worker_environment,
     sanitize_cursor,
 )
+from app.inbox_service import get_budget_first_month_date, suggest_account_for_budget
 from app.ingestion_service import ingest_receipt_result
 from app.models import (
+    Account,
+    AutoMergePolicy,
     BudgetMember,
     ConnectionDisconnectResponse,
     ConnectionErrorCode,
     ConnectionOAuthCallbackRequest,
     ConnectionOAuthStartResponse,
+    ConnectionSettingsUpdate,
     ConnectionStatus,
     ConnectionSyncNowResponse,
     ExternalReceiptConnection,
     ExternalReceiptConnectionCreate,
     ExternalReceiptConnectionRead,
     ImportJob,
+    ImportJobStatus,
     User,
     ensure_tz_aware,
 )
@@ -53,8 +58,44 @@ CONNECTION_WRITE_ROLES = {"owner", "editor"}
 _OAUTH_ATTEMPT_TTL = timedelta(minutes=15)
 
 
-def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRead:
+def _coerce_utc_date(value: Optional[datetime | date | str]) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+    except ValueError:
+        try:
+            return datetime.strptime(raw[:10], "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+
+def to_read_dto(
+    conn: ExternalReceiptConnection,
+    session: Optional[Session] = None,
+) -> ExternalReceiptConnectionRead:
     """Return the public, credential-free representation of a connection."""
+    budget_first_month = (
+        get_budget_first_month_date(session, budget_id=conn.budget_id)
+        if session is not None
+        else None
+    )
+    suggested_account_id = (
+        suggest_account_for_budget(
+            session,
+            budget_id=conn.budget_id,
+            connection_default_account_id=conn.default_account_id,
+        )
+        if session is not None
+        else conn.default_account_id
+    )
     return ExternalReceiptConnectionRead(
         id=conn.id or 0,
         budget_id=conn.budget_id,
@@ -65,6 +106,12 @@ def to_read_dto(conn: ExternalReceiptConnection) -> ExternalReceiptConnectionRea
         status=ConnectionStatus(conn.status),
         is_enabled=bool(conn.is_enabled),
         has_token=bool(conn.encrypted_refresh_token),
+        default_account_id=conn.default_account_id,
+        auto_merge_policy=conn.auto_merge_policy,
+        auto_approve_clean=bool(conn.auto_approve_clean),
+        sync_from_date=conn.sync_from_date,
+        budget_first_month_date=budget_first_month,
+        suggested_account_id=suggested_account_id,
         last_success_at=conn.last_success_at,
         last_error_code=conn.last_error_code,
         next_sync_at=conn.next_sync_at,
@@ -225,7 +272,7 @@ class ConnectionService:
                 ExternalReceiptConnection.owner_user_id == user.id,
             )
         ).all()
-        return [to_read_dto(connection) for connection in connections]
+        return [to_read_dto(connection, session=session) for connection in connections]
 
     @staticmethod
     def get_connection(
@@ -279,7 +326,90 @@ class ConnectionService:
         session.add(connection)
         session.commit()
         session.refresh(connection)
-        return to_read_dto(connection)
+        return to_read_dto(connection, session=session)
+
+    @staticmethod
+    def _reset_connection_cursors(session: Session, connection_id: int) -> None:
+        jobs = session.exec(
+            select(ImportJob).where(
+                ImportJob.connection_id == connection_id,
+                col(ImportJob.status).in_(
+                    [
+                        ImportJobStatus.PENDING.value,
+                        ImportJobStatus.RUNNING.value,
+                    ]
+                ),
+            )
+        ).all()
+        for job in jobs:
+            job.cursor = None
+            session.add(job)
+
+    @staticmethod
+    def update_connection_settings(
+        session: Session,
+        budget_id: int,
+        connection_id: int,
+        user: User,
+        data: ConnectionSettingsUpdate,
+    ) -> ExternalReceiptConnectionRead:
+        """Update per-connection import preferences (account, merge policy, date range)."""
+        ConnectionService._require_write_member(session, budget_id, user)
+        conn = ConnectionService.get_connection(session, budget_id, connection_id, user)
+        updates = data.model_dump(exclude_unset=True)
+
+        if "default_account_id" in updates:
+            acc_id = updates["default_account_id"]
+            if acc_id is not None:
+                acc = session.get(Account, acc_id)
+                if acc is None or acc.budget_id != budget_id or not acc.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Selected default account is invalid or inactive in this budget",
+                    )
+            conn.default_account_id = acc_id
+
+        if "auto_merge_policy" in updates and updates["auto_merge_policy"] is not None:
+            raw_policy = updates["auto_merge_policy"]
+            policy_raw = (
+                raw_policy.value
+                if isinstance(raw_policy, AutoMergePolicy)
+                else str(raw_policy).strip().lower()
+            )
+            try:
+                conn.auto_merge_policy = AutoMergePolicy(policy_raw)
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Unsupported auto_merge_policy; use 'auto' or 'manual'",
+                ) from exc
+
+        if "auto_approve_clean" in updates and updates["auto_approve_clean"] is not None:
+            conn.auto_approve_clean = bool(updates["auto_approve_clean"])
+
+        if "sync_from_date" in updates:
+            prev_cutoff = _coerce_utc_date(conn.sync_from_date)
+            raw_new = updates["sync_from_date"]
+            if raw_new is None:
+                conn.sync_from_date = None
+                if prev_cutoff is not None and conn.id is not None:
+                    ConnectionService._reset_connection_cursors(session, conn.id)
+            else:
+                new_cutoff = _coerce_utc_date(raw_new)
+                if new_cutoff is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail="Invalid sync_from_date format",
+                    )
+                conn.sync_from_date = new_cutoff
+                if (prev_cutoff is None or new_cutoff < prev_cutoff) and conn.id is not None:
+                    ConnectionService._reset_connection_cursors(session, conn.id)
+
+        conn.updated_at = datetime.now(timezone.utc)
+        session.add(conn)
+        session.commit()
+        session.refresh(conn)
+        return to_read_dto(conn, session=session)
 
     @staticmethod
     def start_oauth(
@@ -432,7 +562,51 @@ class ConnectionService:
         session.commit()
         session.refresh(connection)
         enqueue_connection_sync_job(session, connection, next_retry_at=now, commit=True)
-        return to_read_dto(connection)
+        return to_read_dto(connection, session=session)
+
+    @staticmethod
+    def _ingest_lidl_canonical_receipt_with_cutoff(
+        session: Session,
+        budget_id: int,
+        user_id: int,
+        ticket_id: str,
+        raw_ticket: dict,
+        *,
+        connection_id: Optional[int] = None,
+        cutoff_date: Optional[date] = None,
+        default_account_id: Optional[int] = None,
+        auto_merge_policy: str = AutoMergePolicy.AUTO.value,
+        auto_approve_clean: bool = True,
+    ) -> tuple[bool, bool, bool]:
+        """Extract Lidl ticket, enforce optional ``cutoff_date``, and ingest cleanly.
+
+        Returns ``(imported, skipped, reached_cutoff)``.
+        """
+        clean_ticket_id = ticket_id.strip()
+        result = LidlPlusReceiptAdapter().extract(
+            raw_ticket,
+            budget_id=budget_id,
+            connection_id=connection_id,
+            ticket_id=clean_ticket_id,
+        )
+        if cutoff_date is not None:
+            receipt_date = _coerce_utc_date(result.receipt.date)
+            if receipt_date is not None and receipt_date < cutoff_date:
+                return False, True, True
+
+        outcome = ingest_receipt_result(
+            session,
+            result,
+            budget_id=budget_id,
+            user_id=user_id,
+            note=f"Lidl Plus #{clean_ticket_id}",
+            categorize=True,
+            commit=True,
+            account_id=default_account_id,
+            auto_merge_policy=auto_merge_policy,
+            auto_approve_clean=auto_approve_clean,
+        )
+        return outcome.imported, outcome.skipped, False
 
     @staticmethod
     def _ingest_lidl_canonical_receipt(
@@ -448,23 +622,15 @@ class ConnectionService:
 
         Returns (imported, skipped). Raises TicketMappingError on invalid payload.
         """
-        clean_ticket_id = ticket_id.strip()
-        result = LidlPlusReceiptAdapter().extract(
-            raw_ticket,
-            budget_id=budget_id,
-            connection_id=connection_id,
-            ticket_id=clean_ticket_id,
-        )
-        outcome = ingest_receipt_result(
+        imported, skipped, _ = ConnectionService._ingest_lidl_canonical_receipt_with_cutoff(
             session,
-            result,
-            budget_id=budget_id,
-            user_id=user_id,
-            note=f"Lidl Plus #{clean_ticket_id}",
-            categorize=True,
-            commit=True,
+            budget_id,
+            user_id,
+            ticket_id,
+            raw_ticket,
+            connection_id=connection_id,
         )
-        return outcome.imported, outcome.skipped
+        return imported, skipped
 
     @staticmethod
     def _classify_merchant_error(
@@ -529,6 +695,9 @@ class ConnectionService:
         max_tickets: Optional[int] = None,
         max_pages: Optional[int] = None,
         client_override: Optional[LidlPoCClient] = None,
+        sync_from_date_override: Optional[datetime | date | str] = None,
+        auto_merge_policy_override: Optional[str] = None,
+        ignore_known_latest: bool = False,
     ) -> SyncExecutionOutcome:
         """Execute a single connector sync pass without raising HTTP errors.
 
@@ -603,7 +772,19 @@ class ConnectionService:
 
         previous_cursor = job.cursor if job else None
         parsed_page, known_latest_id = ConnectionService._parse_lidl_cursor(previous_cursor)
-        start_page = 1 if known_latest_id is not None else parsed_page
+        if ignore_known_latest:
+            known_latest_id = None
+        start_page = 1 if (known_latest_id is not None or ignore_known_latest) else parsed_page
+        effective_cutoff = (
+            _coerce_utc_date(sync_from_date_override)
+            if sync_from_date_override is not None
+            else _coerce_utc_date(conn.sync_from_date)
+        )
+        effective_policy = (
+            auto_merge_policy_override
+            or conn.auto_merge_policy
+            or AutoMergePolicy.AUTO.value
+        )
         effective_max_pages = max(
             1, max_pages if max_pages is not None else settings.get_lidl_sync_max_pages()
         )
@@ -652,6 +833,7 @@ class ConnectionService:
 
             new_ids_on_page = 0
             reached_known_latest = False
+            reached_cutoff_date = False
             hit_ticket_cap = False
             abort_sync = False
 
@@ -666,6 +848,13 @@ class ConnectionService:
                 if known_latest_id is not None and ticket_id == known_latest_id:
                     reached_known_latest = True
                     break
+                if effective_cutoff is not None:
+                    entry_date = _coerce_utc_date(
+                        entry.get("date") or entry.get("purchaseDate") or entry.get("createdAt")
+                    )
+                    if entry_date is not None and entry_date < effective_cutoff:
+                        reached_cutoff_date = True
+                        break
                 if ticket_id in seen_ticket_ids:
                     continue
                 seen_ticket_ids.add(ticket_id)
@@ -678,14 +867,23 @@ class ConnectionService:
 
                 try:
                     raw_ticket = lidl_client.get_ticket_detail(access_token, ticket_id)
-                    imported, skipped = ConnectionService._ingest_lidl_canonical_receipt(
-                        session,
-                        conn.budget_id,
-                        conn.owner_user_id,
-                        ticket_id,
-                        raw_ticket,
-                        connection_id=conn.id,
+                    imported, skipped, reached_cutoff = (
+                        ConnectionService._ingest_lidl_canonical_receipt_with_cutoff(
+                            session,
+                            conn.budget_id,
+                            conn.owner_user_id,
+                            ticket_id,
+                            raw_ticket,
+                            connection_id=conn.id,
+                            cutoff_date=effective_cutoff,
+                            default_account_id=conn.default_account_id,
+                            auto_merge_policy=effective_policy,
+                            auto_approve_clean=bool(conn.auto_approve_clean),
+                        )
                     )
+                    if reached_cutoff:
+                        reached_cutoff_date = True
+                        break
                     if imported:
                         imported_count += 1
                     elif skipped:
@@ -712,7 +910,13 @@ class ConnectionService:
                         first_ticket_classification = "permanent"
                         first_ticket_error_code = ConnectionErrorCode.PROVIDER_SCHEMA_CHANGED
 
-            if abort_sync or reached_known_latest or hit_ticket_cap or new_ids_on_page == 0:
+            if (
+                abort_sync
+                or reached_known_latest
+                or reached_cutoff_date
+                or hit_ticket_cap
+                or new_ids_on_page == 0
+            ):
                 break
 
             raw_total_count = list_payload.get("totalCount")
@@ -753,6 +957,8 @@ class ConnectionService:
         max_tickets: Optional[int] = None,
         max_pages: Optional[int] = None,
         client_override: Optional[LidlPoCClient] = None,
+        sync_from_date: Optional[str] = None,
+        auto_merge_policy: Optional[str] = None,
     ) -> ConnectionSyncNowResponse:
         """Queue a durable sync job or execute an immediate live sync pass."""
         ConnectionService.require_trusted_local_execution()
@@ -769,6 +975,30 @@ class ConnectionService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Connection requires a completed authorization before synchronization",
             )
+
+        ignore_known_latest = False
+        if auto_merge_policy is not None:
+            try:
+                conn.auto_merge_policy = AutoMergePolicy(auto_merge_policy.strip().lower())
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Unsupported auto_merge_policy; use 'auto' or 'manual'",
+                ) from exc
+
+        if sync_from_date is not None:
+            prev_cutoff = _coerce_utc_date(conn.sync_from_date)
+            new_cutoff = _coerce_utc_date(sync_from_date)
+            if new_cutoff is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Invalid sync_from_date format",
+                )
+            conn.sync_from_date = new_cutoff
+            if prev_cutoff is None or new_cutoff < prev_cutoff:
+                ignore_known_latest = True
+                if conn.id is not None:
+                    ConnectionService._reset_connection_cursors(session, conn.id)
 
         now = datetime.now(timezone.utc)
         conn.sync_requested_at = now
@@ -798,6 +1028,9 @@ class ConnectionService:
             max_tickets=max_tickets,
             max_pages=max_pages,
             client_override=client_override,
+            sync_from_date_override=conn.sync_from_date,
+            auto_merge_policy_override=conn.auto_merge_policy,
+            ignore_known_latest=ignore_known_latest,
         )
         session.refresh(conn)
         if (
@@ -917,7 +1150,7 @@ class ConnectionService:
             session.add(conn)
         session.commit()
         session.refresh(conn)
-        return to_read_dto(conn)
+        return to_read_dto(conn, session=session)
 
     @staticmethod
     def reconnect(
@@ -942,7 +1175,7 @@ class ConnectionService:
             )
         session.commit()
         session.refresh(conn)
-        return to_read_dto(conn)
+        return to_read_dto(conn, session=session)
 
     @staticmethod
     def disconnect(

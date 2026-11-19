@@ -17,6 +17,8 @@ vi.mock("@/lib/api", () => ({
     setConnectionEnabled: vi.fn(),
     reconnectConnection: vi.fn(),
     disconnectConnection: vi.fn(),
+    getAccounts: vi.fn(),
+    updateConnectionSettings: vi.fn(),
   },
 }));
 
@@ -327,5 +329,52 @@ it("hides Pause button on disconnected connections and refreshes state when sync
 
   fireEvent.click(screen.getAllByRole("button", { name: /Synchronizuj teraz/i })[0]);
   expect(await screen.findByText("MFA_REQUIRED")).toBeInTheDocument();
+});
+
+it("allows saving connection default account, merge policy, and sync date preset", async () => {
+  vi.mocked(api.getAccounts).mockResolvedValue([
+    {
+      id: 7,
+      name: "Konto Domowe",
+      type: "checking",
+      currency: "PLN",
+      initial_balance: "0.00",
+      current_balance: "500.00",
+      is_on_budget: true,
+      is_active: true,
+      budget_id: 10,
+      category_id: null,
+    },
+  ]);
+  vi.mocked(api.getConnections).mockResolvedValue([
+    {
+      ...mockActiveConnection,
+      suggested_account_id: 7,
+      budget_first_month_date: "2026-01-01",
+      auto_merge_policy: "auto",
+      sync_from_date: "2026-09-01",
+    },
+  ]);
+  vi.mocked(api.updateConnectionSettings).mockResolvedValue({
+    ...mockActiveConnection,
+    default_account_id: 7,
+    auto_merge_policy: "auto",
+    sync_from_date: "2026-01-01",
+  });
+
+  render(<ConnectionsTab />);
+
+  const budgetStartBtn = await screen.findByRole("button", { name: /Od początku budżetu/i });
+  fireEvent.click(budgetStartBtn);
+
+  fireEvent.click(screen.getByRole("button", { name: /Zapisz ustawienia/i }));
+
+  await waitFor(() => {
+    expect(api.updateConnectionSettings).toHaveBeenCalledWith(1, {
+      default_account_id: 7,
+      auto_merge_policy: "auto",
+      sync_from_date: "2026-01-01",
+    });
+  });
 });
 });

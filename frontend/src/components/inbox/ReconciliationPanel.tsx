@@ -48,6 +48,8 @@ function formatScorePercent(score: string | undefined): string {
 function getSignalLabel(signal: ReconciliationSignalRead): string {
   const knownCodes = new Set([
     "amount_exact",
+    "exact_amount",
+    "near_amount",
     "amount_exact_rounding",
     "refund_amount_exact",
     "refund_amount_partial",
@@ -55,6 +57,9 @@ function getSignalLabel(signal: ReconciliationSignalRead): string {
     "split_payment_remainder",
     "split_payment_partial",
     "date_same_day",
+    "same_day",
+    "date_adjacent",
+    "date_window_2d",
     "date_within_1d",
     "date_within_2d",
     "date_settlement_lag",
@@ -62,7 +67,9 @@ function getSignalLabel(signal: ReconciliationSignalRead): string {
     "refund_date_window",
     "merchant_strong_match",
     "merchant_partial_match",
+    "merchant_similarity",
     "merchant_mismatch",
+    "merchant_missing",
     "account_exact_match",
     "account_mismatch",
     "account_unassigned",
@@ -164,6 +171,7 @@ export function ReconciliationPanel() {
     queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
     queryClient.invalidateQueries({ queryKey: ["inbox"] });
+    queryClient.invalidateQueries({ queryKey: ["status"] });
   };
 
   const refreshMutation = useMutation({
@@ -197,6 +205,22 @@ export function ReconciliationPanel() {
     onSuccess: () => {
       invalidateAll();
       toast.success(t("inbox.reconciliation.reject_success"));
+    },
+    onError: (err) => {
+      toast.error(extractErrorMessage(err));
+    },
+  });
+
+  const mergeDuplicateMutation = useMutation({
+    mutationFn: (linkId: number) =>
+      typeof api.mergeDuplicateReconciliation === "function"
+        ? api.mergeDuplicateReconciliation(linkId)
+        : api.acceptReconciliation(linkId),
+    onMutate: (id) => setBusyLinkId(id),
+    onSettled: () => setBusyLinkId(null),
+    onSuccess: () => {
+      invalidateAll();
+      toast.success(t("inbox.reconciliation.merge_success"));
     },
     onError: (err) => {
       toast.error(extractErrorMessage(err));
@@ -298,6 +322,7 @@ export function ReconciliationPanel() {
         ) : (
           candidates.map((link) => {
             const isBusy = busyLinkId === link.id;
+            const isDuplicate = link.match_kind === "receipt_duplicate";
             const confidenceKey =
               link.confidence_tier === "high" || link.confidence_tier === "medium" || link.confidence_tier === "low"
                 ? link.confidence_tier
@@ -326,7 +351,9 @@ export function ReconciliationPanel() {
                           onClick={() => unlinkMutation.mutate(link.id)}
                         >
                           <Link2Off className="h-4 w-4 mr-1.5" />
-                          {t("inbox.reconciliation.unlink_button")}
+                          {isDuplicate
+                            ? t("inbox.reconciliation.undo_button")
+                            : t("inbox.reconciliation.unlink_button")}
                         </Button>
                       ) : (
                         <>
@@ -338,16 +365,24 @@ export function ReconciliationPanel() {
                               onClick={() => rejectMutation.mutate(link.id)}
                             >
                               <X className="h-4 w-4 mr-1.5" />
-                              {t("inbox.reconciliation.reject_button")}
+                              {isDuplicate
+                                ? t("inbox.reconciliation.keep_separate_button")
+                                : t("inbox.reconciliation.reject_button")}
                             </Button>
                           )}
                           <Button
                             size="sm"
                             disabled={isBusy}
-                            onClick={() => acceptMutation.mutate(link.id)}
+                            onClick={() =>
+                              isDuplicate
+                                ? mergeDuplicateMutation.mutate(link.id)
+                                : acceptMutation.mutate(link.id)
+                            }
                           >
                             <Check className="h-4 w-4 mr-1.5" />
-                            {t("inbox.reconciliation.accept_button")}
+                            {isDuplicate
+                              ? t("inbox.reconciliation.merge_button")
+                              : t("inbox.reconciliation.accept_button")}
                           </Button>
                         </>
                       )}
@@ -367,12 +402,20 @@ export function ReconciliationPanel() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <TransactionSideCard
-                      label={t("inbox.reconciliation.bank_side_label")}
-                      icon={<Landmark className="h-3.5 w-3.5" />}
+                      label={
+                        isDuplicate
+                          ? t("inbox.reconciliation.incoming_duplicate_label")
+                          : t("inbox.reconciliation.bank_side_label")
+                      }
+                      icon={isDuplicate ? <Receipt className="h-3.5 w-3.5" /> : <Landmark className="h-3.5 w-3.5" />}
                       tx={link.bank_transaction}
                     />
                     <TransactionSideCard
-                      label={t("inbox.reconciliation.receipt_side_label")}
+                      label={
+                        isDuplicate
+                          ? t("inbox.reconciliation.existing_anchor_label")
+                          : t("inbox.reconciliation.receipt_side_label")
+                      }
                       icon={<Receipt className="h-3.5 w-3.5" />}
                       tx={link.target_transaction}
                     />

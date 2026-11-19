@@ -12,6 +12,7 @@ vi.mock("@/lib/api", () => ({
     acceptReconciliation: vi.fn(),
     rejectReconciliation: vi.fn(),
     unlinkReconciliation: vi.fn(),
+    mergeDuplicateReconciliation: vi.fn(),
   },
 }));
 
@@ -157,6 +158,55 @@ describe("ReconciliationPanel", () => {
 
     await waitFor(() => {
       expect(api.unlinkReconciliation).toHaveBeenCalledWith(102, expect.anything());
+    });
+  });
+
+  it("renders receipt_duplicate candidates with Merge / Keep separate / Undo actions", async () => {
+    const duplicateLink: ReconciliationLinkRead = {
+      ...pendingCandidate,
+      id: 303,
+      match_kind: "receipt_duplicate",
+      same_day_conflict_count: 1,
+      signals: [
+        { code: "exact_amount", matched: true, weight: "0.45", detail: {} },
+        { code: "same_day", matched: true, weight: "0.25", detail: {} },
+        { code: "merchant_similarity", matched: true, weight: "0.30", detail: {} },
+      ],
+      bank_transaction: {
+        ...pendingCandidate.bank_transaction!,
+        merchant_name: "Lidl Polska",
+        source_type: "MERCHANT_API",
+        provider: "lidl",
+      },
+      target_transaction: {
+        ...pendingCandidate.target_transaction!,
+        merchant_name: "Lidl (wpis żony)",
+        source_type: "MANUAL",
+        provider: "manual",
+      },
+    };
+
+    vi.mocked(api.getReconciliationCandidates).mockResolvedValue({
+      candidates: [duplicateLink],
+      pending_count: 1,
+      accepted_count: 0,
+      rejected_count: 0,
+      unlinked_count: 0,
+    });
+    vi.mocked(api.mergeDuplicateReconciliation).mockResolvedValue({
+      link: { ...duplicateLink, status: "accepted" },
+      message: "Merged",
+    });
+
+    render(<ReconciliationPanel />);
+
+    expect(await screen.findByText("Lidl Polska")).toBeInTheDocument();
+    expect(screen.getByText("Lidl (wpis żony)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Osobne$/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Scal$/i }));
+    await waitFor(() => {
+      expect(api.mergeDuplicateReconciliation).toHaveBeenCalledWith(303);
     });
   });
 });

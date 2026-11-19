@@ -1097,7 +1097,7 @@
     "/api/transactions/inbox": {
       "get": {
         "summary": "Get Inbox",
-        "description": "Fetch all transactions that require user attention (CATEGORIZATION_OK, NEEDS_REVIEW, or FAILED).",
+        "description": "Fetch Import Inbox transactions across hybrid exception, rejected, and all views.",
         "operationId": "get_inbox_api_transactions_inbox_get",
         "security": [
           {
@@ -1105,6 +1105,35 @@
           }
         ],
         "parameters": [
+          {
+            "name": "tab",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(exceptions|rejected|all)$",
+              "default": "exceptions",
+              "title": "Tab"
+            }
+          },
+          {
+            "name": "source_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional source provenance filter",
+              "title": "Source Type"
+            },
+            "description": "Optional source provenance filter"
+          },
           {
             "name": "needs_review",
             "in": "query",
@@ -1386,6 +1415,18 @@
             }
           },
           {
+            "name": "preserve_source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Soft-reject while preserving SourceRecord tombstones so re-imports skip deleted receipts.",
+              "default": false,
+              "title": "Preserve Source"
+            },
+            "description": "Soft-reject while preserving SourceRecord tombstones so re-imports skip deleted receipts."
+          },
+          {
             "name": "x-budget-id",
             "in": "header",
             "required": false,
@@ -1481,6 +1522,285 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TransactionLine"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/bulk-approve": {
+      "post": {
+        "summary": "Bulk Approve Inbox Items",
+        "description": "Bulk-approve eligible Import Inbox transactions onto a required target account.",
+        "operationId": "bulk_approve_inbox_items_api_inbox_bulk_approve_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InboxBulkApproveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxBulkActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/{transaction_id}/reject": {
+      "post": {
+        "summary": "Reject Inbox Item Endpoint",
+        "description": "Reversibly reject/delete an imported transaction while retaining provenance tombstones.",
+        "operationId": "reject_inbox_item_endpoint_api_inbox__transaction_id__reject_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/InboxRejectRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/inbox/{transaction_id}/restore": {
+      "post": {
+        "summary": "Restore Inbox Item Endpoint",
+        "description": "Restore a rejected transaction back into the Import Inbox review queue.",
+        "operationId": "restore_inbox_item_endpoint_api_inbox__transaction_id__restore_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Transaction Id"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/transactions/import/preview": {
+      "post": {
+        "summary": "Preview Import Transactions",
+        "description": "Dry-run parse a bank CSV/PDF statement and suggest an active account before committing.",
+        "operationId": "preview_import_transactions_api_transactions_import_preview_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_import_transactions_api_transactions_import_preview_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankCsvPreviewResponse"
                 }
               }
             }
@@ -2897,6 +3217,77 @@
         }
       }
     },
+    "/api/connections/{connection_id}/settings": {
+      "patch": {
+        "summary": "Update Receipt Connection Settings",
+        "description": "Update per-connection import settings (default account, auto-merge policy, sync_from_date).",
+        "operationId": "update_receipt_connection_settings_api_connections__connection_id__settings_patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Connection Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalReceiptConnectionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/connections/{connection_id}/oauth/start": {
       "post": {
         "summary": "Start Receipt Connection Oauth",
@@ -3118,6 +3509,38 @@
               "type": "boolean",
               "default": false,
               "title": "Live"
+            }
+          },
+          {
+            "name": "sync_from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sync From Date"
+            }
+          },
+          {
+            "name": "auto_merge_policy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auto Merge Policy"
             }
           },
           {
@@ -3683,6 +4106,84 @@
         }
       }
     },
+    "/api/reconciliation/{link_id}/merge-duplicate": {
+      "post": {
+        "summary": "Merge Reconciliation Duplicate",
+        "description": "Reversibly merge a detected cross-source duplicate receipt onto the chosen surviving entry.",
+        "operationId": "merge_reconciliation_duplicate_api_reconciliation__link_id__merge_duplicate_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Link Id"
+            }
+          },
+          {
+            "name": "x-budget-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Budget-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DuplicateMergeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationActionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "summary": "Health Check",
@@ -3986,7 +4487,156 @@
         ],
         "title": "AppStatusRead"
       },
+      "AutoMergePolicy": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "manual"
+        ],
+        "title": "AutoMergePolicy"
+      },
+      "BankCsvPreviewResponse": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "total_rows": {
+            "type": "integer",
+            "title": "Total Rows"
+          },
+          "new_count": {
+            "type": "integer",
+            "title": "New Count"
+          },
+          "duplicate_count": {
+            "type": "integer",
+            "title": "Duplicate Count"
+          },
+          "suggested_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Account Id"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings",
+            "default": []
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BankCsvPreviewRow"
+            },
+            "type": "array",
+            "title": "Rows",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "total_rows",
+          "new_count",
+          "duplicate_count"
+        ],
+        "title": "BankCsvPreviewResponse"
+      },
+      "BankCsvPreviewRow": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date"
+          },
+          "merchant_name": {
+            "type": "string",
+            "title": "Merchant Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
+            "title": "Amount",
+            "example": "10.99"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "PLN"
+          },
+          "detected_type": {
+            "type": "string",
+            "title": "Detected Type"
+          },
+          "is_duplicate": {
+            "type": "boolean",
+            "title": "Is Duplicate",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "merchant_name",
+          "title",
+          "amount",
+          "detected_type"
+        ],
+        "title": "BankCsvPreviewRow"
+      },
       "Body_import_transactions_api_transactions_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "auto_merge_policy": {
+            "type": "string",
+            "title": "Auto Merge Policy",
+            "default": "manual"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "require_account": {
+            "type": "boolean",
+            "title": "Require Account",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_transactions_api_transactions_import_post"
+      },
+      "Body_preview_import_transactions_api_transactions_import_preview_post": {
         "properties": {
           "file": {
             "type": "string",
@@ -3998,7 +4648,7 @@
         "required": [
           "file"
         ],
-        "title": "Body_import_transactions_api_transactions_import_post"
+        "title": "Body_preview_import_transactions_api_transactions_import_preview_post"
       },
       "Body_scan_transaction_api_transactions_scan_post": {
         "properties": {
@@ -4463,6 +5113,58 @@
         ],
         "title": "ConnectionOAuthStartResponse"
       },
+      "ConnectionSettingsUpdate": {
+        "properties": {
+          "default_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Account Id"
+          },
+          "auto_merge_policy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AutoMergePolicy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_approve_clean": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Approve Clean"
+          },
+          "sync_from_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync From Date"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConnectionSettingsUpdate",
+        "description": "Update connector account, duplicate merge policy, and sync date range."
+      },
       "ConnectionStatus": {
         "type": "string",
         "enum": [
@@ -4531,6 +5233,35 @@
         ],
         "title": "ConnectionToggleRequest",
         "description": "Enable or pause automatic synchronization for a connection without deleting credentials."
+      },
+      "DuplicateMergeRequest": {
+        "properties": {
+          "keep_transaction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Transaction Id"
+          },
+          "account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DuplicateMergeRequest"
       },
       "EnvelopeAllocation": {
         "properties": {
@@ -4657,6 +5388,61 @@
             "title": "Is Enabled",
             "default": true
           },
+          "default_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Account Id"
+          },
+          "auto_merge_policy": {
+            "$ref": "#/components/schemas/AutoMergePolicy",
+            "default": "auto"
+          },
+          "auto_approve_clean": {
+            "type": "boolean",
+            "title": "Auto Approve Clean",
+            "default": true
+          },
+          "sync_from_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync From Date"
+          },
+          "budget_first_month_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget First Month Date"
+          },
+          "suggested_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Account Id"
+          },
           "has_token": {
             "type": "boolean",
             "title": "Has Token",
@@ -4744,6 +5530,76 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "InboxBulkActionResponse": {
+        "properties": {
+          "approved_count": {
+            "type": "integer",
+            "title": "Approved Count"
+          },
+          "skipped_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Skipped Ids",
+            "default": []
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Errors",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "approved_count"
+        ],
+        "title": "InboxBulkActionResponse"
+      },
+      "InboxBulkApproveRequest": {
+        "properties": {
+          "transaction_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Transaction Ids"
+          },
+          "account_id": {
+            "type": "integer",
+            "title": "Account Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "transaction_ids",
+          "account_id"
+        ],
+        "title": "InboxBulkApproveRequest"
+      },
+      "InboxRejectRequest": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "InboxRejectRequest"
       },
       "ManualTransactionCreate": {
         "properties": {
@@ -5204,7 +6060,8 @@
         "enum": [
           "exact",
           "refund",
-          "split_payment"
+          "split_payment",
+          "receipt_duplicate"
         ],
         "title": "ReconciliationMatchKind"
       },
@@ -5352,6 +6209,15 @@
           "status"
         ],
         "title": "ReconciliationTransactionSummary"
+      },
+      "ReviewStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected"
+        ],
+        "title": "ReviewStatus"
       },
       "SourceRecordRead": {
         "properties": {
@@ -6014,6 +6880,10 @@
             "$ref": "#/components/schemas/TransactionStatus",
             "default": "uncleared"
           },
+          "review_status": {
+            "$ref": "#/components/schemas/ReviewStatus",
+            "default": "approved"
+          },
           "import_hash": {
             "anyOf": [
               {
@@ -6083,6 +6953,51 @@
               }
             ],
             "title": "Reconciled Into Id"
+          },
+          "rejected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejected At"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "import_batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Batch Id"
+          },
+          "suggested_account_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Account Id"
           },
           "lines": {
             "items": {

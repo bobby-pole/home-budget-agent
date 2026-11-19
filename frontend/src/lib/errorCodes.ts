@@ -13,6 +13,8 @@ export function translateValidationMessage(message: string | null | undefined): 
       return t("errors.receipt.zero_price_item");
     case "RECEIPT_FUTURE_DATE":
       return t("errors.receipt.future_date");
+    case "DUPLICATE_REVIEW_REQUIRED":
+      return t("errors.receipt.duplicate_review");
     default:
       return message; // fallback: show original string (backward compat)
   }

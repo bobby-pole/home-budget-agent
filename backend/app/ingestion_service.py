@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Optional, Sequence
+import uuid
 
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, desc, select
@@ -24,17 +25,32 @@ from app.adapters.contracts import (
     TransactionBatchAdapterResult,
 )
 from app.category_service import get_budget_categories
+from app.inbox_service import (
+    promote_transaction_to_approved,
+    suggest_account_for_budget,
+)
 from app.models import (
+    AutoMergePolicy,
+    BankCsvPreviewResponse,
+    BankCsvPreviewRow,
     Category,
     ReceiptScan,
+    ReconciliationLink,
+    ReconciliationMatchKind,
+    ReconciliationStatus,
+    ReviewStatus,
     ScanStatus,
     SourceRecord,
     Transaction,
     TransactionLine,
     TransactionStatus,
+    ensure_tz_aware,
 )
 from app.money import quantize_money, quantize_quantity, quantize_unit_price
-from app.reconciliation_service import discover_reconciliation_candidates
+from app.reconciliation_service import (
+    apply_auto_merge_for_transaction,
+    discover_reconciliation_candidates,
+)
 from app.provenance_service import (
     build_source_record,
     find_existing_source_record,
@@ -52,6 +68,24 @@ class ReceiptIngestionOutcome:
     transaction_id: Optional[int] = None
     receipt_scan_id: Optional[int] = None
     source_record_id: Optional[int] = None
+    auto_approved: bool = False
+    auto_merged: bool = False
+    pending_inbox: bool = False
+
+
+def _has_pending_duplicate_for_tx(session: Session, *, budget_id: int, transaction_id: int) -> bool:
+    pending_dup = session.exec(
+        select(ReconciliationLink.id).where(
+            ReconciliationLink.budget_id == budget_id,
+            col(ReconciliationLink.match_kind) == ReconciliationMatchKind.RECEIPT_DUPLICATE.value,
+            col(ReconciliationLink.status) == ReconciliationStatus.PENDING.value,
+            (
+                (col(ReconciliationLink.bank_transaction_id) == transaction_id)
+                | (col(ReconciliationLink.target_transaction_id) == transaction_id)
+            ),
+        )
+    ).first()
+    return pending_dup is not None
 
 
 def _persist_receipt_lines(
@@ -139,6 +173,10 @@ def ingest_receipt_result(
     note: Optional[str] = None,
     categorize: bool = True,
     commit: bool = True,
+    account_id: Optional[int] = None,
+    auto_merge_policy: str = AutoMergePolicy.AUTO.value,
+    auto_approve_clean: bool = True,
+    import_batch_id: Optional[str] = None,
 ) -> ReceiptIngestionOutcome:
     """Commit any ``ReceiptAdapterResult`` idempotently via a single shared persistence path."""
     prov = result.provenance
@@ -210,10 +248,13 @@ def ingest_receipt_result(
                 date=tx_date,
                 is_manual=False,
                 type="expense",
+                account_id=account_id,
                 uploaded_by=user_id,
                 budget_id=budget_id,
                 import_hash=prov.canonical_hash,
                 note=resolved_note,
+                review_status=ReviewStatus.PENDING,
+                import_batch_id=import_batch_id,
             )
             session.add(tx)
             session.flush()
@@ -274,9 +315,62 @@ def ingest_receipt_result(
             )
         raise
 
-    discover_reconciliation_candidates(session, budget_id=budget_id, commit=commit)
+    assert tx.id is not None
+    discover_reconciliation_candidates(session, budget_id=budget_id, commit=False)
+
+    auto_merged = False
+    auto_approved = False
+    pending_inbox = False
+
+    if auto_merge_policy == AutoMergePolicy.AUTO.value:
+        merged_link = apply_auto_merge_for_transaction(
+            session,
+            budget_id=budget_id,
+            transaction_id=tx.id,
+            user_id=user_id,
+            commit=False,
+        )
+        if merged_link is not None:
+            auto_merged = True
+
+    session.refresh(tx)
+    if tx.date is not None:
+        tx.date = ensure_tz_aware(tx.date) or tx.date
+    if tx.reconciled_into_id is not None:
+        scan.status = ScanStatus.DONE
+        scan.needs_review = False
+        session.add(scan)
+    else:
+        has_pending_dup = _has_pending_duplicate_for_tx(session, budget_id=budget_id, transaction_id=tx.id)
+        is_clean = (
+            result.validation_status == "verified"
+            and bool(items)
+            and tx.account_id is not None
+            and not has_pending_dup
+            and auto_approve_clean
+        )
+        if is_clean:
+            promote_transaction_to_approved(
+                session,
+                transaction=tx,
+                scan=scan,
+                finalize_scan=True,
+                commit=False,
+            )
+            auto_approved = True
+        else:
+            pending_inbox = True
+            if has_pending_dup:
+                scan.status = ScanStatus.NEEDS_REVIEW
+                scan.needs_review = True
+                if not scan.validation_message:
+                    scan.validation_message = "DUPLICATE_REVIEW_REQUIRED"
+            session.add(scan)
+
     if commit:
         session.commit()
+    else:
+        session.flush()
 
     return ReceiptIngestionOutcome(
         imported=True,
@@ -284,6 +378,9 @@ def ingest_receipt_result(
         transaction_id=tx.id,
         receipt_scan_id=scan.id,
         source_record_id=sr.id,
+        auto_approved=auto_approved,
+        auto_merged=auto_merged,
+        pending_inbox=pending_inbox,
     )
 
 
@@ -295,6 +392,8 @@ def apply_receipt_result_to_existing_scan(
     result: ReceiptAdapterResult,
     db_categories: Sequence[Category],
     is_demo_uploader: bool = False,
+    auto_merge_policy: str = AutoMergePolicy.AUTO.value,
+    auto_approve_clean: bool = True,
 ) -> ScanStatus:
     """Apply a ``ReceiptAdapterResult`` to an existing background-processed scan/transaction."""
     receipt = result.receipt
@@ -316,6 +415,7 @@ def apply_receipt_result_to_existing_scan(
         scan.status = ScanStatus.FAILED
         scan.needs_review = True
         scan.validation_message = result.validation_message or "RECEIPT_EMPTY"
+        transaction.review_status = ReviewStatus.PENDING
         update_scan_source_metadata(session, receipt_scan_id=scan.id, quality=Decimal("0.0000"))
         session.add(scan)
         session.add(transaction)
@@ -360,9 +460,56 @@ def apply_receipt_result_to_existing_scan(
     )
     session.add(transaction)
     session.add(scan)
-    session.commit()
+    session.flush()
+
     if transaction.budget_id is not None:
-        discover_reconciliation_candidates(session, budget_id=transaction.budget_id, commit=True)
+        discover_reconciliation_candidates(session, budget_id=transaction.budget_id, commit=False)
+        if auto_merge_policy == AutoMergePolicy.AUTO.value and transaction.uploaded_by is not None:
+            apply_auto_merge_for_transaction(
+                session,
+                budget_id=transaction.budget_id,
+                transaction_id=transaction.id,
+                user_id=transaction.uploaded_by,
+                commit=False,
+            )
+            session.refresh(transaction)
+        if transaction.date is not None:
+            transaction.date = ensure_tz_aware(transaction.date) or transaction.date
+
+        if transaction.reconciled_into_id is not None:
+            scan.status = ScanStatus.DONE
+            scan.needs_review = False
+            session.add(scan)
+        else:
+            has_pending_dup = _has_pending_duplicate_for_tx(
+                session, budget_id=transaction.budget_id, transaction_id=transaction.id
+            )
+            is_clean = (
+                result.validation_status == "verified"
+                and bool(items)
+                and transaction.account_id is not None
+                and not has_pending_dup
+                and auto_approve_clean
+            )
+            if is_clean:
+                promote_transaction_to_approved(
+                    session,
+                    transaction=transaction,
+                    scan=scan,
+                    finalize_scan=True,
+                    commit=False,
+                )
+            else:
+                transaction.review_status = ReviewStatus.PENDING
+                if has_pending_dup:
+                    scan.status = ScanStatus.NEEDS_REVIEW
+                    scan.needs_review = True
+                    if not scan.validation_message:
+                        scan.validation_message = "DUPLICATE_REVIEW_REQUIRED"
+                session.add(transaction)
+                session.add(scan)
+
+    session.commit()
     return scan.status
 
 
@@ -372,19 +519,15 @@ def _detect_tx_type_default(item: TransactionAdapterResult) -> str:
     return "expense" if item.transaction.amount < Decimal("0") else "income"
 
 
-def ingest_transaction_batch(
+def _classify_batch_duplicates(
     session: Session,
     batch: TransactionBatchAdapterResult,
     *,
     budget_id: int,
-    user_id: int,
-    filename: str = "",
-    enable_ai_categorization: bool = False,
-    tx_type_classifier: Optional[Callable[[TransactionAdapterResult], str]] = None,
-) -> dict[str, Any]:
-    """Persist any ``TransactionBatchAdapterResult`` with idempotent dedup and safe reconciliation discovery."""
+) -> tuple[list[tuple[TransactionAdapterResult, bool]], int]:
+    """Classify each batch item against existing hashes and external IDs without mutating DB."""
     if not batch.items:
-        return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
+        return [], 0
 
     hashes_to_check = [
         item.provenance.canonical_hash
@@ -437,23 +580,95 @@ def ingest_transaction_batch(
 
     seen_hashes = existing_legacy_hashes | existing_source_hashes
     seen_external_keys = set(existing_external_keys)
-    final_items: list[TransactionAdapterResult] = []
+    classified: list[tuple[TransactionAdapterResult, bool]] = []
     skipped_count = 0
 
     for item in batch.items:
         row_hash = item.provenance.canonical_hash
         ext_id = item.provenance.external_id
         ext_key = (item.provenance.provider, ext_id) if ext_id else None
-        is_dup_hash = bool(row_hash and row_hash in seen_hashes)
-        is_dup_ext = bool(ext_key and ext_key in seen_external_keys)
-        if is_dup_hash or is_dup_ext:
+        is_dup = bool(
+            (row_hash and row_hash in seen_hashes)
+            or (ext_key and ext_key in seen_external_keys)
+        )
+        if is_dup:
             skipped_count += 1
         else:
             if row_hash:
                 seen_hashes.add(row_hash)
             if ext_key:
                 seen_external_keys.add(ext_key)
-            final_items.append(item)
+        classified.append((item, is_dup))
+
+    return classified, skipped_count
+
+
+def preview_transaction_batch(
+    session: Session,
+    batch: TransactionBatchAdapterResult,
+    *,
+    budget_id: int,
+    filename: str = "",
+    tx_type_classifier: Optional[Callable[[TransactionAdapterResult], str]] = None,
+) -> BankCsvPreviewResponse:
+    """Dry-run preview of a parsed CSV/PDF statement before committing transactions."""
+    classified, dup_count = _classify_batch_duplicates(session, batch, budget_id=budget_id)
+    suggested_acc = suggest_account_for_budget(session, budget_id=budget_id)
+
+    rows: list[BankCsvPreviewRow] = []
+    for item, is_dup in classified:
+        tx_data = item.transaction
+        t_type = (
+            tx_type_classifier(item)
+            if tx_type_classifier is not None
+            else _detect_tx_type_default(item)
+        )
+        rows.append(
+            BankCsvPreviewRow(
+                date=tx_data.booked_at,
+                merchant_name=tx_data.counterparty or tx_data.title or "Bank Transaction",
+                title=tx_data.title or "",
+                amount=quantize_money(tx_data.abs_amount),
+                currency=tx_data.currency,
+                detected_type=t_type,
+                is_duplicate=is_dup,
+            )
+        )
+
+    total_rows = len(classified)
+    new_count = total_rows - dup_count
+    return BankCsvPreviewResponse(
+        filename=filename,
+        total_rows=total_rows,
+        new_count=new_count,
+        duplicate_count=dup_count,
+        suggested_account_id=suggested_acc,
+        warnings=list(batch.warnings or []),
+        rows=rows,
+    )
+
+
+def ingest_transaction_batch(
+    session: Session,
+    batch: TransactionBatchAdapterResult,
+    *,
+    budget_id: int,
+    user_id: int,
+    filename: str = "",
+    enable_ai_categorization: bool = False,
+    tx_type_classifier: Optional[Callable[[TransactionAdapterResult], str]] = None,
+    account_id: Optional[int] = None,
+    auto_merge_policy: str = AutoMergePolicy.MANUAL.value,
+    auto_approve_clean: bool = True,
+    require_account: bool = False,
+    import_batch_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Persist any ``TransactionBatchAdapterResult`` with staging, idempotent dedup, and reconciliation."""
+    if not batch.items:
+        return {"created": 0, "skipped": 0, "failed": 0, "summary": "No transactions found in file."}
+
+    classified, skipped_count = _classify_batch_duplicates(session, batch, budget_id=budget_id)
+    final_items = [item for item, is_dup in classified if not is_dup]
 
     if not final_items:
         discover_reconciliation_candidates(session, budget_id=budget_id, commit=True)
@@ -461,9 +676,13 @@ def ingest_transaction_batch(
             "created": 0,
             "skipped": skipped_count,
             "failed": 0,
+            "approved_count": 0,
+            "pending_count": 0,
+            "auto_merged_count": 0,
             "summary": f"All {len(batch.items)} transactions already imported.",
         }
 
+    batch_uid = import_batch_id or uuid.uuid4().hex[:16]
     db_categories = get_budget_categories(session, budget_id)
     cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
     cat_name_to_id = {c.name.lower(): c.id for c in db_categories}
@@ -505,7 +724,7 @@ def ingest_transaction_batch(
                 chunk = descriptions_to_query[i : i + 50]
                 ai_mapping.update(AIService.categorize_descriptions(chunk, categories=cat_dicts))
 
-    created_count = 0
+    created_txs: list[Transaction] = []
     for item in final_items:
         tx_data = item.transaction
         prov = item.provenance
@@ -525,12 +744,10 @@ def ingest_transaction_batch(
             else _detect_tx_type_default(item)
         )
         t_date = tx_data.booked_at
-        t_amount = tx_data.abs_amount
+        t_amount = quantize_money(tx_data.abs_amount)
 
         try:
             with session.begin_nested():
-                # Safe reconciliation (#261): never silently merge bank cashflows onto existing
-                # manual/receipt transactions; keep distinct SourceRecords until confirmed.
                 target_tx = Transaction(
                     merchant_name=tx_data.counterparty or tx_data.title or "Bank Transaction",
                     total_amount=t_amount,
@@ -539,11 +756,14 @@ def ingest_transaction_batch(
                     is_manual=False,
                     type=t_type,
                     status=TransactionStatus.CLEARED,
+                    account_id=account_id,
                     uploaded_by=user_id,
                     budget_id=budget_id,
                     category_id=cat_id,
                     note=tx_data.title,
                     import_hash=prov.canonical_hash,
+                    review_status=ReviewStatus.PENDING,
+                    import_batch_id=batch_uid,
                 )
                 session.add(target_tx)
                 session.flush()
@@ -578,18 +798,71 @@ def ingest_transaction_batch(
                 continue
             raise
 
-        created_count += 1
+        created_txs.append(target_tx)
+
+    session.flush()
+    discover_reconciliation_candidates(session, budget_id=budget_id, commit=False)
+
+    auto_merged_count = 0
+    approved_count = 0
+    pending_count = 0
+
+    if auto_merge_policy == AutoMergePolicy.AUTO.value:
+        for tx in created_txs:
+            if tx.id is None:
+                continue
+            merged_link = apply_auto_merge_for_transaction(
+                session,
+                budget_id=budget_id,
+                transaction_id=tx.id,
+                user_id=user_id,
+                include_bank_exact=True,
+                commit=False,
+            )
+            if merged_link is not None:
+                auto_merged_count += 1
+
+    for tx in created_txs:
+        session.refresh(tx)
+        if tx.date is not None:
+            tx.date = ensure_tz_aware(tx.date) or tx.date
+        if tx.reconciled_into_id is not None:
+            continue
+        is_clean = (
+            tx.total_amount > Decimal("0.00")
+            and (tx.account_id is not None or not require_account)
+            and auto_approve_clean
+        )
+        if is_clean:
+            tx.review_status = ReviewStatus.APPROVED
+            session.add(tx)
+            approved_count += 1
+        else:
+            pending_count += 1
+
+    session.flush()
+    if account_id is not None and approved_count > 0:
+        from app.models import recalculate_account_balance
+
+        recalculate_account_balance(session.connection(), account_id)
 
     session.commit()
     discover_reconciliation_candidates(session, budget_id=budget_id, commit=True)
     return {
-        "created": created_count,
+        "created": len(created_txs),
         "skipped": skipped_count,
         "failed": 0,
+        "approved_count": approved_count,
+        "pending_count": pending_count,
+        "auto_merged_count": auto_merged_count,
+        "import_batch_id": batch_uid,
         "summary": {
             "code": "CSV_IMPORT_COMPLETE",
-            "imported": created_count,
+            "imported": len(created_txs),
             "skipped": skipped_count,
+            "approved": approved_count,
+            "pending": pending_count,
+            "auto_merged": auto_merged_count,
             "filename": filename,
         },
     }

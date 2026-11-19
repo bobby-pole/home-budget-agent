@@ -26,22 +26,27 @@ from app.models import (
     ReconciliationSignalRead,
     ReconciliationStatus,
     ReconciliationTransactionSummary,
+    ReviewStatus,
     SourceRecord,
     SourceType,
     Transaction,
+    TransactionLine,
     TransactionStatus,
     User,
     ensure_tz_aware,
     recalculate_account_balance,
 )
 from app.money import MONEY_QUANT, quantize_money, quantize_score
+from app.provenance_service import record_manual_source_provenance
 
 logger = logging.getLogger("reconciliation_service")
 
 RECONCILIATION_WRITE_ROLES = {"owner", "editor"}
 
 MIN_CANDIDATE_SCORE = Decimal("0.4500")
+AUTO_MERGE_SCORE_THRESHOLD = Decimal("0.9000")
 AMOUNT_TOLERANCE = Decimal("0.01")
+DUPLICATE_DAY_WINDOW = 2
 
 TARGET_SOURCE_TYPES: tuple[SourceType, ...] = (
     SourceType.OCR_PHOTO,
@@ -49,6 +54,21 @@ TARGET_SOURCE_TYPES: tuple[SourceType, ...] = (
     SourceType.E_RECEIPT,
     SourceType.MANUAL,
 )
+RECEIPT_DUPLICATE_INCOMING_SOURCES: tuple[SourceType, ...] = (
+    SourceType.MERCHANT_API,
+    SourceType.E_RECEIPT,
+    SourceType.OCR_PHOTO,
+)
+RECEIPT_DUPLICATE_TARGET_SOURCES: tuple[SourceType, ...] = (
+    SourceType.MANUAL,
+    SourceType.OCR_PHOTO,
+    SourceType.E_RECEIPT,
+    SourceType.MERCHANT_API,
+)
+
+
+def _enum_str(val: Any) -> str:
+    return val.value if isinstance(val, Enum) else str(val)
 
 _MERCHANT_NOISE_RE = re.compile(
     r"\b(sp\.?\s*z\s*o\.?\s*o\.?|s\.?\s*a\.?|sp\.?\s*j\.?|sp\.?\s*k\.?|polska|pl|"
@@ -562,7 +582,10 @@ def discover_reconciliation_candidates(
     """
     existing_links = list(
         session.exec(
-            select(ReconciliationLink).where(ReconciliationLink.budget_id == budget_id)
+            select(ReconciliationLink).where(
+                ReconciliationLink.budget_id == budget_id,
+                col(ReconciliationLink.match_kind) != ReconciliationMatchKind.RECEIPT_DUPLICATE.value,
+            )
         ).all()
     )
     links_by_pair: dict[tuple[int, int], ReconciliationLink] = {
@@ -625,6 +648,7 @@ def discover_reconciliation_candidates(
             SourceRecord.budget_id == budget_id,
             SourceRecord.source_type == SourceType.BANK_CSV,
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) != ReviewStatus.REJECTED.value,
         )
     ).all()
 
@@ -635,6 +659,7 @@ def discover_reconciliation_candidates(
             SourceRecord.budget_id == budget_id,
             col(SourceRecord.source_type).in_(TARGET_SOURCE_TYPES),
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) != ReviewStatus.REJECTED.value,
         )
     ).all()
 
@@ -779,6 +804,374 @@ def discover_reconciliation_candidates(
     # Remove only stale PENDING links that are no longer valid candidates; never touch decided rows.
     for pair_key, existing in links_by_pair.items():
         if existing.status == ReconciliationStatus.PENDING and pair_key not in seen_active_pending_pairs:
+            session.delete(existing)
+
+    upserted += discover_receipt_duplicate_candidates(session, budget_id=budget_id, commit=False)
+
+    if commit:
+        session.commit()
+    else:
+        session.flush()
+    return upserted
+
+
+def _pick_duplicate_anchor_pair(
+    pair_a: tuple[SourceRecord, Transaction],
+    pair_b: tuple[SourceRecord, Transaction],
+    *,
+    accepted_bank_linked_tx_ids: set[int],
+) -> tuple[tuple[SourceRecord, Transaction], tuple[SourceRecord, Transaction]]:
+    """Return ``(incoming_to_absorb, surviving_anchor)`` deterministically.
+
+    Manual / already-approved / bank-linked transactions survive as the anchor so the
+    user's existing account, note, and bank reconciliation link remain intact while
+    imported basket lines and provenance records fold into them.
+    """
+    def _anchor_rank(sr: SourceRecord, tx: Transaction) -> tuple[int, int, int, int]:
+        tx_id = tx.id or 0
+        is_bank_linked = 1 if tx_id in accepted_bank_linked_tx_ids else 0
+        is_approved = 1 if _enum_str(tx.review_status) == ReviewStatus.APPROVED.value else 0
+        is_manual = 1 if _enum_str(sr.source_type) == SourceType.MANUAL.value or tx.is_manual else 0
+        return (is_bank_linked, is_approved, is_manual, -tx_id)
+
+    rank_a = _anchor_rank(pair_a[0], pair_a[1])
+    rank_b = _anchor_rank(pair_b[0], pair_b[1])
+    if rank_a >= rank_b:
+        return pair_b, pair_a
+    return pair_a, pair_b
+
+
+def _evaluate_receipt_duplicate_pair(
+    *,
+    incoming_sr: SourceRecord,
+    incoming_tx: Transaction,
+    anchor_sr: SourceRecord,
+    anchor_tx: Transaction,
+    same_day_conflict_count: int,
+) -> Optional[tuple[Decimal, dict[str, Any]]]:
+    """Deterministically score a cross-source duplicate receipt pair."""
+    if incoming_tx.id is None or anchor_tx.id is None or incoming_tx.id == anchor_tx.id:
+        return None
+    if incoming_tx.type != anchor_tx.type:
+        return None
+    if (incoming_tx.currency or "").upper() != (anchor_tx.currency or "").upper():
+        return None
+
+    in_dt = _tx_utc_date(incoming_tx)
+    an_dt = _tx_utc_date(anchor_tx)
+    if in_dt is None or an_dt is None:
+        return None
+
+    in_abs = quantize_money(abs(incoming_tx.total_amount))
+    an_abs = quantize_money(abs(anchor_tx.total_amount))
+    if in_abs <= Decimal("0.00") or an_abs <= Decimal("0.00"):
+        return None
+    if abs(in_abs - an_abs) > AMOUNT_TOLERANCE:
+        return None
+
+    days_diff = (in_dt.date() - an_dt.date()).days
+    abs_days = abs(days_diff)
+    if abs_days > DUPLICATE_DAY_WINDOW:
+        return None
+
+    sim_ab = _compute_merchant_similarity(incoming_tx, anchor_tx)
+    sim_ba = _compute_merchant_similarity(anchor_tx, incoming_tx)
+    merchant_sim = max(sim_ab, sim_ba)
+
+    in_norm = _normalize_merchant_text(incoming_tx.merchant_name)
+    an_norm = _normalize_merchant_text(anchor_tx.merchant_name)
+    if in_norm and an_norm and merchant_sim < Decimal("0.5000"):
+        return None
+
+    signals: list[dict[str, Any]] = []
+    if in_abs == an_abs:
+        amount_weight = Decimal("0.4500")
+        signals.append(
+            {
+                "code": "exact_amount",
+                "matched": True,
+                "weight": str(amount_weight),
+                "detail": {"amount": str(in_abs)},
+            }
+        )
+    else:
+        amount_weight = Decimal("0.4000")
+        signals.append(
+            {
+                "code": "near_amount",
+                "matched": True,
+                "weight": str(amount_weight),
+                "detail": {"incoming": str(in_abs), "anchor": str(an_abs)},
+            }
+        )
+
+    if abs_days == 0:
+        date_weight = Decimal("0.2500")
+        signals.append(
+            {"code": "same_day", "matched": True, "weight": str(date_weight), "detail": {"days_diff": 0}}
+        )
+    elif abs_days == 1:
+        date_weight = Decimal("0.1800")
+        signals.append(
+            {"code": "date_adjacent", "matched": True, "weight": str(date_weight), "detail": {"days_diff": days_diff}}
+        )
+    else:
+        date_weight = Decimal("0.1000")
+        signals.append(
+            {"code": "date_window_2d", "matched": True, "weight": str(date_weight), "detail": {"days_diff": days_diff}}
+        )
+
+    if in_norm and an_norm:
+        merchant_weight = quantize_score(merchant_sim * Decimal("0.3000"))
+        signals.append(
+            {
+                "code": "merchant_similarity",
+                "matched": merchant_sim >= Decimal("0.6000"),
+                "weight": str(merchant_weight),
+                "detail": {"similarity": str(merchant_sim)},
+            }
+        )
+    else:
+        merchant_weight = Decimal("0.0000")
+        signals.append(
+            {
+                "code": "merchant_missing",
+                "matched": False,
+                "weight": "0.0000",
+                "detail": {"similarity": "0.0000"},
+            }
+        )
+
+    if same_day_conflict_count > 1:
+        signals.append(
+            {
+                "code": "same_day_equal_amount_ambiguity",
+                "matched": False,
+                "weight": "0.0000",
+                "detail": {"conflict_count": same_day_conflict_count},
+            }
+        )
+
+    total_score = quantize_score(amount_weight + date_weight + merchant_weight)
+    if total_score < MIN_CANDIDATE_SCORE:
+        return None
+
+    reasons: dict[str, Any] = {
+        "confidence_tier": _confidence_tier(total_score),
+        "signals": signals,
+        "summary": {
+            "days_diff": days_diff,
+            "merchant_similarity": str(merchant_sim),
+            "same_day_conflict_count": same_day_conflict_count,
+            "incoming_source": _enum_str(incoming_sr.source_type),
+            "anchor_source": _enum_str(anchor_sr.source_type),
+        },
+    }
+    return total_score, reasons
+
+
+def discover_receipt_duplicate_candidates(
+    session: Session,
+    *,
+    budget_id: int,
+    commit: bool = True,
+) -> int:
+    """Detect cross-source duplicate candidates among non-bank transactions idempotently."""
+    # Ensure active non-rejected manual entries have a MANUAL SourceRecord anchor.
+    manual_txs = session.exec(
+        select(Transaction).where(
+            Transaction.budget_id == budget_id,
+            col(Transaction.is_manual).is_(True),
+            col(Transaction.type) != "transfer",
+            col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) != ReviewStatus.REJECTED.value,
+        )
+    ).all()
+    if manual_txs:
+        manual_ids = [t.id for t in manual_txs if t.id is not None]
+        existing_manual_srs = set(
+            session.exec(
+                select(SourceRecord.transaction_id).where(
+                    SourceRecord.budget_id == budget_id,
+                    col(SourceRecord.transaction_id).in_(manual_ids),
+                )
+            ).all()
+        )
+        for mtx in manual_txs:
+            if mtx.id is not None and mtx.id not in existing_manual_srs:
+                record_manual_source_provenance(
+                    session,
+                    budget_id=budget_id,
+                    transaction_id=mtx.id,
+                    acquired_at=ensure_tz_aware(mtx.date),
+                )
+        session.flush()
+
+    existing_dup_links = list(
+        session.exec(
+            select(ReconciliationLink).where(
+                ReconciliationLink.budget_id == budget_id,
+                col(ReconciliationLink.match_kind) == ReconciliationMatchKind.RECEIPT_DUPLICATE.value,
+            )
+        ).all()
+    )
+    dup_by_unordered_sr: dict[tuple[int, int], ReconciliationLink] = {
+        (
+            min(link.bank_source_record_id, link.target_source_record_id),
+            max(link.bank_source_record_id, link.target_source_record_id),
+        ): link
+        for link in existing_dup_links
+    }
+    accepted_bank_linked_tx_ids = {
+        int(tx_id)
+        for tx_id in session.exec(
+            select(ReconciliationLink.target_transaction_id).where(
+                ReconciliationLink.budget_id == budget_id,
+                col(ReconciliationLink.status) == ReconciliationStatus.ACCEPTED.value,
+                col(ReconciliationLink.match_kind) != ReconciliationMatchKind.RECEIPT_DUPLICATE.value,
+            )
+        ).all()
+        if tx_id is not None
+    }
+
+    rows = list(
+        session.exec(
+            select(SourceRecord, Transaction)
+            .join(Transaction, col(SourceRecord.transaction_id) == col(Transaction.id))
+            .where(
+                SourceRecord.budget_id == budget_id,
+                col(SourceRecord.source_type).in_(RECEIPT_DUPLICATE_TARGET_SOURCES),
+                col(Transaction.type) != "transfer",
+                col(Transaction.reconciled_into_id).is_(None),
+                col(Transaction.review_status) != ReviewStatus.REJECTED.value,
+            )
+        ).all()
+    )
+    # Use the earliest primary SourceRecord per transaction to avoid duplicate candidate rows
+    # when a surviving transaction already accumulated secondary SourceRecords.
+    primary_pair_by_tx: dict[int, tuple[SourceRecord, Transaction]] = {}
+    for sr, tx in rows:
+        if tx.id is None or sr.id is None:
+            continue
+        existing_pair = primary_pair_by_tx.get(tx.id)
+        if existing_pair is None or (sr.id < (existing_pair[0].id or 0)):
+            primary_pair_by_tx[tx.id] = (sr, tx)
+
+    pairs = sorted(primary_pair_by_tx.values(), key=lambda p: p[1].id or 0)
+    bucket_counts: dict[tuple[str, Any, Decimal, str], int] = {}
+    for _, tx in pairs:
+        dt = _tx_utc_date(tx)
+        if dt is None:
+            continue
+        key = (
+            (tx.currency or "").upper(),
+            dt.date(),
+            quantize_money(abs(tx.total_amount)),
+            tx.type,
+        )
+        bucket_counts[key] = bucket_counts.get(key, 0) + 1
+
+    upserted = 0
+    now = datetime.now(timezone.utc)
+    seen_pending_pairs: set[tuple[int, int]] = set()
+    incoming_sources_set = {s.value for s in RECEIPT_DUPLICATE_INCOMING_SOURCES}
+
+    for i in range(len(pairs)):
+        sr_a, tx_a = pairs[i]
+        for j in range(i + 1, len(pairs)):
+            sr_b, tx_b = pairs[j]
+            if tx_a.id == tx_b.id or sr_a.id is None or sr_b.id is None:
+                continue
+            src_a = _enum_str(sr_a.source_type)
+            src_b = _enum_str(sr_b.source_type)
+            # At least one item must be an imported/scanned receipt, and items must come from
+            # different source channels or different non-manual providers.
+            if src_a not in incoming_sources_set and src_b not in incoming_sources_set:
+                continue
+            if src_a == src_b and (src_a == SourceType.MANUAL.value or sr_a.provider == sr_b.provider):
+                # Allow same-provider duplicate detection between distinct OCR photos or distinct non-manual records
+                if sr_a.source_type != SourceType.OCR_PHOTO:
+                    continue
+
+            pair_key = (min(sr_a.id, sr_b.id), max(sr_a.id, sr_b.id))
+            existing = dup_by_unordered_sr.get(pair_key)
+            if existing is not None and existing.status != ReconciliationStatus.PENDING:
+                continue
+
+            (in_sr, in_tx), (an_sr, an_tx) = _pick_duplicate_anchor_pair(
+                (sr_a, tx_a),
+                (sr_b, tx_b),
+                accepted_bank_linked_tx_ids=accepted_bank_linked_tx_ids,
+            )
+            assert in_sr.id is not None and an_sr.id is not None
+            assert in_tx.id is not None and an_tx.id is not None
+
+            in_dt = _tx_utc_date(in_tx)
+            an_dt = _tx_utc_date(an_tx)
+            b_in = (
+                (in_tx.currency or "").upper(),
+                in_dt.date() if in_dt else None,
+                quantize_money(abs(in_tx.total_amount)),
+                in_tx.type,
+            )
+            b_an = (
+                (an_tx.currency or "").upper(),
+                an_dt.date() if an_dt else None,
+                quantize_money(abs(an_tx.total_amount)),
+                an_tx.type,
+            )
+            raw_bucket = max(bucket_counts.get(b_in, 0), bucket_counts.get(b_an, 0))
+            conflict_count = (raw_bucket - 1) if raw_bucket > 2 else 1
+
+            scored = _evaluate_receipt_duplicate_pair(
+                incoming_sr=in_sr,
+                incoming_tx=in_tx,
+                anchor_sr=an_sr,
+                anchor_tx=an_tx,
+                same_day_conflict_count=conflict_count,
+            )
+            if scored is None:
+                continue
+
+            score, reasons = scored
+            if existing is not None:
+                seen_pending_pairs.add(pair_key)
+                if (
+                    existing.bank_source_record_id != in_sr.id
+                    or existing.target_source_record_id != an_sr.id
+                    or quantize_score(existing.score) != score
+                    or existing.reasons != reasons
+                ):
+                    existing.bank_source_record_id = in_sr.id
+                    existing.target_source_record_id = an_sr.id
+                    existing.bank_transaction_id = in_tx.id
+                    existing.target_transaction_id = an_tx.id
+                    existing.score = score
+                    existing.reasons = reasons
+                    existing.updated_at = now
+                    session.add(existing)
+                continue
+
+            seen_pending_pairs.add(pair_key)
+            new_link = ReconciliationLink(
+                budget_id=budget_id,
+                bank_source_record_id=in_sr.id,
+                target_source_record_id=an_sr.id,
+                bank_transaction_id=in_tx.id,
+                target_transaction_id=an_tx.id,
+                match_kind=ReconciliationMatchKind.RECEIPT_DUPLICATE,
+                status=ReconciliationStatus.PENDING,
+                score=score,
+                reasons=reasons,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(new_link)
+            dup_by_unordered_sr[pair_key] = new_link
+            upserted += 1
+
+    for pair_key, existing in dup_by_unordered_sr.items():
+        if existing.status == ReconciliationStatus.PENDING and pair_key not in seen_pending_pairs:
             session.delete(existing)
 
     if commit:
@@ -960,9 +1353,19 @@ def accept_reconciliation_link(
     budget_id: int,
     link_id: int,
     user_id: int,
+    commit: bool = True,
 ) -> ReconciliationActionResponse:
     """Confirm a candidate match cleanly while preventing incompatible source multi-links."""
     link = _get_scoped_link(session, budget_id=budget_id, link_id=link_id)
+    if link.match_kind == ReconciliationMatchKind.RECEIPT_DUPLICATE:
+        return merge_receipt_duplicate_link(
+            session,
+            budget_id=budget_id,
+            link_id=link_id,
+            user_id=user_id,
+            keep_transaction_id=None,
+            commit=commit,
+        )
     if link.status == ReconciliationStatus.ACCEPTED:
         raise ReconciliationConflictError("Reconciliation link is already accepted")
 
@@ -1167,12 +1570,341 @@ def accept_reconciliation_link(
     for acc_id in affected_account_ids:
         recalculate_account_balance(conn, acc_id)
 
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(link)
     return ReconciliationActionResponse(
         link=_load_link_read(session, link),
         message="Reconciliation link accepted",
     )
+
+
+def merge_receipt_duplicate_link(
+    session: Session,
+    *,
+    budget_id: int,
+    link_id: int,
+    user_id: int,
+    keep_transaction_id: Optional[int] = None,
+    auto_merged: bool = False,
+    commit: bool = True,
+) -> ReconciliationActionResponse:
+    """Reversibly merge a cross-source duplicate receipt into the surviving transaction."""
+    link = _get_scoped_link(session, budget_id=budget_id, link_id=link_id)
+    if link.match_kind != ReconciliationMatchKind.RECEIPT_DUPLICATE:
+        raise ReconciliationConflictError("Selected reconciliation link is not a duplicate receipt match")
+    if link.status == ReconciliationStatus.ACCEPTED:
+        raise ReconciliationConflictError("Duplicate merge link is already accepted")
+
+    if keep_transaction_id is not None and keep_transaction_id not in (
+        link.target_transaction_id,
+        link.bank_transaction_id,
+    ):
+        raise ReconciliationConflictError("keep_transaction_id must match one side of the duplicate pair")
+
+    # If the user chose to keep the incoming/absorbed side, swap directions so
+    # bank_transaction_id ALWAYS represents the absorbed child (reconciled_into_id = target).
+    if keep_transaction_id is not None and keep_transaction_id == link.bank_transaction_id:
+        link.bank_source_record_id, link.target_source_record_id = (
+            link.target_source_record_id,
+            link.bank_source_record_id,
+        )
+        link.bank_transaction_id, link.target_transaction_id = (
+            link.target_transaction_id,
+            link.bank_transaction_id,
+        )
+
+    absorbed_sr = session.get(SourceRecord, link.bank_source_record_id)
+    surviving_sr = session.get(SourceRecord, link.target_source_record_id)
+    absorbed_tx = session.get(Transaction, link.bank_transaction_id)
+    surviving_tx = session.get(Transaction, link.target_transaction_id)
+    if not absorbed_sr or not surviving_sr or not absorbed_tx or not surviving_tx:
+        raise ReconciliationNotFoundError("Underlying transaction or source record not found")
+    if (
+        absorbed_sr.budget_id != budget_id
+        or surviving_sr.budget_id != budget_id
+        or absorbed_tx.budget_id != budget_id
+        or surviving_tx.budget_id != budget_id
+    ):
+        raise ReconciliationNotFoundError("Cross-budget duplicate merge is forbidden")
+    if (
+        absorbed_tx.id == surviving_tx.id
+        or surviving_tx.reconciled_into_id is not None
+        or absorbed_tx.reconciled_into_id is not None
+        or _enum_str(absorbed_tx.review_status) == ReviewStatus.REJECTED.value
+        or _enum_str(surviving_tx.review_status) == ReviewStatus.REJECTED.value
+    ):
+        raise ReconciliationConflictError("Duplicate transactions cannot be merged in their current state")
+    if (absorbed_tx.currency or "").upper() != (surviving_tx.currency or "").upper():
+        raise ReconciliationConflictError("Transactions with different currencies cannot be merged")
+
+    existing_bank_accepted = session.exec(
+        select(ReconciliationLink).where(
+            ReconciliationLink.budget_id == budget_id,
+            ReconciliationLink.bank_source_record_id == link.bank_source_record_id,
+            col(ReconciliationLink.status) == ReconciliationStatus.ACCEPTED.value,
+            col(ReconciliationLink.id) != link.id,
+        )
+    ).first()
+    if existing_bank_accepted is not None:
+        raise ReconciliationConflictError("Duplicate source record is already linked to another transaction")
+
+    now = datetime.now(timezone.utc)
+    affected_account_ids: set[int] = {
+        acc_id
+        for acc_id in (absorbed_tx.account_id, surviving_tx.account_id)
+        if acc_id is not None
+    }
+    link.previous_receipt_status = _enum_str(surviving_tx.status)
+    reasons = dict(link.reasons or {})
+    reasons["previous_absorbed_review_status"] = _enum_str(absorbed_tx.review_status)
+    reasons["previous_target_account_id"] = surviving_tx.account_id
+    reasons["auto_merged"] = auto_merged
+
+    copied_line_ids: list[int] = []
+    moved_sr_ids: list[int] = []
+    try:
+        with session.begin_nested():
+            assert surviving_tx.id is not None
+            assert absorbed_tx.id is not None
+
+            # Copy itemized basket lines when surviving tx has no lines or only a synthetic manual placeholder.
+            surviving_lines = list(
+                session.exec(
+                    select(TransactionLine).where(TransactionLine.transaction_id == surviving_tx.id)
+                ).all()
+            )
+            absorbed_lines = list(
+                session.exec(
+                    select(TransactionLine).where(TransactionLine.transaction_id == absorbed_tx.id)
+                ).all()
+            )
+            has_synthetic_manual_placeholder = (
+                bool(surviving_tx.is_manual)
+                and len(surviving_lines) == 1
+                and surviving_lines[0].name in ((surviving_tx.note or ""), "Manual entry", "Transfer")
+            )
+            if absorbed_lines and (not surviving_lines or has_synthetic_manual_placeholder):
+                if has_synthetic_manual_placeholder:
+                    orig = surviving_lines[0]
+                    reasons["replaced_manual_line"] = {
+                        "name": orig.name,
+                        "price": str(orig.price),
+                        "quantity": str(orig.quantity),
+                        "category_id": orig.category_id,
+                        "category_source": orig.category_source,
+                    }
+                    session.delete(orig)
+                    session.flush()
+                    session.expire(surviving_tx, ["lines"])
+                else:
+                    reasons.pop("replaced_manual_line", None)
+
+                for src_line in absorbed_lines:
+                    cloned = TransactionLine(
+                        transaction_id=surviving_tx.id,
+                        name=src_line.name,
+                        price=src_line.price,
+                        quantity=src_line.quantity,
+                        category_id=src_line.category_id,
+                        category_source=src_line.category_source,
+                        original_price=src_line.original_price,
+                        discount_total=src_line.discount_total,
+                        final_price=src_line.final_price,
+                        is_adjustment=src_line.is_adjustment,
+                    )
+                    session.add(cloned)
+                    session.flush()
+                    if cloned.id is not None:
+                        copied_line_ids.append(cloned.id)
+
+            # Inherit account/category only when the surviving anchor lacked them.
+            if surviving_tx.account_id is None and absorbed_tx.account_id is not None:
+                reasons["inherited_account_on_accept"] = True
+                surviving_tx.account_id = absorbed_tx.account_id
+                affected_account_ids.add(absorbed_tx.account_id)
+            else:
+                reasons.pop("inherited_account_on_accept", None)
+
+            if surviving_tx.category_id is None and absorbed_tx.category_id is not None:
+                reasons["inherited_category_on_accept"] = True
+                reasons["previous_target_category_id"] = None
+                surviving_tx.category_id = absorbed_tx.category_id
+            else:
+                reasons.pop("inherited_category_on_accept", None)
+
+            if absorbed_sr.id is not None:
+                absorbed_sr.transaction_id = surviving_tx.id
+                moved_sr_ids.append(absorbed_sr.id)
+                session.add(absorbed_sr)
+
+            # Move any additional provenance records attached to the absorbed duplicate.
+            extra_srs = list(
+                session.exec(
+                    select(SourceRecord).where(
+                        SourceRecord.budget_id == budget_id,
+                        SourceRecord.transaction_id == absorbed_tx.id,
+                        col(SourceRecord.id) != link.bank_source_record_id,
+                    )
+                ).all()
+            )
+            for extra_sr in extra_srs:
+                extra_sr.transaction_id = surviving_tx.id
+                if extra_sr.id is not None:
+                    moved_sr_ids.append(extra_sr.id)
+                session.add(extra_sr)
+
+            absorbed_tx.reconciled_into_id = surviving_tx.id
+            absorbed_tx.review_status = ReviewStatus.APPROVED
+            session.add(absorbed_tx)
+            session.add(surviving_tx)
+
+            reasons["copied_line_ids"] = copied_line_ids
+            reasons["moved_source_record_ids"] = moved_sr_ids
+            link.reasons = reasons
+            link.status = ReconciliationStatus.ACCEPTED
+            link.decided_by_user_id = user_id
+            link.decided_at = now
+            link.updated_at = now
+            session.add(link)
+
+            # Remove pending candidates targeting the absorbed child.
+            superseded = list(
+                session.exec(
+                    select(ReconciliationLink).where(
+                        ReconciliationLink.budget_id == budget_id,
+                        col(ReconciliationLink.status) == ReconciliationStatus.PENDING.value,
+                        col(ReconciliationLink.id) != link.id,
+                        (
+                            (col(ReconciliationLink.bank_transaction_id) == absorbed_tx.id)
+                            | (col(ReconciliationLink.target_transaction_id) == absorbed_tx.id)
+                        ),
+                    )
+                ).all()
+            )
+            for pending in superseded:
+                session.delete(pending)
+
+            session.flush()
+    except IntegrityError as exc:
+        raise ReconciliationConflictError(
+            "Duplicate source record is already merged into another transaction"
+        ) from exc
+
+    conn = session.connection()
+    for acc_id in affected_account_ids:
+        recalculate_account_balance(conn, acc_id)
+
+    if commit:
+        session.commit()
+    else:
+        session.flush()
+    session.refresh(link)
+    return ReconciliationActionResponse(
+        link=_load_link_read(session, link),
+        message="Duplicate receipt merged cleanly",
+    )
+
+
+def apply_auto_merge_for_transaction(
+    session: Session,
+    *,
+    budget_id: int,
+    transaction_id: int,
+    user_id: int,
+    include_bank_exact: bool = True,
+    commit: bool = False,
+) -> Optional[ReconciliationLink]:
+    """Automatically merge a newly ingested item iff a single unambiguous high-confidence match exists."""
+    discover_reconciliation_candidates(session, budget_id=budget_id, commit=False)
+
+    def _try_auto_accept(match_kind: ReconciliationMatchKind) -> Optional[ReconciliationLink]:
+        pending_for_tx = list(
+            session.exec(
+                select(ReconciliationLink).where(
+                    ReconciliationLink.budget_id == budget_id,
+                    col(ReconciliationLink.match_kind) == match_kind.value,
+                    col(ReconciliationLink.status) == ReconciliationStatus.PENDING.value,
+                    (
+                        (col(ReconciliationLink.bank_transaction_id) == transaction_id)
+                        | (col(ReconciliationLink.target_transaction_id) == transaction_id)
+                    ),
+                )
+            ).all()
+        )
+        if len(pending_for_tx) != 1:
+            return None
+
+        candidate = pending_for_tx[0]
+        if candidate.id is None:
+            return None
+        if quantize_score(candidate.score) < AUTO_MERGE_SCORE_THRESHOLD:
+            return None
+
+        conflict_count = int((candidate.reasons or {}).get("summary", {}).get("same_day_conflict_count") or 0)
+        if conflict_count > 1:
+            return None
+
+        other_tx_id = (
+            candidate.target_transaction_id
+            if candidate.bank_transaction_id == transaction_id
+            else candidate.bank_transaction_id
+        )
+        pending_for_other = list(
+            session.exec(
+                select(ReconciliationLink.id).where(
+                    ReconciliationLink.budget_id == budget_id,
+                    col(ReconciliationLink.match_kind) == match_kind.value,
+                    col(ReconciliationLink.status) == ReconciliationStatus.PENDING.value,
+                    (
+                        (col(ReconciliationLink.bank_transaction_id) == other_tx_id)
+                        | (col(ReconciliationLink.target_transaction_id) == other_tx_id)
+                    ),
+                )
+            ).all()
+        )
+        if len(pending_for_other) != 1:
+            return None
+
+        if match_kind == ReconciliationMatchKind.RECEIPT_DUPLICATE:
+            merge_receipt_duplicate_link(
+                session,
+                budget_id=budget_id,
+                link_id=candidate.id,
+                user_id=user_id,
+                keep_transaction_id=candidate.target_transaction_id,
+                auto_merged=True,
+                commit=commit,
+            )
+        else:
+            other_tx = session.get(Transaction, other_tx_id)
+            if other_tx is None or _enum_str(other_tx.review_status) != ReviewStatus.APPROVED.value:
+                return None
+            # Also ensure bank_tx settles as APPROVED when folded into target_tx so it exits Inbox.
+            bank_tx_obj = session.get(Transaction, candidate.bank_transaction_id)
+            if bank_tx_obj is not None and _enum_str(bank_tx_obj.review_status) == ReviewStatus.PENDING.value:
+                bank_tx_obj.review_status = ReviewStatus.APPROVED
+                session.add(bank_tx_obj)
+                session.flush()
+            accept_reconciliation_link(
+                session,
+                budget_id=budget_id,
+                link_id=candidate.id,
+                user_id=user_id,
+                commit=commit,
+            )
+        return session.get(ReconciliationLink, candidate.id)
+
+    merged_dup = _try_auto_accept(ReconciliationMatchKind.RECEIPT_DUPLICATE)
+    if merged_dup is not None:
+        return merged_dup
+
+    if include_bank_exact:
+        return _try_auto_accept(ReconciliationMatchKind.EXACT)
+
+    return None
 
 
 def reject_reconciliation_link(
@@ -1237,7 +1969,61 @@ def unlink_reconciliation_link(
     }
 
     now = datetime.now(timezone.utc)
-    if link.match_kind in (ReconciliationMatchKind.EXACT, ReconciliationMatchKind.SPLIT_PAYMENT):
+    if link.match_kind == ReconciliationMatchKind.RECEIPT_DUPLICATE:
+        reasons = link.reasons or {}
+        moved_sr_ids = [int(x) for x in (reasons.get("moved_source_record_ids") or []) if x is not None]
+        if not moved_sr_ids and bank_sr is not None and bank_sr.id is not None:
+            moved_sr_ids = [bank_sr.id]
+        if moved_sr_ids:
+            moved_srs = session.exec(select(SourceRecord).where(col(SourceRecord.id).in_(moved_sr_ids))).all()
+            for sr in moved_srs:
+                sr.transaction_id = link.bank_transaction_id
+                session.add(sr)
+
+        if bank_tx is not None:
+            bank_tx.reconciled_into_id = None
+            prev_review = reasons.get("previous_absorbed_review_status")
+            if prev_review:
+                try:
+                    bank_tx.review_status = ReviewStatus(prev_review)
+                except ValueError:
+                    pass
+            session.add(bank_tx)
+
+        if target_tx is not None:
+            copied_line_ids = [int(x) for x in (reasons.get("copied_line_ids") or []) if x is not None]
+            if copied_line_ids:
+                copied_lines = session.exec(
+                    select(TransactionLine).where(
+                        col(TransactionLine.id).in_(copied_line_ids),
+                        TransactionLine.transaction_id == target_tx.id,
+                    )
+                ).all()
+                for cline in copied_lines:
+                    session.delete(cline)
+
+            replaced_manual = reasons.get("replaced_manual_line")
+            if isinstance(replaced_manual, dict) and target_tx.id is not None:
+                session.add(
+                    TransactionLine(
+                        transaction_id=target_tx.id,
+                        name=str(replaced_manual.get("name") or "Manual entry"),
+                        price=Decimal(str(replaced_manual.get("price") or "0.00")),
+                        quantity=Decimal(str(replaced_manual.get("quantity") or "1")),
+                        category_id=replaced_manual.get("category_id"),
+                        category_source=replaced_manual.get("category_source"),
+                    )
+                )
+
+            if reasons.get("inherited_account_on_accept"):
+                prev_acc_id = reasons.get("previous_target_account_id", None)
+                target_tx.account_id = prev_acc_id
+                if prev_acc_id is not None:
+                    affected_account_ids.add(prev_acc_id)
+            if reasons.get("inherited_category_on_accept"):
+                target_tx.category_id = reasons.get("previous_target_category_id", None)
+            session.add(target_tx)
+    elif link.match_kind in (ReconciliationMatchKind.EXACT, ReconciliationMatchKind.SPLIT_PAYMENT):
         if bank_sr is not None:
             bank_sr.transaction_id = link.bank_transaction_id
             session.add(bank_sr)
@@ -1342,6 +2128,58 @@ def cleanup_reconciliation_before_transaction_delete(session: Session, *, transa
             if bank_sr is not None and bank_sr.transaction_id == transaction_id:
                 bank_sr.transaction_id = link.bank_transaction_id
                 session.add(bank_sr)
+            reasons = link.reasons or {}
+            moved_sr_ids = [int(x) for x in (reasons.get("moved_source_record_ids") or []) if x is not None]
+            if moved_sr_ids:
+                for sr in session.exec(select(SourceRecord).where(col(SourceRecord.id).in_(moved_sr_ids))).all():
+                    if sr.transaction_id == transaction_id:
+                        sr.transaction_id = link.bank_transaction_id
+                        session.add(sr)
+        elif (
+            link.bank_transaction_id == transaction_id
+            and link.status == ReconciliationStatus.ACCEPTED
+            and link.match_kind == ReconciliationMatchKind.RECEIPT_DUPLICATE
+            and link.target_transaction_id != transaction_id
+        ):
+            reasons = link.reasons or {}
+            moved_sr_ids = [int(x) for x in (reasons.get("moved_source_record_ids") or []) if x is not None]
+            if not moved_sr_ids:
+                moved_sr_ids = [link.bank_source_record_id]
+            for sr in session.exec(select(SourceRecord).where(col(SourceRecord.id).in_(moved_sr_ids))).all():
+                if sr.transaction_id != transaction_id:
+                    sr.transaction_id = transaction_id
+                    session.add(sr)
+            target_tx = session.get(Transaction, link.target_transaction_id)
+            if target_tx is not None:
+                if target_tx.account_id is not None:
+                    affected_account_ids.add(target_tx.account_id)
+                copied_line_ids = [int(x) for x in (reasons.get("copied_line_ids") or []) if x is not None]
+                if copied_line_ids:
+                    for cline in session.exec(
+                        select(TransactionLine).where(
+                            col(TransactionLine.id).in_(copied_line_ids),
+                            TransactionLine.transaction_id == target_tx.id,
+                        )
+                    ).all():
+                        session.delete(cline)
+                replaced_manual = reasons.get("replaced_manual_line")
+                if isinstance(replaced_manual, dict) and target_tx.id is not None:
+                    session.add(
+                        TransactionLine(
+                            transaction_id=target_tx.id,
+                            name=str(replaced_manual.get("name") or "Manual entry"),
+                            price=Decimal(str(replaced_manual.get("price") or "0.00")),
+                            quantity=Decimal(str(replaced_manual.get("quantity") or "1")),
+                            category_id=replaced_manual.get("category_id"),
+                            category_source=replaced_manual.get("category_source"),
+                        )
+                    )
+                if reasons.get("inherited_account_on_accept"):
+                    prev_acc_id = reasons.get("previous_target_account_id", None)
+                    target_tx.account_id = prev_acc_id
+                    if prev_acc_id is not None:
+                        affected_account_ids.add(prev_acc_id)
+                session.add(target_tx)
         elif (
             link.bank_transaction_id == transaction_id
             and link.status == ReconciliationStatus.ACCEPTED
