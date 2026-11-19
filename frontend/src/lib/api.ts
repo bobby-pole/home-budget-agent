@@ -19,6 +19,7 @@ import type {
   AccountUpdate,
   ExternalReceiptConnectionRead,
   ExternalReceiptConnectionCreate,
+  ConnectionSettingsUpdate,
   ConnectionSyncNowResponse,
   ConnectionDisconnectResponse,
   ConnectionOAuthStartResponse,
@@ -26,7 +27,13 @@ import type {
   ConnectionToggleRequest,
   ReconciliationActionResponse,
   ReconciliationListResponse,
-  ReconciliationStatus
+  ReconciliationStatus,
+  AutoMergePolicy,
+  BankCsvPreviewResponse,
+  DuplicateMergeRequest,
+  InboxBulkActionResponse,
+  InboxBulkApproveRequest,
+  InboxRejectRequest
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n";
@@ -145,8 +152,33 @@ export const api = {
     return response.data;
   },
 
-  getInbox: async () => {
-    const response = await apiClient.get<Transaction[]>("/transactions/inbox");
+  getInbox: async (params?: {
+    tab?: "exceptions" | "rejected" | "all";
+    source_type?: string;
+    needs_review?: boolean;
+  }) => {
+    const response = params
+      ? await apiClient.get<Transaction[]>("/transactions/inbox", { params })
+      : await apiClient.get<Transaction[]>("/transactions/inbox");
+    return response.data;
+  },
+
+  bulkApproveInbox: async (data: InboxBulkApproveRequest): Promise<InboxBulkActionResponse> => {
+    const response = await apiClient.post<InboxBulkActionResponse>("/inbox/bulk-approve", data);
+    return response.data;
+  },
+
+  rejectInboxItem: async (id: number, data?: InboxRejectRequest): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>(`/inbox/${id}/reject`, data ?? {});
+    return response.data;
+  },
+
+  restoreInboxItem: async (id: number, accountId?: number): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>(
+      `/inbox/${id}/restore`,
+      undefined,
+      { params: accountId !== undefined ? { account_id: accountId } : undefined }
+    );
     return response.data;
   },
 
@@ -193,18 +225,66 @@ export const api = {
     return response.data;
   },
 
-  deleteTransaction: async (id: number) => {
-    await apiClient.delete(`/transactions/${id}`);
+  deleteTransaction: async (id: number, options?: { preserveSource?: boolean }) => {
+    if (options?.preserveSource) {
+      await apiClient.delete(`/transactions/${id}`, {
+        params: { preserve_source: true },
+      });
+    } else {
+      await apiClient.delete(`/transactions/${id}`);
+    }
   },
 
-  importTransactions: async (file: File) => {
+  previewImportTransactions: async (file: File): Promise<BankCsvPreviewResponse> => {
     const formData = new FormData();
     formData.append("file", file);
+    const response = await apiClient.post<BankCsvPreviewResponse>(
+      "/transactions/import/preview",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return response.data;
+  },
+
+  importTransactions: async (
+    file: File,
+    options?: {
+      account_id?: number;
+      auto_merge_policy?: AutoMergePolicy;
+      require_account?: boolean;
+    }
+  ) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (options?.account_id !== undefined) {
+      formData.append("account_id", String(options.account_id));
+    }
+    if (options?.auto_merge_policy) {
+      formData.append("auto_merge_policy", options.auto_merge_policy);
+    }
+    if (options?.require_account !== undefined) {
+      formData.append("require_account", String(options.require_account));
+    }
     const response = await apiClient.post<{
       created: number;
       skipped: number;
       failed: number;
-      summary: string | { code: string; imported: number; skipped: number; filename: string };
+      approved_count?: number;
+      pending_count?: number;
+      auto_merged_count?: number;
+      summary:
+        | string
+        | {
+            code: string;
+            imported: number;
+            skipped: number;
+            approved?: number;
+            pending?: number;
+            auto_merged?: number;
+            filename: string;
+          };
     }>("/transactions/import", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
@@ -414,9 +494,34 @@ export const api = {
     return response.data;
   },
 
-  syncNowConnection: async (id: number, live: boolean = true): Promise<ConnectionSyncNowResponse> => {
+  syncNowConnection: async (
+    id: number,
+    options:
+      | boolean
+      | { live?: boolean; sync_from_date?: string; auto_merge_policy?: AutoMergePolicy } = true
+  ): Promise<ConnectionSyncNowResponse> => {
+    const normalized = typeof options === "boolean" ? { live: options } : options;
     const response = await apiClient.post<ConnectionSyncNowResponse>(
-      `/connections/${id}/sync-now?live=${live}`
+      `/connections/${id}/sync-now`,
+      undefined,
+      {
+        params: {
+          live: normalized.live ?? true,
+          ...(normalized.sync_from_date ? { sync_from_date: normalized.sync_from_date } : {}),
+          ...(normalized.auto_merge_policy ? { auto_merge_policy: normalized.auto_merge_policy } : {}),
+        },
+      }
+    );
+    return response.data;
+  },
+
+  updateConnectionSettings: async (
+    id: number,
+    data: ConnectionSettingsUpdate
+  ): Promise<ExternalReceiptConnectionRead> => {
+    const response = await apiClient.patch<ExternalReceiptConnectionRead>(
+      `/connections/${id}/settings`,
+      data
     );
     return response.data;
   },
@@ -481,6 +586,17 @@ export const api = {
   unlinkReconciliation: async (linkId: number): Promise<ReconciliationActionResponse> => {
     const response = await apiClient.post<ReconciliationActionResponse>(
       `/reconciliation/${linkId}/unlink`
+    );
+    return response.data;
+  },
+
+  mergeDuplicateReconciliation: async (
+    linkId: number,
+    data?: DuplicateMergeRequest
+  ): Promise<ReconciliationActionResponse> => {
+    const response = await apiClient.post<ReconciliationActionResponse>(
+      `/reconciliation/${linkId}/merge-duplicate`,
+      data ?? {}
     );
     return response.data;
   },

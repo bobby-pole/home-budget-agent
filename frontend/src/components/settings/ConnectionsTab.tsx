@@ -9,10 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import type {
+  AccountRead,
+  AutoMergePolicy,
   ConnectionOAuthStartResponse,
+  ConnectionSettingsUpdate,
   ExternalReceiptConnectionCreate,
   ExternalReceiptConnectionRead,
 } from "@/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +47,148 @@ const STORES = [
   { id: "lidl", name: "Lidl Plus", icon: "/brands/lidl.svg" },
   { id: "biedronka", name: "Biedronka", icon: "/brands/biedronka.ico" },
 ];
+
+function getCurrentMonthStartDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}-01`;
+}
+
+function ConnectionImportPreferences({
+  conn,
+  accounts,
+  isSaving,
+  onSave,
+}: {
+  conn: ExternalReceiptConnectionRead;
+  accounts: AccountRead[];
+  isSaving: boolean;
+  onSave: (id: number, settings: ConnectionSettingsUpdate) => void;
+}) {
+  const activeAccounts = accounts.filter((a) => a.is_active !== false);
+  const currentMonthStart = getCurrentMonthStartDate();
+
+  const [accountVal, setAccountVal] = useState<string>(
+    conn.default_account_id
+      ? String(conn.default_account_id)
+      : conn.suggested_account_id
+        ? String(conn.suggested_account_id)
+        : "none"
+  );
+  const [mergePolicy, setMergePolicy] = useState<AutoMergePolicy>(
+    conn.auto_merge_policy ?? "auto"
+  );
+  const [syncFromDate, setSyncFromDate] = useState<string>(
+    conn.sync_from_date ? String(conn.sync_from_date).slice(0, 10) : currentMonthStart
+  );
+
+  const handleSubmit = () => {
+    onSave(conn.id, {
+      default_account_id: accountVal === "none" ? null : parseInt(accountVal, 10),
+      auto_merge_policy: mergePolicy,
+      sync_from_date: syncFromDate.trim() ? syncFromDate.trim() : null,
+    });
+  };
+
+  return (
+    <div className="rounded-lg border bg-muted/20 p-3 space-y-3 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium text-foreground">
+          {t("settings.connections.preferences.title")}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor={`conn-acc-${conn.id}`} className="text-xs">
+            {t("settings.connections.preferences.default_account_label")}
+          </Label>
+          <Select value={accountVal} onValueChange={setAccountVal}>
+            <SelectTrigger id={`conn-acc-${conn.id}`} className="h-8 text-xs">
+              <SelectValue placeholder={t("settings.connections.preferences.default_account_placeholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("settings.connections.preferences.account_none")}</SelectItem>
+              {activeAccounts.map((acc) => (
+                <SelectItem key={acc.id} value={String(acc.id)}>
+                  {acc.name}
+                  {conn.suggested_account_id === acc.id
+                    ? ` (${t("settings.connections.preferences.suggested_badge")})`
+                    : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor={`conn-merge-${conn.id}`} className="text-xs">
+            {t("settings.connections.preferences.merge_policy_label")}
+          </Label>
+          <Select value={mergePolicy} onValueChange={(v) => setMergePolicy(v as AutoMergePolicy)}>
+            <SelectTrigger id={`conn-merge-${conn.id}`} className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">{t("settings.connections.preferences.merge_auto")}</SelectItem>
+              <SelectItem value="manual">{t("settings.connections.preferences.merge_manual")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor={`conn-date-${conn.id}`} className="text-xs">
+            {t("settings.connections.preferences.sync_from_label")}
+          </Label>
+          <Input
+            id={`conn-date-${conn.id}`}
+            type="date"
+            value={syncFromDate}
+            onChange={(e) => setSyncFromDate(e.target.value)}
+            className="h-8 text-xs"
+          />
+          <div className="flex flex-wrap gap-1 pt-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-[11px]"
+              onClick={() => setSyncFromDate(currentMonthStart)}
+            >
+              {t("settings.connections.preferences.preset_current_month")}
+            </Button>
+            {conn.budget_first_month_date && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[11px]"
+                onClick={() => setSyncFromDate(String(conn.budget_first_month_date).slice(0, 10))}
+              >
+                {t("settings.connections.preferences.preset_budget_start")}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          disabled={isSaving}
+          onClick={handleSubmit}
+          className="h-7 text-xs"
+        >
+          {isSaving
+            ? t("settings.connections.preferences.saving_button")
+            : t("settings.connections.preferences.save_button")}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export function ConnectionsTab() {
   const queryClient = useQueryClient();
@@ -73,6 +225,25 @@ export function ConnectionsTab() {
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ["connections"],
     queryFn: api.getConnections,
+  });
+
+  const hasAccountsEndpoint = typeof api.getAccounts === "function";
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: async () => (hasAccountsEndpoint ? api.getAccounts() : []),
+    enabled: hasAccountsEndpoint,
+  });
+
+  const hasSettingsEndpoint = typeof api.updateConnectionSettings === "function";
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: ConnectionSettingsUpdate }) =>
+      api.updateConnectionSettings(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      toast.success(t("settings.connections.preferences.toast_saved"));
+    },
+    onError: () => toast.error(t("common.error")),
   });
 
   const providerAlreadyAdded = connections.some((connection) => connection.provider === formData.provider);
@@ -137,6 +308,10 @@ export function ConnectionsTab() {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
       queryClient.invalidateQueries({ queryKey: ["inbox"] });
       queryClient.invalidateQueries({ queryKey: ["status"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       toast.success(res.message || t("settings.connections.toast_sync_queued"));
     },
     onError: () => {
@@ -440,6 +615,18 @@ export function ConnectionsTab() {
 
                 {!conn.has_token && conn.status === "reauth_required" && !conn.last_error_code && (
                   <p className="text-sm text-muted-foreground">{t("settings.connections.authorization_unavailable")}</p>
+                )}
+
+                {hasSettingsEndpoint && conn.status !== "disconnected" && (
+                  <ConnectionImportPreferences
+                    key={`${conn.id}-${conn.updated_at}`}
+                    conn={conn}
+                    accounts={accounts}
+                    isSaving={updateSettingsMutation.isPending}
+                    onSave={(id, settingsData) =>
+                      updateSettingsMutation.mutate({ id, data: settingsData })
+                    }
+                  />
                 )}
 
                 {/* Actions */}

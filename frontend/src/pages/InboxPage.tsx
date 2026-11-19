@@ -1,29 +1,98 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Inbox, Loader2, Sparkles, AlertCircle, Plus, GitCompareArrows, Receipt } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Inbox,
+  Loader2,
+  Sparkles,
+  AlertCircle,
+  Plus,
+  GitCompareArrows,
+  Receipt,
+  Trash2,
+  RotateCcw,
+  Check,
+} from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import type { TransactionRead } from "@/client";
 import { PendingVerificationList } from "@/components/inbox/PendingVerificationList";
 import { ReconciliationPanel } from "@/components/inbox/ReconciliationPanel";
 import { VerificationCard } from "@/components/inbox/VerificationCard";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
+import { formatDate } from "@/lib/dates";
+import { formatMoneyFixed } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
+type InboxTab = "exceptions" | "reconciliation" | "rejected";
+type SourceFilter = "all" | "ocr_photo" | "merchant_api" | "e_receipt" | "bank_csv";
+
+function getRejectedSourceLabel(tx: TransactionRead): string | null {
+  const first = tx.source_records?.[0];
+  if (!first) return null;
+  const st = String(first.source_type || "").toUpperCase();
+  if (st === "OCR_PHOTO") return t("inbox.list.source_ocr_photo");
+  if (st === "MERCHANT_API") {
+    return first.provider === "lidl" ? t("transactions.table.source_lidl") : t("inbox.list.source_merchant_api");
+  }
+  if (st === "E_RECEIPT") return t("inbox.list.source_e_receipt");
+  if (st === "BANK_CSV") return t("inbox.list.source_bank_csv");
+  return t("inbox.list.source_manual");
+}
+
 export function InboxPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"receipts" | "reconciliation">("receipts");
+  const [activeTab, setActiveTab] = useState<InboxTab>("exceptions");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [checkedIds, setCheckedIds] = useState<number[]>([]);
+  const [bulkAccountOverride, setBulkAccountOverride] = useState<string>("");
   const isMobile = useIsMobile();
   const { setQuickEntryOpen, renderModals } = useTransactionActions();
 
-  const { data: transactions = [], isLoading, error } = useQuery({
-    queryKey: ["inbox"],
-    queryFn: api.getInbox,
+  const {
+    data: transactions = [],
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["inbox", "exceptions", sourceFilter],
+    queryFn: () =>
+      api.getInbox(
+        sourceFilter === "all"
+          ? { tab: "exceptions" }
+          : { tab: "exceptions", source_type: sourceFilter }
+      ),
     refetchInterval: 5000,
+  });
+
+  const {
+    data: rejectedTransactions = [],
+    isLoading: isRejectedLoading,
+  } = useQuery({
+    queryKey: ["inbox", "rejected"],
+    queryFn: () => api.getInbox({ tab: "rejected" }),
   });
 
   const { data: reconciliationSummary } = useQuery({
@@ -31,27 +100,128 @@ export function InboxPage() {
     queryFn: () => api.getReconciliationCandidates("pending"),
   });
 
+  const { data: accounts = [] } = useQuery({
+    queryKey: ["accounts"],
+    queryFn: api.getAccounts,
+  });
+
   const pendingReconciliationCount = reconciliationSummary?.pending_count ?? 0;
+  const rejectedCount = rejectedTransactions.length;
 
+  const activeAccounts = accounts.filter((acc) => acc.is_active !== false);
+  const suggestedAccountId =
+    transactions.find((item) => item.suggested_account_id != null)?.suggested_account_id ??
+    activeAccounts[0]?.id ??
+    null;
+  const effectiveBulkAccountId = bulkAccountOverride || (suggestedAccountId ? String(suggestedAccountId) : "");
 
-  // Decide which transaction to show
-  const currentTransaction = transactions.find(t => t.id === selectedId) || (transactions.length > 0 && !isMobile ? transactions[0] : null);
+  const currentTransaction =
+    transactions.find((tx) => tx.id === selectedId) ||
+    (transactions.length > 0 && !isMobile ? transactions[0] : null);
 
-  const handleSuccess = () => {
+  const visibleIdSet = new Set(transactions.map((tx) => tx.id));
+  const activeCheckedIds = checkedIds.filter((id) => visibleIdSet.has(id));
+  const allChecked = transactions.length > 0 && activeCheckedIds.length === transactions.length;
+
+  const invalidateInboxAndLedger = () => {
     queryClient.invalidateQueries({ queryKey: ["inbox"] });
+    queryClient.invalidateQueries({ queryKey: ["status"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+  };
+
+  const handleSuccess = () => {
+    invalidateInboxAndLedger();
     if (isMobile) {
       setSelectedId(null);
     }
   };
+
+  const bulkApproveMutation = useMutation({
+    mutationFn: ({ ids, accountId }: { ids: number[]; accountId: number }) =>
+      api.bulkApproveInbox({ transaction_ids: ids, account_id: accountId }),
+    onSuccess: (res) => {
+      invalidateInboxAndLedger();
+      setCheckedIds([]);
+      if ((res.skipped_ids?.length ?? 0) > 0) {
+        toast.info(
+          t("inbox.bulk.approve_partial", {
+            approved: String(res.approved_count),
+            skipped: String(res.skipped_ids?.length ?? 0),
+          })
+        );
+      } else {
+        toast.success(t("inbox.bulk.approve_success", { count: String(res.approved_count) }));
+      }
+    },
+    onError: () => {
+      toast.error(t("inbox.bulk.approve_error"));
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (txId: number) => api.restoreInboxItem(txId),
+    onSuccess: () => {
+      invalidateInboxAndLedger();
+      toast.success(t("inbox.rejected.restore_success"));
+    },
+    onError: () => {
+      toast.error(t("inbox.rejected.restore_error"));
+    },
+  });
+
+  const purgeMutation = useMutation({
+    mutationFn: (txId: number) => api.deleteTransaction(txId, { preserveSource: false }),
+    onSuccess: () => {
+      invalidateInboxAndLedger();
+      toast.success(t("inbox.rejected.purge_success"));
+    },
+    onError: () => {
+      toast.error(t("inbox.rejected.purge_error"));
+    },
+  });
+
+  const handleToggleSelect = (txId: number) => {
+    setCheckedIds((prev) =>
+      prev.includes(txId) ? prev.filter((id) => id !== txId) : [...prev, txId]
+    );
+  };
+
+  const handleToggleAll = () => {
+    if (allChecked) {
+      setCheckedIds([]);
+    } else {
+      setCheckedIds(transactions.map((tx) => tx.id));
+    }
+  };
+
+  const handleBulkApprove = () => {
+    if (!effectiveBulkAccountId) {
+      toast.error(t("inbox.bulk.account_required"));
+      return;
+    }
+    if (activeCheckedIds.length === 0) return;
+    bulkApproveMutation.mutate({
+      ids: activeCheckedIds,
+      accountId: parseInt(effectiveBulkAccountId, 10),
+    });
+  };
+
+  const sourceFilters: Array<{ value: SourceFilter; label: string }> = [
+    { value: "all", label: t("inbox.source_filters.all") },
+    { value: "ocr_photo", label: t("inbox.source_filters.ocr_photo") },
+    { value: "merchant_api", label: t("inbox.source_filters.merchant_api") },
+    { value: "e_receipt", label: t("inbox.source_filters.e_receipt") },
+    { value: "bank_csv", label: t("inbox.source_filters.bank_csv") },
+  ];
 
   const showList = !isMobile || (isMobile && !selectedId);
   const showDetail = currentTransaction && (!isMobile || (isMobile && selectedId));
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
-      {/* Header - Hide on mobile if showing detail to save space */}
       {(!isMobile || !selectedId) && (
         <div className="flex items-center justify-between px-4 md:px-8 py-4 md:py-6 bg-background/50 backdrop-blur-md border-b shrink-0">
           <div className="flex items-center gap-3 md:gap-4">
@@ -71,7 +241,6 @@ export function InboxPage() {
             </div>
           </div>
 
-
           <div className="flex items-center gap-4">
             {!isMobile && (
               <Button
@@ -81,7 +250,7 @@ export function InboxPage() {
                 <Plus className="mr-2 size-4" /> {t("dashboard.header.add_transaction")}
               </Button>
             )}
-            
+
             {transactions.length > 0 && (
               <div className="flex items-center gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-primary/5 rounded-full border border-primary/10">
                 <span className="relative flex h-2 w-2">
@@ -98,17 +267,17 @@ export function InboxPage() {
       )}
 
       {(!isMobile || !selectedId) && (
-        <div className="flex items-center gap-2 px-4 md:px-8 py-2.5 border-b bg-background/40 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 md:px-8 py-2.5 border-b bg-background/40 shrink-0">
           <Button
-            variant={activeTab === "receipts" ? "default" : "ghost"}
+            variant={activeTab === "exceptions" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveTab("receipts")}
+            onClick={() => setActiveTab("exceptions")}
             className="gap-2"
           >
             <Receipt className="h-4 w-4" />
-            <span>{t("inbox.tabs.receipts")}</span>
+            <span>{t("inbox.tabs.exceptions")}</span>
             {transactions.length > 0 && (
-              <Badge variant={activeTab === "receipts" ? "secondary" : "outline"} className="text-[10px] h-4 px-1.5">
+              <Badge variant={activeTab === "exceptions" ? "secondary" : "outline"} className="text-[10px] h-4 px-1.5">
                 {transactions.length}
               </Badge>
             )}
@@ -130,6 +299,23 @@ export function InboxPage() {
               </Badge>
             )}
           </Button>
+          <Button
+            variant={activeTab === "rejected" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setActiveTab("rejected")}
+            className="gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>{t("inbox.tabs.rejected")}</span>
+            {rejectedCount > 0 && (
+              <Badge
+                variant={activeTab === "rejected" ? "secondary" : "outline"}
+                className="text-[10px] h-4 px-1.5"
+              >
+                {rejectedCount}
+              </Badge>
+            )}
+          </Button>
         </div>
       )}
 
@@ -137,74 +323,228 @@ export function InboxPage() {
         <div className={cn("flex-1 flex overflow-hidden bg-muted/20", isMobile ? "p-4" : "p-8")}>
           <ReconciliationPanel />
         </div>
+      ) : activeTab === "rejected" ? (
+        <div className={cn("flex-1 overflow-y-auto bg-muted/20", isMobile ? "p-4" : "p-8")}>
+          {isRejectedLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+            </div>
+          ) : rejectedTransactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center border-2 border-dashed rounded-2xl bg-card/40 max-w-2xl mx-auto">
+              <Trash2 className="h-12 w-12 text-muted-foreground/30 mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground">{t("inbox.rejected.empty_title")}</h3>
+              <p className="text-sm text-muted-foreground/70 max-w-md mt-1">
+                {t("inbox.rejected.empty_description")}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-w-4xl">
+              {rejectedTransactions.map((tx) => {
+                const srcLabel = getRejectedSourceLabel(tx);
+                return (
+                  <Card key={tx.id} className="border-border/60 bg-card/80">
+                    <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-sm truncate">
+                            {tx.merchant_name || t("inbox.list.processing_placeholder")}
+                          </span>
+                          {srcLabel && (
+                            <Badge variant="secondary" className="text-[10px] h-5">
+                              {srcLabel}
+                            </Badge>
+                          )}
+                          <span className="font-bold text-sm tabular-nums">
+                            {formatMoneyFixed(tx.total_amount ?? "0.00")} {tx.currency}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span>{tx.date ? formatDate(tx.date, "PPP") : t("inbox.list.no_date")}</span>
+                          {tx.rejection_reason && (
+                            <span>
+                              • {t("inbox.rejected.reason_prefix")}: {tx.rejection_reason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={restoreMutation.isPending}
+                          onClick={() => restoreMutation.mutate(tx.id)}
+                          className="gap-1.5"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {t("inbox.rejected.restore_button")}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={purgeMutation.isPending}
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 gap-1.5"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {t("inbox.rejected.purge_button")}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{t("inbox.rejected.purge_dialog_title")}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t("inbox.rejected.purge_dialog_description")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>{t("inbox.rejected.purge_dialog_cancel")}</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => purgeMutation.mutate(tx.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                {t("inbox.rejected.purge_dialog_confirm")}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
       ) : (
-      <div className={cn(
-        "flex-1 flex overflow-hidden bg-muted/20",
-        isMobile ? "p-0" : "p-8 gap-8"
-      )}>
-        {/* List of pending */}
-        {showList && (
-          <div className={cn(
-            "flex flex-col gap-4 overflow-hidden shrink-0",
-            isMobile ? "w-full p-4" : "w-80"
-          )}>
-            {!isMobile && (
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-1">
-                {t("inbox.pending_section_header")}
-              </h3>
-            )}
-            <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-              {isLoading ? (
-                <div className="flex items-center justify-center p-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
-                </div>
-              ) : error ? (
-                <Card className="border-destructive/20 bg-destructive/5">
-                  <CardContent className="p-4 flex items-center gap-2 text-destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <span className="text-xs font-medium">{t("inbox.load_error")}</span>
-                  </CardContent>
-                </Card>
-              ) : (
-                <PendingVerificationList
-                  transactions={transactions}
-                  selectedId={currentTransaction?.id}
-                  onSelect={(t) => setSelectedId(t.id)}
-                />
+        <div
+          className={cn(
+            "flex-1 flex overflow-hidden bg-muted/20",
+            isMobile ? "p-0" : "p-8 gap-8"
+          )}
+        >
+          {showList && (
+            <div
+              className={cn(
+                "flex flex-col gap-3 overflow-hidden shrink-0",
+                isMobile ? "w-full p-4" : "w-96"
               )}
-            </div>
-          </div>
-        )}
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {sourceFilters.map((f) => (
+                  <Button
+                    key={f.value}
+                    variant={sourceFilter === f.value ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setSourceFilter(f.value)}
+                  >
+                    {f.label}
+                  </Button>
+                ))}
+              </div>
 
-        {/* Main Area: Verification Card */}
-        {showDetail && (
-          <div className={cn(
-            "flex-1 overflow-hidden",
-            isMobile && "fixed inset-0 z-50 bg-background pt-[env(safe-area-inset-top)] pb-[calc(env(safe-area-inset-bottom)+64px)]"
-          )}>
-            <VerificationCard
-              key={currentTransaction.id}
-              transaction={currentTransaction}
-              onSuccess={handleSuccess}
-              onBack={isMobile ? () => setSelectedId(null) : undefined}
-            />
-          </div>
-        )}
+              {transactions.length > 0 && (
+                <div className="rounded-xl border border-border/60 bg-card/80 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <label className="inline-flex items-center gap-2 cursor-pointer font-medium">
+                      <input
+                        type="checkbox"
+                        checked={allChecked}
+                        onChange={handleToggleAll}
+                        className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                      />
+                      <span>{t("inbox.bulk.select_all")}</span>
+                    </label>
+                    {activeCheckedIds.length > 0 && (
+                      <span className="font-semibold text-primary">
+                        {t("inbox.bulk.selected_count", { count: String(activeCheckedIds.length) })}
+                      </span>
+                    )}
+                  </div>
 
-        {!isMobile && !currentTransaction && !isLoading && (
-          <div className="flex-1 h-full flex flex-col items-center justify-center text-center p-12 bg-card/30 rounded-3xl border-2 border-dashed border-border/50">
-            <div className="p-6 bg-primary/5 rounded-full mb-6">
-              <Inbox className="h-12 w-12 text-primary/20" />
+                  {activeCheckedIds.length > 0 && (
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <Select
+                        value={effectiveBulkAccountId}
+                        onValueChange={setBulkAccountOverride}
+                      >
+                        <SelectTrigger className="h-8 text-xs flex-1">
+                          <SelectValue placeholder={t("inbox.bulk.account_placeholder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {activeAccounts.map((acc) => (
+                            <SelectItem key={acc.id} value={String(acc.id)}>
+                              {acc.name}
+                              {suggestedAccountId === acc.id
+                                ? ` (${t("inbox.bulk.suggested_suffix")})`
+                                : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        className="h-8 text-xs shrink-0 gap-1"
+                        disabled={bulkApproveMutation.isPending || !effectiveBulkAccountId}
+                        onClick={handleBulkApprove}
+                      >
+                        {bulkApproveMutation.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        {bulkApproveMutation.isPending
+                          ? t("inbox.bulk.approving_button")
+                          : t("inbox.bulk.approve_button")}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!isMobile && (
+                <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60 px-1">
+                  {t("inbox.pending_section_header")}
+                </h3>
+              )}
+              <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                {isLoading ? (
+                  <div className="flex items-center justify-center p-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary/40" />
+                  </div>
+                ) : error ? (
+                  <Card className="border-destructive/20 bg-destructive/5">
+                    <CardContent className="p-4 flex items-center gap-2 text-destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-xs font-medium">{t("inbox.load_error")}</span>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <PendingVerificationList
+                    transactions={transactions}
+                    selectedId={currentTransaction?.id}
+                    selectedIds={activeCheckedIds}
+                    onToggleSelect={handleToggleSelect}
+                    onSelect={(tx) => setSelectedId(tx.id)}
+                  />
+                )}
+              </div>
             </div>
-            <h2 className="text-2xl font-bold text-foreground/40">{t("inbox.empty_title")}</h2>
-            <p className="text-muted-foreground/50 max-w-sm mt-2">
-              {t("inbox.empty_description")}
-            </p>
-          </div>
-        )}
-      </div>
+          )}
+
+          {showDetail && (
+            <div className={cn("flex-1 flex flex-col overflow-hidden", isMobile ? "p-0" : "")}>
+              <VerificationCard
+                key={currentTransaction.id}
+                transaction={currentTransaction}
+                onSuccess={handleSuccess}
+                onBack={isMobile ? () => setSelectedId(null) : undefined}
+              />
+            </div>
+          )}
+        </div>
       )}
-
       {renderModals()}
     </div>
   );

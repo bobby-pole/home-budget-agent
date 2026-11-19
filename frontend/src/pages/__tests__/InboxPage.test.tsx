@@ -4,7 +4,12 @@ import { MemoryRouter } from "react-router-dom";
 import { render } from "@/__tests__/test-utils";
 import { InboxPage } from "@/pages/InboxPage";
 import { api } from "@/lib/api";
-import type { ReconciliationLinkRead, ReconciliationListResponse, TransactionRead } from "@/client";
+import type {
+  AccountRead,
+  ReconciliationLinkRead,
+  ReconciliationListResponse,
+  TransactionRead,
+} from "@/client";
 
 vi.mock("@/hooks/use-mobile", () => ({
   useIsMobile: () => false,
@@ -16,19 +21,38 @@ vi.mock("@/lib/api", () => ({
   },
   api: {
     getInbox: vi.fn(),
+    bulkApproveInbox: vi.fn(),
+    rejectInboxItem: vi.fn(),
+    restoreInboxItem: vi.fn(),
     getCategories: vi.fn().mockResolvedValue([]),
     getEnvelopes: vi.fn().mockResolvedValue([]),
-    getAccounts: vi.fn().mockResolvedValue([]),
+    getAccounts: vi.fn(),
     getReconciliationCandidates: vi.fn(),
     refreshReconciliationCandidates: vi.fn(),
     acceptReconciliation: vi.fn(),
     rejectReconciliation: vi.fn(),
     unlinkReconciliation: vi.fn(),
+    mergeDuplicateReconciliation: vi.fn(),
     approveTransaction: vi.fn(),
     updateTransaction: vi.fn(),
     deleteTransaction: vi.fn(),
   },
 }));
+
+const mockAccounts: AccountRead[] = [
+  {
+    id: 5,
+    name: "ING Wspólne",
+    type: "checking",
+    currency: "PLN",
+    initial_balance: "1000.00",
+    current_balance: "1000.00",
+    is_on_budget: true,
+    is_active: true,
+    budget_id: 1,
+    category_id: null,
+  },
+];
 
 const mockInboxScans: TransactionRead[] = [
   {
@@ -39,6 +63,8 @@ const mockInboxScans: TransactionRead[] = [
     date: "2026-05-10T10:00:00Z",
     type: "expense",
     status: "uncleared",
+    review_status: "pending",
+    suggested_account_id: 5,
     is_manual: false,
     lines: [],
   },
@@ -50,6 +76,24 @@ const mockInboxScans: TransactionRead[] = [
     date: "2026-05-11T12:00:00Z",
     type: "expense",
     status: "uncleared",
+    review_status: "pending",
+    suggested_account_id: 5,
+    is_manual: false,
+    lines: [],
+  },
+];
+
+const mockRejectedScans: TransactionRead[] = [
+  {
+    id: 99,
+    merchant_name: "Lidl Stary Paragon",
+    total_amount: "19.99",
+    currency: "PLN",
+    date: "2026-05-09T12:00:00Z",
+    type: "expense",
+    status: "uncleared",
+    review_status: "rejected",
+    rejection_reason: "deleted_by_user",
     is_manual: false,
     lines: [],
   },
@@ -115,11 +159,15 @@ const mockReconciliationResponse: ReconciliationListResponse = {
 describe("InboxPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(api.getInbox).mockResolvedValue(mockInboxScans);
+    vi.mocked(api.getAccounts).mockResolvedValue(mockAccounts);
+    vi.mocked(api.getInbox).mockImplementation(async (params) => {
+      if (params?.tab === "rejected") return mockRejectedScans;
+      return mockInboxScans;
+    });
     vi.mocked(api.getReconciliationCandidates).mockResolvedValue(mockReconciliationResponse);
   });
 
-  it("displays receipt and pending reconciliation badge counters and switches tabs cleanly", async () => {
+  it("displays hybrid Inbox tab counters and switches across all 3 tabs cleanly", async () => {
     render(
       <MemoryRouter>
         <InboxPage />
@@ -127,33 +175,78 @@ describe("InboxPage", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Skany paragonów/i })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Uzgadnianie z bankiem/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Wyjątki i do przeglądu/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Uzgodnienia i duplikaty/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Odrzucone \/ Usunięte/i })).toBeInTheDocument();
     });
 
-    const receiptsTab = screen.getByRole("button", { name: /Skany paragonów/i });
-    const reconciliationTab = screen.getByRole("button", { name: /Uzgadnianie z bankiem/i });
+    const exceptionsTab = screen.getByRole("button", { name: /Wyjątki i do przeglądu/i });
+    const reconciliationTab = screen.getByRole("button", { name: /Uzgodnienia i duplikaty/i });
+    const rejectedTab = screen.getByRole("button", { name: /Odrzucone \/ Usunięte/i });
 
     await waitFor(() => {
-      expect(receiptsTab).toHaveTextContent("2");
+      expect(exceptionsTab).toHaveTextContent("2");
       expect(reconciliationTab).toHaveTextContent("3");
+      expect(rejectedTab).toHaveTextContent("1");
     });
 
-    // Receipts tab is active initially
     expect(screen.getByText(/Lidl Warszawa/i)).toBeInTheDocument();
-    expect(screen.queryByText(/CARREFOUR POLSKA/i)).not.toBeInTheDocument();
 
-    // Switch to Bank reconciliation tab
     fireEvent.click(reconciliationTab);
     await waitFor(() => {
       expect(screen.getByText(/CARREFOUR POLSKA/i)).toBeInTheDocument();
     });
-    expect(screen.queryByText(/Lidl Warszawa/i)).not.toBeInTheDocument();
 
-    // Switch back to Receipt scans tab
-    fireEvent.click(receiptsTab);
+    fireEvent.click(rejectedTab);
+    await waitFor(() => {
+      expect(screen.getByText(/Lidl Stary Paragon/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(exceptionsTab);
     await waitFor(() => {
       expect(screen.getByText(/Lidl Warszawa/i)).toBeInTheDocument();
+    });
+  });
+
+  it("supports bulk selection and approval onto suggested account plus restoring rejected items", async () => {
+    vi.mocked(api.bulkApproveInbox).mockResolvedValue({
+      approved_count: 2,
+      skipped_ids: [],
+      errors: [],
+    });
+    vi.mocked(api.restoreInboxItem).mockResolvedValue({
+      ...mockRejectedScans[0],
+      review_status: "pending",
+      rejection_reason: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <InboxPage />
+      </MemoryRouter>
+    );
+
+    await screen.findByText(/Lidl Warszawa/i);
+
+    const selectAllCheckbox = screen.getByRole("checkbox", { name: /Zaznacz wszystkie/i });
+    fireEvent.click(selectAllCheckbox);
+
+    const bulkBtn = await screen.findByRole("button", { name: /Zatwierdź wybrane/i });
+    fireEvent.click(bulkBtn);
+
+    await waitFor(() => {
+      expect(api.bulkApproveInbox).toHaveBeenCalledWith({
+        transaction_ids: [1, 2],
+        account_id: 5,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Odrzucone \/ Usunięte/i }));
+    const restoreBtn = await screen.findByRole("button", { name: /Przywróć/i });
+    fireEvent.click(restoreBtn);
+
+    await waitFor(() => {
+      expect(api.restoreInboxItem).toHaveBeenCalledWith(99);
     });
   });
 });

@@ -457,7 +457,7 @@ def test_alembic_connection_is_enabled_migration_roundtrip(
         cols_pre = {c["name"] for c in inspect(engine).get_columns("external_receipt_connection")}
         assert "is_enabled" not in cols_pre
 
-        command.upgrade(cfg, "head")
+        command.upgrade(cfg, "j7e1b42a9c03")
         cols_up = {c["name"] for c in inspect(engine).get_columns("external_receipt_connection")}
         assert "is_enabled" in cols_up
         with engine.connect() as db_conn:

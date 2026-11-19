@@ -1,14 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { api } from "@/lib/api";
+import type { AutoMergePolicy, BankCsvPreviewResponse } from "@/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Receipt, Upload, Loader2, FileText, Plus, Wallet, X } from "lucide-react";
 import { TransactionsTable } from "@/components/dashboard/TransactionsTable";
 import { toast } from "sonner";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { AxiosError } from "axios";
 import { t } from "@/lib/i18n";
+import { formatDate } from "@/lib/dates";
+import { formatMoneyFixed } from "@/lib/money";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +41,11 @@ export function TransactionsPage() {
   const isMobile = useIsMobile();
   const { setQuickEntryOpen, renderModals } = useTransactionActions();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
+  const [previewData, setPreviewData] = useState<BankCsvPreviewResponse | null>(null);
+  const [importAccountId, setImportAccountId] = useState<string>("");
+  const [mergePolicy, setMergePolicy] = useState<AutoMergePolicy>("auto");
 
   const accountIdParam = searchParams.get("accountId");
   const selectedAccountId = accountIdParam ? parseInt(accountIdParam) : null;
@@ -40,18 +65,62 @@ export function TransactionsPage() {
     queryFn: api.getCategories,
   });
 
+  const activeAccounts = accounts.filter((a) => a.is_active !== false);
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId);
   const filteredTransactions = selectedAccountId
     ? transactions.filter((t) => t.account_id === selectedAccountId || (t.type === "transfer" && t.transfer_id === selectedAccountId))
     : transactions;
 
+  const resetImportModal = () => {
+    setImportDialogOpen(false);
+    setPendingImportFile(null);
+    setPreviewData(null);
+    setImportAccountId("");
+    setMergePolicy("auto");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const previewMutation = useMutation({
+    mutationFn: api.previewImportTransactions,
+    onSuccess: (preview) => {
+      setPreviewData(preview);
+      const preferred =
+        selectedAccountId ??
+        preview.suggested_account_id ??
+        activeAccounts[0]?.id ??
+        null;
+      setImportAccountId(preferred ? String(preferred) : "");
+    },
+    onError: (err: AxiosError<{ detail?: string }>) => {
+      toast.error(t("transactions.import_error_title"), {
+        description: err.response?.data?.detail || t("transactions.import_error_default"),
+      });
+      resetImportModal();
+    },
+  });
+
   const importMutation = useMutation({
-    mutationFn: api.importTransactions,
+    mutationFn: ({
+      file,
+      accountId,
+      policy,
+    }: {
+      file: File;
+      accountId: number;
+      policy: AutoMergePolicy;
+    }) =>
+      api.importTransactions(file, {
+        account_id: accountId,
+        auto_merge_policy: policy,
+        require_account: true,
+      }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
       let description: string;
       if (data.summary && typeof data.summary === "object" && data.summary.code === "CSV_IMPORT_COMPLETE") {
         description = t("errors.csv_import_complete", {
@@ -65,7 +134,7 @@ export function TransactionsPage() {
       toast.success(t("transactions.import_success"), {
         description,
       });
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      resetImportModal();
     },
     onError: (err: AxiosError<{ detail?: string }>) => {
       toast.error(t("transactions.import_error_title"), {
@@ -77,8 +146,24 @@ export function TransactionsPage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      importMutation.mutate(file);
+      setPendingImportFile(file);
+      setPreviewData(null);
+      setImportDialogOpen(true);
+      previewMutation.mutate(file);
     }
+  };
+
+  const handleConfirmImport = () => {
+    if (!pendingImportFile) return;
+    if (!importAccountId) {
+      toast.error(t("transactions.import_modal.account_required_error"));
+      return;
+    }
+    importMutation.mutate({
+      file: pendingImportFile,
+      accountId: parseInt(importAccountId, 10),
+      policy: mergePolicy,
+    });
   };
 
   return (
@@ -181,6 +266,171 @@ export function TransactionsPage() {
 
       {/* Modals & Drawers */}
       {renderModals()}
+
+      <Dialog
+        open={importDialogOpen}
+        onOpenChange={(open) => {
+          if (!open && !importMutation.isPending) {
+            resetImportModal();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("transactions.import_modal.title")}</DialogTitle>
+            <DialogDescription>{t("transactions.import_modal.subtitle")}</DialogDescription>
+          </DialogHeader>
+
+          {previewMutation.isPending ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span className="text-sm">{t("transactions.import_modal.preview_loading")}</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {previewData && (
+                <div className="rounded-xl border bg-muted/40 p-3 space-y-2 text-xs">
+                  <div className="font-medium truncate">
+                    {t("transactions.import_modal.file_summary", { filename: previewData.filename })}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline">
+                      {t("transactions.import_modal.total_rows", { count: String(previewData.total_rows) })}
+                    </Badge>
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20">
+                      {t("transactions.import_modal.new_rows", { count: String(previewData.new_count) })}
+                    </Badge>
+                    {previewData.duplicate_count > 0 && (
+                      <Badge variant="secondary">
+                        {t("transactions.import_modal.duplicate_rows", {
+                          count: String(previewData.duplicate_count),
+                        })}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label>{t("transactions.import_modal.account_label")}</Label>
+                <Select value={importAccountId} onValueChange={setImportAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("transactions.import_modal.account_placeholder")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeAccounts.map((acc) => (
+                      <SelectItem key={acc.id} value={String(acc.id)}>
+                        {acc.name}
+                        {previewData?.suggested_account_id === acc.id
+                          ? ` (${t("transactions.import_modal.account_suggested_badge")})`
+                          : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{t("transactions.import_modal.merge_policy_label")}</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMergePolicy("auto")}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-colors",
+                      mergePolicy === "auto"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="font-semibold text-xs">{t("transactions.import_modal.merge_auto_label")}</div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {t("transactions.import_modal.merge_auto_desc")}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMergePolicy("manual")}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-colors",
+                      mergePolicy === "manual"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    )}
+                  >
+                    <div className="font-semibold text-xs">{t("transactions.import_modal.merge_manual_label")}</div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      {t("transactions.import_modal.merge_manual_desc")}
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {previewData && previewData.rows && previewData.rows.length > 0 && (
+                <div className="max-h-44 overflow-y-auto rounded-lg border divide-y text-xs">
+                  {previewData.rows.slice(0, 8).map((row, idx) => (
+                    <div
+                      key={`${row.date}-${idx}`}
+                      className={cn(
+                        "flex items-center justify-between gap-2 px-3 py-2",
+                        row.is_duplicate && "opacity-50"
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{row.merchant_name}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {formatDate(row.date, "PPP")}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {row.is_duplicate && (
+                          <Badge variant="outline" className="text-[10px]">
+                            {t("transactions.import_modal.already_imported_badge")}
+                          </Badge>
+                        )}
+                        <span className="font-semibold tabular-nums">
+                          {formatMoneyFixed(row.amount)} {row.currency}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={resetImportModal}
+              disabled={importMutation.isPending}
+            >
+              {t("transactions.import_modal.cancel_button")}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmImport}
+              disabled={
+                previewMutation.isPending ||
+                importMutation.isPending ||
+                !importAccountId
+              }
+            >
+              {importMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {t("transactions.import_modal.importing_button")}
+                </>
+              ) : (
+                t("transactions.import_modal.confirm_button", {
+                  count: String(previewData?.new_count ?? 0),
+                })
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

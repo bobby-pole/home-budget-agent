@@ -9,7 +9,6 @@ import re
 import time
 from uuid import uuid4
 from datetime import datetime, timezone
-import json
 from decimal import Decimal
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header, Query
 from fastapi.responses import FileResponse
@@ -21,6 +20,7 @@ from .models import (
     Transaction, TransactionLine, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
     ReceiptScan, ScanStatus, TransactionStatus, VerifyRequest,
+    ReviewStatus, AutoMergePolicy,
     ScanUsageLog, SourceRecord, SourceType, RawPayloadPolicy,
     Budget, BudgetMember, BudgetCreate, BudgetUpdate,
     Account, AccountCreate, AccountUpdate, AccountRead,
@@ -32,10 +32,13 @@ from .models import (
     UserBudgetRead, ChangePasswordRequest, UserUpdate,
     ExternalReceiptConnection,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
+    ConnectionSettingsUpdate,
     ImportJob,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
     ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest, ConnectionToggleRequest,
     ReconciliationActionResponse, ReconciliationListResponse, ReconciliationStatus,
+    BankCsvPreviewResponse, DuplicateMergeRequest,
+    InboxBulkActionResponse, InboxBulkApproveRequest, InboxRejectRequest,
 )
 from .adapters import (
     AdapterContractError,
@@ -47,9 +50,20 @@ from .adapters import (
 )
 from .connection_service import ConnectionService, to_read_dto
 from .database import get_session, get_ops_session, operations_engine
+from .inbox_service import (
+    InboxNotFoundError,
+    InboxValidationError,
+    approve_inbox_items,
+    check_envelope_balance_and_alert,
+    list_inbox_items,
+    promote_transaction_to_approved,
+    reject_transaction_preserving_provenance,
+    restore_inbox_item,
+)
 from .ingestion_service import (
     apply_receipt_result_to_existing_scan,
     ingest_transaction_batch,
+    preview_transaction_batch,
 )
 from .reconciliation_service import (
     ReconciliationConflictError,
@@ -60,6 +74,7 @@ from .reconciliation_service import (
     cleanup_reconciliation_for_budget,
     discover_reconciliation_candidates,
     list_reconciliation_links,
+    merge_receipt_duplicate_link,
     reject_reconciliation_link,
     require_reconciliation_write_access,
     unlink_reconciliation_link,
@@ -81,7 +96,7 @@ from .auth import get_current_user, get_current_user_optional, hash_password, ve
 from .demo_seed import seed_demo_environment
 from .demo_samples_data import SAMPLE_BIEDRONKA_DATA, SAMPLE_LIDL_DATA
 from .config import settings
-from .money import format_money, quantize_money, quantize_unit_price, MoneyDecimal
+from .money import quantize_money, quantize_unit_price, MoneyDecimal
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -654,111 +669,8 @@ async def process_transaction_in_background(transaction_id: int, scan_id: int, i
 
 
 def _check_envelope_balance_and_alert(session: Session, transaction: Transaction, delta_amount: Decimal | float):
-    if transaction.type != "expense" or not transaction.budget_id:
-        return
-
-    # 1. Gather all categories and their amount in this transaction
-    category_amounts: dict[int, Decimal] = {}
-
-    lines = session.exec(
-        select(TransactionLine).where(TransactionLine.transaction_id == transaction.id)
-    ).all()
-
-    if lines:
-        for line in lines:
-            if line.category_id is not None:
-                line_total = quantize_money(Decimal(str(line.price)) * Decimal(str(line.quantity)))
-                category_amounts[line.category_id] = category_amounts.get(line.category_id, Decimal("0.00")) + line_total
-    else:
-        if transaction.category_id is not None:
-            category_amounts[transaction.category_id] = quantize_money(transaction.total_amount)
-
-    if not category_amounts:
-        return
-
-    raw_date = getattr(transaction, "date", None)
-    if isinstance(raw_date, str):
-        try:
-            date_str = str(raw_date).replace("Z", "+00:00")
-            date_obj = datetime.fromisoformat(date_str)
-        except ValueError:
-            date_obj = datetime.now(timezone.utc)
-    elif isinstance(raw_date, datetime):
-        date_obj = raw_date
-    else:
-        date_obj = datetime.now(timezone.utc)
-    year = date_obj.year
-    month = date_obj.month
-
-    # 2. Check each category's balance
-    for cat_id, amt in category_amounts.items():
-        planned = session.exec(
-            select(col(EnvelopeAllocation.amount)).where(
-                EnvelopeAllocation.budget_id == transaction.budget_id,
-                EnvelopeAllocation.category_id == cat_id,
-                EnvelopeAllocation.year == year,
-                EnvelopeAllocation.month == month
-            )
-        ).first()
-        planned_dec = quantize_money(planned) if planned is not None else Decimal("0.00")
-        # Sum spent from transactions without lines in this category
-        spent_no_lines = session.scalar(
-            select(func.sum(Transaction.total_amount)).where(
-                Transaction.budget_id == transaction.budget_id,
-                Transaction.type == "expense",
-                col(Transaction.reconciled_into_id).is_(None),
-                extract('year', col(Transaction.date)) == year,
-                extract('month', col(Transaction.date)) == month,
-                col(Transaction.category_id) == cat_id,
-                ~col(Transaction.id).in_(select(TransactionLine.transaction_id).where(col(TransactionLine.transaction_id).is_not(None)))
-            )
-        ) or Decimal("0.00")
-
-        # Sum spent from transaction lines in this category
-        spent_with_lines = session.scalar(
-            select(func.sum(TransactionLine.price * TransactionLine.quantity)).join(
-                Transaction, col(Transaction.id) == col(TransactionLine.transaction_id)
-            ).where(
-                Transaction.budget_id == transaction.budget_id,
-                Transaction.type == "expense",
-                col(Transaction.reconciled_into_id).is_(None),
-                extract('year', col(Transaction.date)) == year,
-                extract('month', col(Transaction.date)) == month,
-                col(TransactionLine.category_id) == cat_id
-            )
-        ) or Decimal("0.00")
-
-        spent_dec = quantize_money(spent_no_lines) + quantize_money(spent_with_lines)
-
-        remaining = planned_dec - spent_dec
-        delta_dec = quantize_money(amt)
-        remaining_before = remaining + delta_dec
-
-        if remaining_before > Decimal("0.00") and remaining <= Decimal("0.00"):
-            category = session.get(Category, cat_id)
-            cat_name = category.name if category else "Nieznana"
-
-            other_members = session.exec(
-                select(BudgetMember.user_id).where(
-                    BudgetMember.budget_id == transaction.budget_id,
-                    BudgetMember.user_id != transaction.uploaded_by
-                )
-            ).all()
-
-            for member_id in other_members:
-                if member_id is None:
-                    continue
-                alert_msg = json.dumps({
-                    "type": "zeroed_envelope",
-                    "remaining": format_money(remaining)
-                })
-                alert = BudgetAlert(
-                    budget_id=transaction.budget_id,
-                    user_id=member_id,
-                    category_name=cat_name,
-                    message=alert_msg,
-                )
-                session.add(alert)
+    del delta_amount  # Balance threshold checks inspect net spent vs allocation directly.
+    check_envelope_balance_and_alert(session, transaction)
 
 
 # --- TRANSACTIONS ---
@@ -1064,6 +976,7 @@ async def scan_transaction(
                     uploaded_by=current_user.id,
                     budget_id=current_budget.id,
                     note=note,
+                    review_status=ReviewStatus.PENDING,
                 )
                 session.add(candidate_tx)
                 session.flush()
@@ -1321,6 +1234,7 @@ async def scan_sample_transaction(
         uploaded_by=current_user.id,
         budget_id=current_budget.id,
         note=f"Wzorcowy paragon demonstracyjny: {sample_id.capitalize()}",
+        review_status=ReviewStatus.PENDING,
     )
     session.add(new_transaction)
     session.flush()
@@ -1424,6 +1338,7 @@ async def get_transactions(
         .where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) == ReviewStatus.APPROVED.value,
         )
     )
 
@@ -1453,26 +1368,14 @@ async def get_app_status(
     current_budget: Budget = Depends(get_current_budget),
 ):
     """Fetch global app status: inbox items and unread alerts."""
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
-    inbox_statuses = [
-        ScanStatus.CATEGORIZATION_OK,
-        ScanStatus.NEEDS_REVIEW,
-        ScanStatus.FAILED,
-        "needs_review",
-        "error",
-    ]
-    inbox_statement = (
-        select(Transaction)
-        .join(ReceiptScan)
-        .where(
-            Transaction.budget_id == current_budget.id,
-            col(ReceiptScan.status).in_(inbox_statuses),
-        )
-        .order_by(desc(Transaction.date))
+    inbox_results = list_inbox_items(
+        session,
+        budget_id=current_budget.id,
+        tab="exceptions",
     )
-    inbox_results = session.exec(inbox_statement).all()
 
     alerts_statement = select(BudgetAlert).where(
         BudgetAlert.budget_id == current_budget.id,
@@ -1505,38 +1408,25 @@ async def mark_alert_read(
 
 @router.get("/transactions/inbox", response_model=List[TransactionRead])
 async def get_inbox(
+    tab: str = Query(default="exceptions", pattern="^(exceptions|rejected|all)$"),
+    source_type: Optional[str] = Query(default=None, description="Optional source provenance filter"),
     needs_review: Optional[bool] = Query(default=None, description="Filter by needs_review flag"),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    """Fetch all transactions that require user attention (CATEGORIZATION_OK, NEEDS_REVIEW, or FAILED)."""
-    if not current_budget:
+    """Fetch Import Inbox transactions across hybrid exception, rejected, and all views."""
+    del current_user  # Budget scope resolved via get_current_budget dependency.
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
-    inbox_statuses = [
-        ScanStatus.CATEGORIZATION_OK,
-        ScanStatus.NEEDS_REVIEW,
-        ScanStatus.FAILED,
-        # legacy values stored before migration
-        "needs_review",
-        "error",
-    ]
-    conditions = [
-        Transaction.budget_id == current_budget.id,
-        col(ReceiptScan.status).in_(inbox_statuses),
-    ]
-    if needs_review is not None:
-        conditions.append(col(ReceiptScan.needs_review) == needs_review)
-
-    statement = (
-        select(Transaction)
-        .join(ReceiptScan)
-        .where(*conditions)
-        .order_by(desc(Transaction.date))
+    return list_inbox_items(
+        session,
+        budget_id=current_budget.id,
+        tab=tab,
+        source_type=source_type,
+        needs_review=needs_review,
     )
-    results = session.exec(statement).all()
-    return results
 
 
 @router.get("/transactions/{transaction_id}/receipt")
@@ -1659,10 +1549,8 @@ async def verify_transaction(
                 if new_cat_id is not None and new_line.name:
                     cache_updates[new_line.name] = new_cat_id
 
-    # Persist user's keep_image decision and mark as done
+    # Persist user's keep_image decision and promote to approved ledger state
     scan.keep_image = body.keep_image
-    scan.status = ScanStatus.DONE
-    scan.needs_review = False
     if scan.id is not None:
         update_scan_source_metadata(
             session,
@@ -1671,10 +1559,13 @@ async def verify_transaction(
                 RawPayloadPolicy.RETAINED_IMAGE if scan.keep_image else RawPayloadPolicy.CANONICAL_ONLY
             ),
         )
-    session.add(db_transaction)
-    session.add(scan)
-
-    _check_envelope_balance_and_alert(session, db_transaction, db_transaction.total_amount)
+    promote_transaction_to_approved(
+        session,
+        transaction=db_transaction,
+        scan=scan,
+        finalize_scan=True,
+        commit=False,
+    )
 
     session.commit()
     if cache_updates and current_user.id is not None:
@@ -1808,11 +1699,15 @@ async def update_line(
 @router.delete("/transactions/{transaction_id}", status_code=204)
 async def delete_transaction(
     transaction_id: int,
+    preserve_source: bool = Query(
+        default=False,
+        description="Soft-reject while preserving SourceRecord tombstones so re-imports skip deleted receipts.",
+    ),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
     transaction = session.get(Transaction, transaction_id)
     if not transaction:
@@ -1820,6 +1715,21 @@ async def delete_transaction(
 
     if transaction.budget_id != current_budget.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this transaction")
+
+    if preserve_source and current_user.id is not None:
+        try:
+            require_reconciliation_write_access(session, current_user, current_budget.id)
+        except ReconciliationPermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
+        reject_transaction_preserving_provenance(
+            session,
+            budget_id=current_budget.id,
+            transaction_id=transaction_id,
+            user_id=current_user.id,
+            reason="deleted_by_user",
+            commit=True,
+        )
+        return None
 
     cleanup_reconciliation_before_transaction_delete(session, transaction_id=transaction_id)
     delete_source_records_for_transaction(session, transaction_id)
@@ -1842,6 +1752,86 @@ async def delete_transaction(
     session.delete(transaction)
     session.commit()
     return None
+
+
+@router.post("/inbox/bulk-approve", response_model=InboxBulkActionResponse)
+async def bulk_approve_inbox_items(
+    body: InboxBulkApproveRequest,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Bulk-approve eligible Import Inbox transactions onto a required target account."""
+    if not current_budget or current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return approve_inbox_items(
+            session,
+            budget_id=current_budget.id,
+            transaction_ids=body.transaction_ids,
+            account_id=body.account_id,
+            user_id=current_user.id,
+        )
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InboxValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/inbox/{transaction_id}/reject", response_model=TransactionRead)
+async def reject_inbox_item_endpoint(
+    transaction_id: int,
+    body: Optional[InboxRejectRequest] = None,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Reversibly reject/delete an imported transaction while retaining provenance tombstones."""
+    if not current_budget or current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return reject_transaction_preserving_provenance(
+            session,
+            budget_id=current_budget.id,
+            transaction_id=transaction_id,
+            user_id=current_user.id,
+            reason=body.reason if body else None,
+            commit=True,
+        )
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InboxNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/inbox/{transaction_id}/restore", response_model=TransactionRead)
+async def restore_inbox_item_endpoint(
+    transaction_id: int,
+    account_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Restore a rejected transaction back into the Import Inbox review queue."""
+    if not current_budget or current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return restore_inbox_item(
+            session,
+            budget_id=current_budget.id,
+            transaction_id=transaction_id,
+            account_id=account_id,
+            commit=True,
+        )
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except InboxNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except InboxValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # --- IMPORT ---
@@ -1883,9 +1873,78 @@ def detect_transaction_type(merchant: str, title: str, amount: Decimal | float, 
     return "expense" if amount < 0 else "income"
 
 
+def _extract_statement_batch_for_user(
+    *,
+    content: bytes,
+    filename: str,
+    budget_id: int,
+    user_email: str,
+):
+    local_part = user_email.split("@")[0]
+    clean_part = local_part.replace(".", " ").replace("-", " ").replace("_", " ").upper()
+    name_parts = [p.strip() for p in clean_part.split() if p.strip() and len(p) > 2 and p.isalpha()]
+    user_names: list[str] = []
+    if len(name_parts) >= 2:
+        user_names.append(f"{name_parts[0]} {name_parts[1]}")
+        user_names.append(f"{name_parts[1]} {name_parts[0]}")
+
+    is_pdf = filename.lower().endswith(".pdf")
+    adapter = IngPdfTransactionAdapter() if is_pdf else IngCsvTransactionAdapter()
+    try:
+        batch = adapter.extract_transactions(
+            content,
+            budget_id=budget_id,
+            filename=filename,
+            raw_payload_policy=RawPayloadPolicy.NONE,
+        )
+    except AdapterContractError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+
+    return batch, is_pdf, user_names
+
+
+@router.post("/transactions/import/preview", response_model=BankCsvPreviewResponse)
+async def preview_import_transactions(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Dry-run parse a bank CSV/PDF statement and suggest an active account before committing."""
+    if is_demo_user(current_user):
+        raise HTTPException(status_code=403, detail="CSV import is disabled in demo mode")
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    content = await file.read()
+    filename = file.filename or ""
+    batch, _, user_names = _extract_statement_batch_for_user(
+        content=content,
+        filename=filename,
+        budget_id=current_budget.id,
+        user_email=current_user.email,
+    )
+    return preview_transaction_batch(
+        session,
+        batch,
+        budget_id=current_budget.id,
+        filename=filename,
+        tx_type_classifier=lambda item: detect_transaction_type(
+            merchant=item.transaction.counterparty,
+            title=item.transaction.title,
+            amount=item.transaction.amount,
+            user_names=user_names,
+        ),
+    )
+
+
 @router.post("/transactions/import", response_model=dict)
 async def import_transactions(
     file: UploadFile = File(...),
+    account_id: Optional[int] = Form(default=None),
+    auto_merge_policy: str = Form(default=AutoMergePolicy.MANUAL.value),
+    dry_run: bool = Form(default=False),
+    require_account: bool = Form(default=False),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
@@ -1893,36 +1952,55 @@ async def import_transactions(
     if is_demo_user(current_user):
         raise HTTPException(status_code=403, detail="CSV import is disabled in demo mode")
 
-    if not current_budget:
+    if not current_budget or current_budget.id is None or current_user.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
+
+    try:
+        normalized_policy = AutoMergePolicy(auto_merge_policy.strip().lower()).value
+    except ValueError as err:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported auto_merge_policy; use 'auto' or 'manual'",
+        ) from err
+
+    if account_id is not None:
+        acc = session.get(Account, account_id)
+        if acc is None or acc.budget_id != current_budget.id or not acc.is_active:
+            raise HTTPException(
+                status_code=422,
+                detail="Selected account is invalid or inactive in this budget",
+            )
+    elif require_account and not dry_run:
+        raise HTTPException(
+            status_code=422,
+            detail="Account selection is required for bank statement import",
+        )
 
     content = await file.read()
     filename = file.filename or ""
+    batch, is_pdf, user_names = _extract_statement_batch_for_user(
+        content=content,
+        filename=filename,
+        budget_id=current_budget.id,
+        user_email=current_user.email,
+    )
 
-    # Extract potential full name from user's email to detect personal transfers
-    user_names = []
-    local_part = current_user.email.split("@")[0]
-    clean_part = local_part.replace(".", " ").replace("-", " ").replace("_", " ").upper()
-    # Only keep parts that are purely alphabetic (skip ALEX123)
-    name_parts = [p.strip() for p in clean_part.split() if p.strip() and len(p) > 2 and p.isalpha()]
-    if len(name_parts) >= 2:
-        user_names.append(f"{name_parts[0]} {name_parts[1]}")
-        user_names.append(f"{name_parts[1]} {name_parts[0]}")
+    classifier = lambda item: detect_transaction_type(  # noqa: E731
+        merchant=item.transaction.counterparty,
+        title=item.transaction.title,
+        amount=item.transaction.amount,
+        user_names=user_names,
+    )
 
-    is_pdf = filename.lower().endswith(".pdf")
-    adapter = IngPdfTransactionAdapter() if is_pdf else IngCsvTransactionAdapter()
-    assert current_budget.id is not None
-    assert current_user.id is not None
-
-    try:
-        batch = adapter.extract_transactions(
-            content,
+    if dry_run:
+        preview = preview_transaction_batch(
+            session,
+            batch,
             budget_id=current_budget.id,
             filename=filename,
-            raw_payload_policy=RawPayloadPolicy.NONE,
+            tx_type_classifier=classifier,
         )
-    except AdapterContractError as err:
-        raise HTTPException(status_code=400, detail=str(err)) from err
+        return preview.model_dump(mode="json")
 
     return ingest_transaction_batch(
         session,
@@ -1931,12 +2009,11 @@ async def import_transactions(
         user_id=current_user.id,
         filename=filename,
         enable_ai_categorization=not is_pdf,
-        tx_type_classifier=lambda item: detect_transaction_type(
-            merchant=item.transaction.counterparty,
-            title=item.transaction.title,
-            amount=item.transaction.amount,
-            user_names=user_names,
-        ),
+        tx_type_classifier=classifier,
+        account_id=account_id,
+        auto_merge_policy=normalized_policy,
+        auto_approve_clean=True,
+        require_account=require_account,
     )
 
 
@@ -2044,6 +2121,7 @@ def get_summary(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "income",
         col(Transaction.reconciled_into_id).is_(None),
+        col(Transaction.review_status) == ReviewStatus.APPROVED.value,
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
@@ -2058,6 +2136,7 @@ def get_summary(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) == ReviewStatus.APPROVED.value,
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(False),
@@ -2072,6 +2151,7 @@ def get_summary(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
         col(Transaction.reconciled_into_id).is_(None),
+        col(Transaction.review_status) == ReviewStatus.APPROVED.value,
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month
     )
@@ -2086,6 +2166,7 @@ def get_summary(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) == ReviewStatus.APPROVED.value,
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(True),
@@ -2112,6 +2193,7 @@ def get_summary(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
         col(Transaction.reconciled_into_id).is_(None),
+        col(Transaction.review_status) == ReviewStatus.APPROVED.value,
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month,
         col(Transaction.category_id).is_not(None),
@@ -2127,6 +2209,7 @@ def get_summary(
         Transaction.budget_id == current_budget.id,
         Transaction.type == "expense",
         col(Transaction.reconciled_into_id).is_(None),
+        col(Transaction.review_status) == ReviewStatus.APPROVED.value,
         extract('year', col(Transaction.date)) == year,
         extract('month', col(Transaction.date)) == month,
         col(TransactionLine.category_id).is_not(None)
@@ -2146,6 +2229,7 @@ def get_summary(
             Transaction.budget_id == current_budget.id,
             col(Transaction.type) == "transfer",
             col(Transaction.reconciled_into_id).is_(None),
+            col(Transaction.review_status) == ReviewStatus.APPROVED.value,
             extract('year', col(Transaction.date)) == year,
             extract('month', col(Transaction.date)) == month,
             col(source_acc.is_on_budget).is_(True),
@@ -2631,7 +2715,23 @@ def get_receipt_connection(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     conn = ConnectionService.get_connection(session, current_budget.id, connection_id, current_user)
-    return to_read_dto(conn)
+    return to_read_dto(conn, session=session)
+
+
+@router.patch("/connections/{connection_id}/settings", response_model=ExternalReceiptConnectionRead)
+def update_receipt_connection_settings(
+    connection_id: int,
+    body: ConnectionSettingsUpdate,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Update per-connection import settings (default account, auto-merge policy, sync_from_date)."""
+    if current_budget.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget")
+    return ConnectionService.update_connection_settings(
+        session, current_budget.id, connection_id, current_user, body
+    )
 
 
 @router.post("/connections/{connection_id}/oauth/start", response_model=ConnectionOAuthStartResponse)
@@ -2722,6 +2822,8 @@ async def desktop_login_receipt_connection_oauth(
 def sync_now_receipt_connection(
     connection_id: int,
     live: bool = Query(default=False),
+    sync_from_date: Optional[str] = Query(default=None),
+    auto_merge_policy: Optional[str] = Query(default=None),
     session: Session = Depends(get_ops_session),
     current_budget: Budget = Depends(get_current_budget),
     current_user: User = Depends(get_current_user),
@@ -2730,7 +2832,13 @@ def sync_now_receipt_connection(
     if current_budget.id is None:
         raise HTTPException(status_code=400, detail="Invalid budget")
     return ConnectionService.trigger_sync_now(
-        session, current_budget.id, connection_id, current_user, execute_live=live
+        session,
+        current_budget.id,
+        connection_id,
+        current_user,
+        execute_live=live,
+        sync_from_date=sync_from_date,
+        auto_merge_policy=auto_merge_policy,
     )
 
 
@@ -2905,6 +3013,33 @@ def unlink_reconciliation_candidate(
             budget_id=current_budget.id,
             link_id=link_id,
             user_id=current_user.id,
+        )
+
+    return _handle_reconciliation_action(_run)
+
+
+@router.post("/reconciliation/{link_id}/merge-duplicate", response_model=ReconciliationActionResponse)
+def merge_reconciliation_duplicate(
+    link_id: int,
+    body: Optional[DuplicateMergeRequest] = None,
+    session: Session = Depends(get_ops_session),
+    current_budget: Budget = Depends(get_current_budget),
+    current_user: User = Depends(get_current_user),
+):
+    """Reversibly merge a detected cross-source duplicate receipt onto the chosen surviving entry."""
+    if current_budget.id is None or current_user.id is None:
+        raise HTTPException(status_code=400, detail="Invalid budget or user")
+
+    def _run() -> ReconciliationActionResponse:
+        assert current_budget.id is not None and current_user.id is not None
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+        return merge_receipt_duplicate_link(
+            session,
+            budget_id=current_budget.id,
+            link_id=link_id,
+            user_id=current_user.id,
+            keep_transaction_id=body.keep_transaction_id if body else None,
+            commit=True,
         )
 
     return _handle_reconciliation_action(_run)

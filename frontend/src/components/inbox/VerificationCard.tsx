@@ -259,7 +259,9 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       date: transaction.date ? format(new Date(transaction.date), "yyyy-MM-dd") : format(new Date(), "yyyy-MM-dd"),
       total_amount: transaction.total_amount ?? "0.00",
       currency: transaction.currency || "PLN",
-      account_id: transaction.account_id ? transaction.account_id.toString() : (accounts[0]?.id?.toString() || ""),
+      account_id: transaction.account_id
+        ? transaction.account_id.toString()
+        : (transaction.suggested_account_id?.toString() || accounts[0]?.id?.toString() || ""),
       lines: (transaction.lines || []).map(l => ({
         id: l.id,
         name: l.name,
@@ -278,12 +280,16 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
     },
   });
 
-  // Auto-select the first available account if transaction has no account selected
+  // Auto-select suggested or first available account if transaction has no account selected
   useEffect(() => {
     if (!form.getValues("account_id") && accounts.length > 0) {
-      form.setValue("account_id", accounts[0].id.toString());
+      const preferred =
+        transaction.suggested_account_id?.toString() || accounts[0]?.id?.toString() || "";
+      if (preferred) {
+        form.setValue("account_id", preferred);
+      }
     }
-  }, [accounts, form]);
+  }, [accounts, form, transaction.suggested_account_id]);
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -293,12 +299,21 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const deleteMutation = useMutation({
-    mutationFn: () => api.deleteTransaction(transaction.id),
+    mutationFn: async () => {
+      if (typeof api.rejectInboxItem === "function") {
+        await api.rejectInboxItem(transaction.id);
+      } else {
+        await api.deleteTransaction(transaction.id, { preserveSource: true });
+      }
+    },
     onSuccess: () => {
       toast.success(t("inbox.verification_card.toast_deleted"));
       queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       onSuccess();
     },
     onError: () => {

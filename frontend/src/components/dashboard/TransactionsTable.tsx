@@ -42,6 +42,35 @@ interface TransactionsTableProps {
   selectedAccountId?: number | null;
 }
 
+const EXTERNAL_PRESERVE_SOURCE_TYPES = new Set([
+  "BANK_CSV",
+  "MERCHANT_API",
+  "E_RECEIPT",
+]);
+
+function hasExternalImportSource(transaction: Transaction | undefined | null): boolean {
+  if (!transaction?.source_records?.length) return false;
+  return transaction.source_records.some((sr) =>
+    EXTERNAL_PRESERVE_SOURCE_TYPES.has(String(sr.source_type || "").toUpperCase())
+  );
+}
+
+function getSourceBadgeLabel(transaction: Transaction): string | null {
+  const first = transaction.source_records?.[0];
+  if (!first) {
+    return transaction.is_manual ? t("transactions.table.source_manual") : null;
+  }
+  const srcType = String(first.source_type || "").toUpperCase();
+  if (srcType === "BANK_CSV") return t("transactions.table.source_bank");
+  if (srcType === "MERCHANT_API") {
+    return first.provider === "lidl" ? t("transactions.table.source_lidl") : first.provider;
+  }
+  if (srcType === "E_RECEIPT") return t("transactions.table.source_eparagon");
+  if (srcType === "OCR_PHOTO") return t("transactions.table.source_scan");
+  if (srcType === "MANUAL") return t("transactions.table.source_manual");
+  return null;
+}
+
 export function TransactionsTable({
   transactions,
   categories = [],
@@ -81,11 +110,19 @@ export function TransactionsTable({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: api.deleteTransaction,
+    mutationFn: (id: number) => {
+      const tx = transactions.find((item) => item.id === id);
+      return api.deleteTransaction(id, {
+        preserveSource: hasExternalImportSource(tx),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      queryClient.invalidateQueries({ queryKey: ["status"] });
+      queryClient.invalidateQueries({ queryKey: ["reconciliation"] });
       toast.success(t("transactions.table.deleted_toast"));
       setTransactionToDelete(null);
       if (paginatedTransactions.length === 1 && currentPage > 1) {
@@ -227,22 +264,38 @@ export function TransactionsTable({
                           )}
                           <span aria-hidden>•</span>
                           <span>{dateLabel}</span>
-                          {scanStatus && (
-                            <>
-                              <span aria-hidden>•</span>
+                          {scanStatus && (() => {
+                            const statusVariant = getStatusVariant(scanStatus);
+                            const statusLabel = getStatusLabel(scanStatus);
+                            return (
+                              <>
+                                <span aria-hidden>•</span>
+                                <Badge
+                                  variant="outline"
+                                  className={cn(
+                                    "h-4 px-1.5 text-[9px] uppercase font-bold rounded-md leading-none",
+                                    statusVariant === "success" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-400/30",
+                                    statusVariant === "error" && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-400/30",
+                                    statusVariant !== "success" && statusVariant !== "error" && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-400/30",
+                                  )}
+                                >
+                                  {statusLabel}
+                                </Badge>
+                              </>
+                            );
+                          })()}
+                          {(() => {
+                            const sourceLabel = getSourceBadgeLabel(transaction);
+                            if (!sourceLabel) return null;
+                            return (
                               <Badge
-                                variant="outline"
-                                className={cn(
-                                  "h-4 px-1.5 text-[9px] uppercase font-bold rounded-md leading-none",
-                                  scanStatus === "done" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-400/30",
-                                  scanStatus === "error" && "bg-red-500/10 text-red-700 dark:text-red-400 border-red-400/30",
-                                  scanStatus !== "done" && scanStatus !== "error" && "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-400/30",
-                                )}
+                                variant="secondary"
+                                className="h-4 px-1.5 text-[9px] font-semibold rounded-md leading-none"
                               >
-                                {scanStatus}
+                                {sourceLabel}
                               </Badge>
-                            </>
-                          )}
+                            );
+                          })()}
                           {transaction.tags?.map((tag) => (
                             <span
                               key={tag.id}
@@ -266,7 +319,7 @@ export function TransactionsTable({
                           {formatMoneyFixed(transaction.total_amount ?? "0.00")} {transaction.currency ?? "PLN"}
                         </span>
                         <div className="flex items-center gap-0.5 -mr-1.5">
-                          {scanStatus === "error" && (
+                          {scanStatus && getStatusVariant(scanStatus) === "error" && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -396,6 +449,18 @@ export function TransactionsTable({
                               {transaction.merchant_name}
                             </span>
                             <div className="flex flex-wrap gap-1 mt-0.5">
+                              {(() => {
+                                const sourceLabel = getSourceBadgeLabel(transaction);
+                                if (!sourceLabel) return null;
+                                return (
+                                  <Badge
+                                    variant="secondary"
+                                    className="h-4 px-1.5 text-[9px] font-semibold rounded-sm leading-none"
+                                  >
+                                    {sourceLabel}
+                                  </Badge>
+                                );
+                              })()}
                               {transaction.tags?.map(tag => (
                                 <span
                                   key={tag.id}
@@ -471,7 +536,7 @@ export function TransactionsTable({
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {transaction.receipt_scan?.status === "error" && (
+                          {transaction.receipt_scan?.status && getStatusVariant(transaction.receipt_scan.status) === "error" && (
                             <Button
                               variant="outline"
                               size="icon"
@@ -544,7 +609,9 @@ export function TransactionsTable({
               {t("transactions.table.delete_dialog_title")}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {t("transactions.table.delete_dialog_description")}
+              {hasExternalImportSource(transactions.find((item) => item.id === transactionToDelete))
+                ? t("transactions.table.delete_dialog_imported_description")
+                : t("transactions.table.delete_dialog_description")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
