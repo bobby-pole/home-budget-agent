@@ -31,6 +31,8 @@ import {
   type DecimalInput,
 } from "@/lib/money";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { getCategorySourceMeta } from "@/lib/provenance";
+import { cn } from "@/lib/utils";
 
 const itemSchema = z.object({
   name: z.string().min(1, t("transactions.item_row.validation.name_required")),
@@ -109,6 +111,7 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
 
   if (!isEditing) {
     const displayCat = getDisplayCategory(item.category_id ?? null);
+    const catSourceMeta = getCategorySourceMeta(item.category_source);
     const qty = item.quantity ?? "1";
     const hasDiscount =
       item.original_price != null && toCents(item.discount_total ?? "0.00") !== 0n;
@@ -137,7 +140,18 @@ export function TransactionItemRow({ item, transactionId, currency }: Transactio
             {item.name}
           </span>
 
-          <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground ml-auto">
+          <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground ml-auto">
+            {catSourceMeta && (
+              <span
+                title={catSourceMeta.tooltip}
+                className={cn(
+                  "px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider leading-none",
+                  catSourceMeta.badgeClass,
+                )}
+              >
+                {catSourceMeta.label}
+              </span>
+            )}
             {displayCat && (
               <span
                 className="px-2 py-0.5 rounded text-[10px] uppercase tracking-wide font-medium flex items-center gap-1.5 text-white shadow-sm"

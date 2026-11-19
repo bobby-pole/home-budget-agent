@@ -21,11 +21,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Check, Clock, AlertTriangle } from "lucide-react";
+import { Store, RefreshCcw, Eye, Trash2, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, Check, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import type { TransactionRead as Transaction, CategoryRead } from "@/client";
 import { cn } from "@/lib/utils";
 import { getIntlLocale } from "@/lib/dates";
 import { formatMoneyFixed } from "@/lib/money";
+import { getTransactionProvenance, hasExternalImportSource } from "@/lib/provenance";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -42,35 +43,6 @@ interface TransactionsTableProps {
   selectedAccountId?: number | null;
 }
 
-const EXTERNAL_PRESERVE_SOURCE_TYPES = new Set([
-  "BANK_CSV",
-  "MERCHANT_API",
-  "E_RECEIPT",
-]);
-
-function hasExternalImportSource(transaction: Transaction | undefined | null): boolean {
-  if (!transaction?.source_records?.length) return false;
-  return transaction.source_records.some((sr) =>
-    EXTERNAL_PRESERVE_SOURCE_TYPES.has(String(sr.source_type || "").toUpperCase())
-  );
-}
-
-function getSourceBadgeLabel(transaction: Transaction): string | null {
-  const first = transaction.source_records?.[0];
-  if (!first) {
-    return transaction.is_manual ? t("transactions.table.source_manual") : null;
-  }
-  const srcType = String(first.source_type || "").toUpperCase();
-  if (srcType === "BANK_CSV") return t("transactions.table.source_bank");
-  if (srcType === "MERCHANT_API") {
-    return first.provider === "lidl" ? t("transactions.table.source_lidl") : first.provider;
-  }
-  if (srcType === "E_RECEIPT") return t("transactions.table.source_eparagon");
-  if (srcType === "OCR_PHOTO") return t("transactions.table.source_scan");
-  if (srcType === "MANUAL") return t("transactions.table.source_manual");
-  return null;
-}
-
 export function TransactionsTable({
   transactions,
   categories = [],
@@ -79,9 +51,14 @@ export function TransactionsTable({
   selectedAccountId,
 }: TransactionsTableProps) {
   const queryClient = useQueryClient();
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [selectedTransactionId, setSelectedTransactionId] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [transactionToDelete, setTransactionToDelete] = useState<number | null>(null);
+
+  const selectedTransaction =
+    selectedTransactionId != null
+      ? transactions.find((item) => item.id === selectedTransactionId) ?? null
+      : null;
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -133,7 +110,7 @@ export function TransactionsTable({
   });
 
   const handleOpenModal = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
+    setSelectedTransactionId(transaction.id);
     setIsModalOpen(true);
   };
 
@@ -285,15 +262,38 @@ export function TransactionsTable({
                             );
                           })()}
                           {(() => {
-                            const sourceLabel = getSourceBadgeLabel(transaction);
-                            if (!sourceLabel) return null;
+                            const provenance = getTransactionProvenance(transaction);
+                            if (!provenance.sourceLabel && transaction.canonical_total_valid !== true) {
+                              return null;
+                            }
+                            const sourceTooltip = [
+                              provenance.provider,
+                              provenance.adapterVersion,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
                             return (
-                              <Badge
-                                variant="secondary"
-                                className="h-4 px-1.5 text-[9px] font-semibold rounded-md leading-none"
-                              >
-                                {sourceLabel}
-                              </Badge>
+                              <>
+                                {provenance.sourceLabel && (
+                                  <Badge
+                                    variant="secondary"
+                                    title={sourceTooltip || undefined}
+                                    className="h-4 px-1.5 text-[9px] font-semibold rounded-md leading-none"
+                                  >
+                                    {provenance.sourceLabel}
+                                  </Badge>
+                                )}
+                                {transaction.canonical_total_valid === true && (
+                                  <Badge
+                                    variant="outline"
+                                    title={t("provenance.validation.sum_ok_tooltip")}
+                                    className="h-4 px-1.5 text-[9px] font-semibold rounded-md leading-none bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-0.5"
+                                  >
+                                    <CheckCircle2 className="h-2.5 w-2.5" />
+                                    <span>{t("provenance.validation.sum_ok")}</span>
+                                  </Badge>
+                                )}
+                              </>
                             );
                           })()}
                           {transaction.tags?.map((tag) => (
@@ -448,17 +448,40 @@ export function TransactionsTable({
                             <span className="font-medium">
                               {transaction.merchant_name}
                             </span>
-                            <div className="flex flex-wrap gap-1 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1 mt-0.5">
                               {(() => {
-                                const sourceLabel = getSourceBadgeLabel(transaction);
-                                if (!sourceLabel) return null;
+                                const provenance = getTransactionProvenance(transaction);
+                                if (!provenance.sourceLabel && transaction.canonical_total_valid !== true) {
+                                  return null;
+                                }
+                                const sourceTooltip = [
+                                  provenance.provider,
+                                  provenance.adapterVersion,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ");
                                 return (
-                                  <Badge
-                                    variant="secondary"
-                                    className="h-4 px-1.5 text-[9px] font-semibold rounded-sm leading-none"
-                                  >
-                                    {sourceLabel}
-                                  </Badge>
+                                  <>
+                                    {provenance.sourceLabel && (
+                                      <Badge
+                                        variant="secondary"
+                                        title={sourceTooltip || undefined}
+                                        className="h-4 px-1.5 text-[9px] font-semibold rounded-sm leading-none"
+                                      >
+                                        {provenance.sourceLabel}
+                                      </Badge>
+                                    )}
+                                    {transaction.canonical_total_valid === true && (
+                                      <Badge
+                                        variant="outline"
+                                        title={t("provenance.validation.sum_ok_tooltip")}
+                                        className="h-4 px-1.5 text-[9px] font-semibold rounded-sm leading-none bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 gap-0.5"
+                                      >
+                                        <CheckCircle2 className="h-2.5 w-2.5" />
+                                        <span>{t("provenance.validation.sum_ok")}</span>
+                                      </Badge>
+                                    )}
+                                  </>
                                 );
                               })()}
                               {transaction.tags?.map(tag => (

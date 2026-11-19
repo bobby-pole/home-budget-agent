@@ -1521,7 +1521,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransactionLine"
+                  "$ref": "#/components/schemas/TransactionLineRead"
                 }
               }
             }
@@ -6454,115 +6454,6 @@
         ],
         "title": "Token"
       },
-      "TransactionLine": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "price": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
-            "title": "Price",
-            "example": "10.99"
-          },
-          "quantity": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{1,4})?$",
-            "title": "Quantity",
-            "default": "1",
-            "example": "1"
-          },
-          "category_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Id"
-          },
-          "category_source": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category Source"
-          },
-          "original_price": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
-                "example": "10.99"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Original Price"
-          },
-          "discount_total": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{1,2})?$",
-            "title": "Discount Total",
-            "default": "0.00",
-            "example": "10.99"
-          },
-          "final_price": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^-?\\d+(\\.\\d{1,4})?$",
-                "example": "10.99"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Final Price"
-          },
-          "is_adjustment": {
-            "type": "boolean",
-            "title": "Is Adjustment",
-            "default": false
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "transaction_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Transaction Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "price"
-        ],
-        "title": "TransactionLine"
-      },
       "TransactionLineCreate": {
         "properties": {
           "name": {
@@ -6998,6 +6889,24 @@
               }
             ],
             "title": "Suggested Account Id"
+          },
+          "review_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Review Reasons"
+          },
+          "canonical_total_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Total Valid"
           },
           "lines": {
             "items": {

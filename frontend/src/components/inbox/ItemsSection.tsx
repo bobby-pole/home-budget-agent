@@ -32,6 +32,8 @@ import {
   type DecimalInput,
 } from "@/lib/money";
 import { getCategoryDisplayName } from "@/lib/constants";
+import { getCategorySourceMeta } from "@/lib/provenance";
+import { cn } from "@/lib/utils";
 import type { CategoryRead } from "@/client";
 import type { VerificationFormValues } from "./VerificationCard";
 import { CategoryIcon } from "@/components/CategoryIcon";
@@ -202,12 +204,17 @@ function ItemRow({
   const total = computeLineTotal(unitPrice, qty, discount);
 
   const selectedCategory = categories.find((c) => c.id.toString() === categoryId);
+  const categorySourceMeta = getCategorySourceMeta(categorySource);
+  const missingCategory = !selectedCategory;
 
   if (isCollapsed) {
     return (
       <div
         onClick={onToggleCollapse}
-        className="group relative bg-card border border-border/40 hover:border-primary/30 p-2 sm:p-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:shadow-sm transition-all"
+        className={cn(
+          "group relative bg-card border hover:border-primary/30 p-2 sm:p-3 rounded-xl flex items-center justify-between gap-3 cursor-pointer hover:shadow-sm transition-all",
+          missingCategory ? "border-amber-500/40" : "border-border/40",
+        )}
       >
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {/* Category Icon */}
@@ -220,25 +227,38 @@ function ItemRow({
               className="size-4" 
               style={{ color: selectedCategory?.color || "#3b82f6" }} 
             />
-            {categorySource === "ai" && (
-              <div 
-                className="absolute -top-1 -right-2 flex h-[14px] px-1 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 text-[8px] font-bold uppercase tracking-wider shadow-sm"
-                title={t("transactions.item_row.ai_category_tooltip")}
-              >
-                AI
-              </div>
-            )}
           </div>
 
           {/* Name & Qty/Price Summary */}
           <div className="flex flex-col min-w-0 flex-1">
-            <span className="text-sm font-bold truncate pr-2">
-              {name || (
-                <span className="text-muted-foreground/50 italic">
-                  {t("inbox.verification_card.placeholder_item_name")}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-sm font-bold truncate">
+                {name || (
+                  <span className="text-muted-foreground/50 italic">
+                    {t("inbox.verification_card.placeholder_item_name")}
+                  </span>
+                )}
+              </span>
+              {categorySourceMeta && (
+                <span
+                  title={categorySourceMeta.tooltip}
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded border px-1.5 py-0 text-[9px] font-bold uppercase tracking-wider leading-tight",
+                    categorySourceMeta.badgeClass,
+                  )}
+                >
+                  {categorySourceMeta.label}
                 </span>
               )}
-            </span>
+              {missingCategory && (
+                <span
+                  title={t("provenance.labels.missing_category_warning")}
+                  className="inline-flex shrink-0 items-center rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-0 text-[9px] font-semibold text-amber-700 dark:text-amber-300"
+                >
+                  {t("provenance.category_source.unassigned")}
+                </span>
+              )}
+            </div>
             <span className="text-[10px] text-muted-foreground font-semibold flex items-center gap-1.5 mt-0.5">
               {parseQuantityInput(qty) !== "1" && (
                 <span className="tabular-nums">
@@ -290,7 +310,12 @@ function ItemRow({
   }
 
   return (
-    <div className="group relative bg-card border border-border/40 p-3 rounded-xl hover:border-primary/30 transition-all hover:shadow-sm">
+    <div
+      className={cn(
+        "group relative bg-card border p-3 rounded-xl hover:border-primary/30 transition-all hover:shadow-sm",
+        missingCategory ? "border-amber-500/40" : "border-border/40",
+      )}
+    >
       <div className="flex flex-col gap-2">
         {/* Row 1: name + category + toggle collapse + delete */}
         <div className="flex gap-2 items-start">
@@ -315,17 +340,34 @@ function ItemRow({
             name={`lines.${index}.category_id`}
             render={({ field }) => (
               <FormItem className="w-32 space-y-0 relative">
-                {categorySource === "ai" && (
-                  <div 
-                    className="absolute -top-2 -right-2 z-10 flex h-[14px] px-1 items-center justify-center rounded bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 text-[8px] font-bold uppercase tracking-wider shadow-sm pointer-events-none"
-                    title={t("transactions.item_row.ai_category_tooltip")}
+                {categorySourceMeta && (
+                  <div
+                    className={cn(
+                      "absolute -top-2 -right-2 z-10 flex h-[15px] px-1.5 items-center justify-center rounded border text-[8px] font-bold uppercase tracking-wider shadow-sm pointer-events-none",
+                      categorySourceMeta.badgeClass,
+                    )}
+                    title={categorySourceMeta.tooltip}
                   >
-                    AI
+                    {categorySourceMeta.label}
                   </div>
                 )}
-                <Select onValueChange={field.onChange} value={field.value || undefined}>
+                <Select
+                  onValueChange={(val) => {
+                    field.onChange(val);
+                    form.setValue(`lines.${index}.category_source`, "user", {
+                      shouldDirty: true,
+                    });
+                  }}
+                  value={field.value || undefined}
+                >
                   <FormControl>
-                    <SelectTrigger className="h-9 text-xs bg-muted/20 px-2">
+                    <SelectTrigger
+                      title={missingCategory ? t("provenance.labels.missing_category_warning") : undefined}
+                      className={cn(
+                        "h-9 text-xs bg-muted/20 px-2",
+                        missingCategory && "border-amber-500/50",
+                      )}
+                    >
                       <SelectValue placeholder={t("inbox.verification_card.placeholder_category")} />
                     </SelectTrigger>
                   </FormControl>
