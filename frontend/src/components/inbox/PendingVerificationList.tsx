@@ -112,6 +112,19 @@ export function PendingVerificationList({
                         {translateValidationMessage(reviewReasons[0])}
                       </p>
                     )}
+                    {tx.import_job &&
+                      (tx.import_job.status === "failed" ||
+                        (tx.import_job.status === "pending" && tx.import_job.attempt_count > 0)) && (
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          {t("inbox.jobs.attempt_label", {
+                            attempt: String(tx.import_job.attempt_count),
+                            max: String(tx.import_job.max_attempts),
+                          })}
+                          {tx.import_job.last_error_code
+                            ? ` • ${translateValidationMessage(tx.import_job.last_error_code)}`
+                            : ""}
+                        </p>
+                      )}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm font-bold">

@@ -19,6 +19,9 @@ from app.models import (
     BudgetMember,
     Category,
     EnvelopeAllocation,
+    ImportJob,
+    ImportJobRead,
+    ImportJobStatus,
     InboxBulkActionResponse,
     ReceiptScan,
     ReceiptScanRead,
@@ -478,11 +481,49 @@ def _fetch_pending_duplicate_tx_ids(
     return matched
 
 
+def serialize_import_job_read(job: ImportJob) -> ImportJobRead:
+    """Serialize an ``ImportJob`` ORM row into ``ImportJobRead`` with computed retryability."""
+    status_val = _enum_str(job.status)
+    is_retryable = status_val == ImportJobStatus.FAILED.value or (
+        status_val == ImportJobStatus.PENDING.value and job.attempt_count > 0
+    )
+    return ImportJobRead.model_validate(
+        job,
+        update={"is_retryable": is_retryable},
+    )
+
+
+def _fetch_latest_document_jobs_by_tx(
+    session: Session,
+    *,
+    budget_id: Optional[int],
+    transaction_ids: Sequence[int],
+) -> dict[int, ImportJobRead]:
+    if budget_id is None or not transaction_ids:
+        return {}
+    id_set = list(set(transaction_ids))
+    jobs = session.exec(
+        select(ImportJob)
+        .where(
+            ImportJob.budget_id == budget_id,
+            col(ImportJob.transaction_id).in_(id_set),
+            col(ImportJob.job_type) == "document_ingest",
+        )
+        .order_by(desc(ImportJob.id))
+    ).all()
+    by_tx: dict[int, ImportJobRead] = {}
+    for job in jobs:
+        if job.transaction_id is not None and job.transaction_id not in by_tx:
+            by_tx[job.transaction_id] = serialize_import_job_read(job)
+    return by_tx
+
+
 def serialize_transaction_read(
     tx: Transaction,
     *,
     suggested_account_id: Optional[int] = None,
     has_pending_duplicate: Optional[bool] = None,
+    import_job: Optional[ImportJobRead] = None,
     session: Optional[Session] = None,
 ) -> TransactionRead:
     """Serialize a ``Transaction`` ORM instance into ``TransactionRead`` with provenance signals."""
@@ -497,6 +538,14 @@ def serialize_transaction_read(
             has_dup = False
     else:
         has_dup = has_pending_duplicate
+
+    resolved_import_job = import_job
+    if resolved_import_job is None and session is not None and tx.id is not None and tx.budget_id is not None:
+        resolved_import_job = _fetch_latest_document_jobs_by_tx(
+            session,
+            budget_id=tx.budget_id,
+            transaction_ids=[tx.id],
+        ).get(tx.id)
 
     canonical_total_valid = compute_canonical_total_valid(tx)
     review_reasons = compute_review_reasons(
@@ -525,6 +574,7 @@ def serialize_transaction_read(
             "suggested_account_id": tx.account_id if tx.account_id is not None else suggested_account_id,
             "review_reasons": review_reasons,
             "canonical_total_valid": canonical_total_valid,
+            "import_job": resolved_import_job,
         },
     )
     return tx_data
@@ -551,11 +601,17 @@ def serialize_transactions_read(
         budget_id=budget_id,
         transaction_ids=tx_ids,
     )
+    jobs_by_tx = _fetch_latest_document_jobs_by_tx(
+        session,
+        budget_id=budget_id,
+        transaction_ids=tx_ids,
+    )
     return [
         serialize_transaction_read(
             tx,
             suggested_account_id=suggested_account_id,
             has_pending_duplicate=(tx.id in pending_dup_ids if tx.id is not None else False),
+            import_job=(jobs_by_tx.get(tx.id) if tx.id is not None else None),
         )
         for tx in transactions
     ]
@@ -775,6 +831,19 @@ def reject_transaction_preserving_provenance(
     )
     for pending in pending_links:
         session.delete(pending)
+
+    # Remove any pending document_ingest jobs so rejected items are not processed in the background.
+    pending_jobs = list(
+        session.exec(
+            select(ImportJob).where(
+                ImportJob.budget_id == budget_id,
+                col(ImportJob.transaction_id) == transaction_id,
+                col(ImportJob.status) == ImportJobStatus.PENDING.value,
+            )
+        ).all()
+    )
+    for pending_job in pending_jobs:
+        session.delete(pending_job)
 
     session.refresh(tx)
     if tx.date is not None:

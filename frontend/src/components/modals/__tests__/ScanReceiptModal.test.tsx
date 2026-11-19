@@ -7,8 +7,10 @@ import { api } from "@/lib/api";
 vi.mock("@/lib/api", () => ({
   api: {
     getDemoQuota: vi.fn(),
+    getAccounts: vi.fn(),
     scanSampleReceipt: vi.fn(),
     scanTransaction: vi.fn(),
+    scanBatch: vi.fn(),
   },
 }));
 
@@ -17,6 +19,7 @@ describe("ScanReceiptModal", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getAccounts).mockResolvedValue([]);
     vi.mocked(api.getDemoQuota).mockResolvedValue({
       is_demo: true,
       daily_limit: 5,
@@ -99,5 +102,93 @@ describe("ScanReceiptModal", () => {
     const buttons = screen.getAllByRole("button");
     const biedronkaBtn = buttons.find((b) => b.textContent?.includes("Limit wykorzystany"));
     expect(biedronkaBtn).toBeDisabled();
+  });
+
+  it("queues multiple files, flags client-side invalid file, submits batch and re-uploads duplicates", async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    vi.mocked(api.getDemoQuota).mockResolvedValue({
+      is_demo: false,
+      daily_limit: 999,
+      used: 0,
+      remaining: 999,
+      can_scan: true,
+    });
+    vi.mocked(api.scanBatch)
+      .mockResolvedValueOnce({
+        import_batch_id: "batch_abc",
+        total_files: 2,
+        queued_count: 1,
+        duplicate_count: 1,
+        failed_count: 0,
+        rate_limited_count: 0,
+        results: [
+          {
+            filename: "r1.jpg",
+            status: "queued",
+            transaction_id: 10,
+            receipt_scan_id: 20,
+            job_id: 30,
+          },
+          {
+            filename: "r_2.pdf",
+            status: "duplicate",
+            error_code: "DUPLICATE_FILE",
+            detail: "Already imported",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        import_batch_id: "batch_def",
+        total_files: 1,
+        queued_count: 1,
+        duplicate_count: 0,
+        failed_count: 0,
+        rate_limited_count: 0,
+        results: [
+          {
+            filename: "r_2.pdf",
+            status: "queued",
+            transaction_id: 11,
+            receipt_scan_id: 21,
+            job_id: 31,
+          },
+        ],
+      });
+
+    render(<ScanReceiptModal open={true} onOpenChange={onOpenChange} />);
+
+    await screen.findByText(/Biedronka \(Katowice\)/i);
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).toBeTruthy();
+    expect(fileInput.multiple).toBe(true);
+
+    const validImg = new File(["jpgdata"], "r1.jpg", { type: "image/jpeg" });
+    const validPdf = new File(["%PDF-1.4"], "r 2.pdf", { type: "application/pdf" });
+    const invalidHtml = new File(["<html></html>"], "bad.html", { type: "text/html" });
+
+    // Trigger direct onChange with multiple files including unsupported html
+    await user.upload(fileInput, [validImg, validPdf, invalidHtml]);
+
+    expect(await screen.findByText("r1.jpg")).toBeInTheDocument();
+    expect(screen.getByText("r 2.pdf")).toBeInTheDocument();
+    expect(screen.getByText("bad.html")).toBeInTheDocument();
+    expect(screen.getByText(/Nieobsługiwany format pliku/i)).toBeInTheDocument();
+
+    const submitBtn = screen.getByRole("button", { name: /Wyślij paczkę \(2\)/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(api.scanBatch).toHaveBeenCalledTimes(1);
+    });
+    expect(vi.mocked(api.scanBatch).mock.calls[0][0]).toHaveLength(2);
+
+    expect(await screen.findByText(/Zakolejkowano 1 z 2 dokumentów/i)).toBeInTheDocument();
+    const forceBtn = screen.getByRole("button", { name: /Wyślij duplikaty ponownie/i });
+    await user.click(forceBtn);
+
+    await waitFor(() => {
+      expect(api.scanBatch).toHaveBeenCalledTimes(2);
+    });
+    expect(vi.mocked(api.scanBatch).mock.calls[1][1]?.force).toBe(true);
   });
 });

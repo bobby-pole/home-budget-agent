@@ -33,7 +33,9 @@ import type {
   DuplicateMergeRequest,
   InboxBulkActionResponse,
   InboxBulkApproveRequest,
-  InboxRejectRequest
+  InboxRejectRequest,
+  ImportJobRead,
+  BatchDocumentUploadResponse
 } from "@/client";
 import { getToken, clearAuth, getActiveBudget } from "@/lib/auth";
 import { getLocale } from "@/lib/i18n";
@@ -142,6 +144,52 @@ export const api = {
     const response = await apiClient.post<Transaction>(`/transactions/scan?force=${force}`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return response.data;
+  },
+
+  scanBatch: async (
+    files: File[],
+    options?: {
+      force?: boolean;
+      account_id?: number;
+      auto_merge_policy?: AutoMergePolicy;
+    }
+  ): Promise<BatchDocumentUploadResponse> => {
+    const formData = new FormData();
+    files.forEach((file) => {
+      formData.append("files", file);
+    });
+    formData.append("force", String(Boolean(options?.force)));
+    if (options?.account_id !== undefined) {
+      formData.append("account_id", String(options.account_id));
+    }
+    if (options?.auto_merge_policy) {
+      formData.append("auto_merge_policy", options.auto_merge_policy);
+    }
+    const response = await apiClient.post<BatchDocumentUploadResponse>(
+      "/transactions/scan-batch",
+      formData,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+      }
+    );
+    return response.data;
+  },
+
+  getImportJobs: async (params?: {
+    import_batch_id?: string;
+    job_type?: string;
+    active_only?: boolean;
+    limit?: number;
+  }): Promise<ImportJobRead[]> => {
+    const response = await apiClient.get<ImportJobRead[]>("/import-jobs", {
+      params,
+    });
+    return response.data;
+  },
+
+  retryImportJob: async (jobId: number): Promise<ImportJobRead> => {
+    const response = await apiClient.post<ImportJobRead>(`/import-jobs/${jobId}/retry`);
     return response.data;
   },
 

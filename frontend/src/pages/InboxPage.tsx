@@ -11,10 +11,13 @@ import {
   Trash2,
   RotateCcw,
   Check,
+  Clock,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { TransactionRead } from "@/client";
+import type { ImportJobRead, TransactionRead } from "@/client";
 import { PendingVerificationList } from "@/components/inbox/PendingVerificationList";
 import { ReconciliationPanel } from "@/components/inbox/ReconciliationPanel";
 import { VerificationCard } from "@/components/inbox/VerificationCard";
@@ -42,6 +45,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { formatDate } from "@/lib/dates";
+import { translateValidationMessage } from "@/lib/errorCodes";
 import { formatMoneyFixed } from "@/lib/money";
 import { getTransactionProvenance } from "@/lib/provenance";
 import { cn } from "@/lib/utils";
@@ -54,6 +58,25 @@ function getRejectedSourceLabel(tx: TransactionRead): string | null {
   return getTransactionProvenance(tx).sourceLabel;
 }
 
+function getJobStatusMeta(job: ImportJobRead): {
+  label: string;
+  variant: "secondary" | "outline" | "destructive";
+} {
+  if (job.status === "failed") {
+    return { label: t("inbox.jobs.status_failed"), variant: "destructive" };
+  }
+  if (job.status === "running") {
+    return { label: t("inbox.jobs.status_running"), variant: "secondary" };
+  }
+  if (job.status === "completed") {
+    return { label: t("inbox.jobs.status_completed"), variant: "outline" };
+  }
+  if (job.status === "pending" && job.attempt_count > 0) {
+    return { label: t("inbox.jobs.status_retryable"), variant: "outline" };
+  }
+  return { label: t("inbox.jobs.status_pending"), variant: "secondary" };
+}
+
 export function InboxPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<InboxTab>("exceptions");
@@ -61,8 +84,29 @@ export function InboxPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [checkedIds, setCheckedIds] = useState<number[]>([]);
   const [bulkAccountOverride, setBulkAccountOverride] = useState<string>("");
+  const [jobsExpandedOverride, setJobsExpandedOverride] = useState<boolean | null>(null);
   const isMobile = useIsMobile();
   const { setQuickEntryOpen, renderModals } = useTransactionActions();
+
+  const { data: importJobs = [] } = useQuery({
+    queryKey: ["import-jobs"],
+    queryFn: () =>
+      typeof api.getImportJobs === "function"
+        ? api.getImportJobs({ job_type: "document_ingest", limit: 25 })
+        : Promise.resolve([]),
+    refetchInterval: (query) => {
+      const jobs = query.state.data ?? [];
+      const hasActive = jobs.some((j) => j.status === "pending" || j.status === "running");
+      return hasActive ? 2000 : 8000;
+    },
+  });
+
+  const activeJobsCount = importJobs.filter(
+    (j) => j.status === "pending" || j.status === "running"
+  ).length;
+  const failedJobsCount = importJobs.filter((j) => j.status === "failed").length;
+  const hasActiveJobs = activeJobsCount > 0;
+  const isJobsPanelExpanded = jobsExpandedOverride ?? (activeJobsCount > 0 || failedJobsCount > 0);
 
   const {
     data: transactions = [],
@@ -76,7 +120,7 @@ export function InboxPage() {
           ? { tab: "exceptions" }
           : { tab: "exceptions", source_type: sourceFilter }
       ),
-    refetchInterval: 5000,
+    refetchInterval: hasActiveJobs ? 2000 : 5000,
   });
 
   const {
@@ -117,6 +161,7 @@ export function InboxPage() {
 
   const invalidateInboxAndLedger = () => {
     queryClient.invalidateQueries({ queryKey: ["inbox"] });
+    queryClient.invalidateQueries({ queryKey: ["import-jobs"] });
     queryClient.invalidateQueries({ queryKey: ["status"] });
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["budget-summary"] });
@@ -172,6 +217,18 @@ export function InboxPage() {
     },
     onError: () => {
       toast.error(t("inbox.rejected.purge_error"));
+    },
+  });
+
+  const retryJobMutation = useMutation({
+    mutationFn: (jobId: number) => api.retryImportJob(jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["import-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["inbox"] });
+      toast.success(t("inbox.jobs.retry_success"));
+    },
+    onError: () => {
+      toast.error(t("inbox.jobs.retry_error"));
     },
   });
 
@@ -422,6 +479,112 @@ export function InboxPage() {
                 isMobile ? "w-full p-4" : "w-96"
               )}
             >
+              {importJobs.length > 0 && (
+                <div className="rounded-xl border border-border/60 bg-card/80 p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Clock className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span className="text-xs font-semibold truncate">
+                        {t("inbox.jobs.panel_title")}
+                      </span>
+                      {activeJobsCount > 0 && (
+                        <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
+                          {t("inbox.jobs.active_count", { count: String(activeJobsCount) })}
+                        </Badge>
+                      )}
+                      {failedJobsCount > 0 && (
+                        <Badge variant="destructive" className="text-[10px] h-4 px-1.5">
+                          {t("inbox.jobs.failed_count", { count: String(failedJobsCount) })}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] gap-1 shrink-0"
+                      onClick={() => setJobsExpandedOverride(!isJobsPanelExpanded)}
+                    >
+                      <span>
+                        {isJobsPanelExpanded ? t("inbox.jobs.toggle_hide") : t("inbox.jobs.toggle_show")}
+                      </span>
+                      {isJobsPanelExpanded ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+
+                  {isJobsPanelExpanded && (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-0.5">
+                      {importJobs.map((job) => {
+                        const statusMeta = getJobStatusMeta(job);
+                        const canRetry =
+                          job.status === "failed" ||
+                          (job.status === "pending" && job.attempt_count > 0);
+                        return (
+                          <div
+                            key={job.id}
+                            onClick={() => {
+                              if (job.transaction_id) {
+                                setSelectedId(job.transaction_id);
+                              }
+                            }}
+                            className={cn(
+                              "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs bg-muted/20",
+                              job.transaction_id && "cursor-pointer hover:border-primary/40"
+                            )}
+                          >
+                            <div className="min-w-0 space-y-0.5">
+                              <p className="font-medium truncate">
+                                {job.source_filename ||
+                                  t("inbox.jobs.unnamed_file", { id: String(job.id) })}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+                                <span>
+                                  {t("inbox.jobs.attempt_label", {
+                                    attempt: String(job.attempt_count),
+                                    max: String(job.max_attempts),
+                                  })}
+                                </span>
+                                {job.last_error_code && (
+                                  <span className="truncate">
+                                    • {translateValidationMessage(job.last_error_code)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Badge variant={statusMeta.variant} className="text-[10px] h-5">
+                                {statusMeta.label}
+                              </Badge>
+                              {canRetry && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={retryJobMutation.isPending}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    retryJobMutation.mutate(job.id);
+                                  }}
+                                  className="h-6 px-2 text-[10px] gap-1"
+                                >
+                                  <RotateCcw className="h-3 w-3" />
+                                  {t("inbox.jobs.retry_button")}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex flex-wrap gap-1.5">
                 {sourceFilters.map((f) => (
                   <Button

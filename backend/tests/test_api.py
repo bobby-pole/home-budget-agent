@@ -57,11 +57,9 @@ def test_manual_transaction_receipt_scan_is_null(client: TestClient, session: Se
     assert response.json()["receipt_scan"] is None
 
 
-@patch("app.api.shutil.copyfileobj")
 @patch("builtins.open", new_callable=mock_open)
-@patch("app.api.process_transaction_in_background")
-def test_scan_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, client: TestClient, session: Session):
-    file_content = b"fake_receipt_image_data"
+def test_scan_creates_transaction_and_scan(mock_file_open, client: TestClient, session: Session):
+    file_content = b"\xff\xd8\xff\xe0fake_receipt_image_data"
     expected_hash = hashlib.sha256(file_content).hexdigest()
 
     response = client.post(
@@ -75,6 +73,9 @@ def test_scan_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, c
     assert data["receipt_scan"] is not None
     assert data["receipt_scan"]["status"] == ScanStatus.QUEUED
     assert data["receipt_scan"]["content_hash"] == expected_hash
+    assert data["import_job"] is not None
+    assert data["import_job"]["job_type"] == "document_ingest"
+    assert data["import_job"]["status"] == "pending"
 
     scan = session.exec(select(ReceiptScan).where(ReceiptScan.transaction_id == data["id"])).first()
     assert scan is not None
@@ -82,7 +83,7 @@ def test_scan_creates_transaction_and_scan(mock_bg, mock_file_open, mock_copy, c
 
 
 def test_scan_duplicate_returns_409(client: TestClient, session: Session):
-    file_content = b"known_duplicate_receipt"
+    file_content = b"\xff\xd8\xff\xe0known_duplicate_receipt"
     file_hash = hashlib.sha256(file_content).hexdigest()
 
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
@@ -107,8 +108,7 @@ def test_scan_duplicate_returns_409(client: TestClient, session: Session):
 
 
 @patch("app.api.os.path.exists", return_value=True)
-@patch("app.api.process_transaction_in_background")
-def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, session: Session):
+def test_retry_uses_scan_status(mock_exists, client: TestClient, session: Session):
     test_user = session.exec(select(User).where(User.email == "test@example.com")).first()
     assert test_user is not None
     test_budget = session.exec(select(Budget).where(Budget.name == "Domowy")).first()
@@ -130,7 +130,10 @@ def test_retry_uses_scan_status(mock_bg, mock_exists, client: TestClient, sessio
 
     session.refresh(scan)
     assert scan.status == ScanStatus.QUEUED
-    mock_bg.assert_called_once_with(transaction.id, scan_id, "/fake/path/image.jpg")
+    retried_payload = response.json()
+    assert retried_payload["import_job"] is not None
+    assert retried_payload["import_job"]["receipt_scan_id"] == scan_id
+    assert retried_payload["import_job"]["status"] == "pending"
 
 
 def test_delete_removes_receipt_scan(client: TestClient, session: Session):

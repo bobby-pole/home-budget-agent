@@ -14,10 +14,10 @@ import signal
 import socket
 import threading
 import time
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence, Union
 import uuid
 
-from sqlalchemy import case, func, update
+from sqlalchemy import case, func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -32,12 +32,15 @@ from app.models import (
     ImportJob,
     ImportJobStatus,
     ImportProviderLimit,
+    ReceiptScan,
+    ScanStatus,
     ensure_tz_aware,
 )
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_JOB_TYPE = "connection_sync"
+DOCUMENT_JOB_TYPE = "document_ingest"
 TRUSTED_WORKER_ROLE = "trusted_local"
 
 _FORBIDDEN_CURSOR_RE = re.compile(
@@ -62,23 +65,62 @@ DEFAULT_PROVIDER_POLICIES: dict[str, ProviderRatePolicy] = {
         min_interval_seconds=1.0,
         sync_interval_seconds=settings.IMPORT_SYNC_INTERVAL_SECONDS,
     ),
+    "receipt_upload": ProviderRatePolicy(
+        max_concurrent=3,
+        min_interval_seconds=0.0,
+        sync_interval_seconds=settings.IMPORT_SYNC_INTERVAL_SECONDS,
+    ),
+    "eparagon_json": ProviderRatePolicy(
+        max_concurrent=3,
+        min_interval_seconds=0.0,
+        sync_interval_seconds=settings.IMPORT_SYNC_INTERVAL_SECONDS,
+    ),
+    "demo_sample": ProviderRatePolicy(
+        max_concurrent=3,
+        min_interval_seconds=0.0,
+        sync_interval_seconds=settings.IMPORT_SYNC_INTERVAL_SECONDS,
+    ),
 }
 
 
 @dataclass(frozen=True)
 class SyncExecutionOutcome:
-    """Structured result returned by a connector sync executor (zero secrets/PII)."""
+    """Structured result returned by a connector sync or document ingest executor (zero secrets/PII)."""
 
     imported_count: int = 0
     skipped_count: int = 0
     failed_count: int = 0
     next_cursor: Optional[str] = None
     error_classification: Optional[str] = None  # None | "transient" | "permanent"
-    error_code: Optional[ConnectionErrorCode] = None
+    error_code: Optional[Union[ConnectionErrorCode, str]] = None
     retry_after_seconds: Optional[int] = None
 
 
 SyncExecutorFn = Callable[[Session, ExternalReceiptConnection, ImportJob], SyncExecutionOutcome]
+DocumentExecutorFn = Callable[[Session, ImportJob], SyncExecutionOutcome]
+
+_ACTIVE_WORKER_LOCK = threading.Lock()
+_ACTIVE_WORKER: Optional["ImportWorker"] = None
+
+
+def _error_code_str(code: Union[ConnectionErrorCode, str, None]) -> Optional[str]:
+    if code is None:
+        return None
+    return code.value if isinstance(code, ConnectionErrorCode) else str(code)
+
+
+def register_active_worker(worker: Optional["ImportWorker"]) -> None:
+    global _ACTIVE_WORKER
+    with _ACTIVE_WORKER_LOCK:
+        _ACTIVE_WORKER = worker
+
+
+def wake_import_worker() -> None:
+    """Signal the active ImportWorker (if running) to wake up immediately for newly enqueued jobs."""
+    with _ACTIVE_WORKER_LOCK:
+        worker = _ACTIVE_WORKER
+    if worker is not None:
+        worker.wake()
 
 
 def utc_now() -> datetime:
@@ -376,6 +418,101 @@ def enqueue_connection_sync_job(
     return job
 
 
+def enqueue_document_ingest_job(
+    session: Session,
+    *,
+    budget_id: int,
+    transaction_id: int,
+    receipt_scan_id: int,
+    provider: str = "receipt_upload",
+    import_batch_id: Optional[str] = None,
+    source_filename: Optional[str] = None,
+    cursor: Optional[str] = None,
+    max_attempts: int = 3,
+    correlation_id: Optional[str] = None,
+    next_retry_at: Optional[datetime] = None,
+    expedite_if_pending: bool = True,
+    commit: bool = True,
+) -> ImportJob:
+    """Idempotently enqueue a durable document_ingest job for a receipt/PDF/e-Paragon upload."""
+    now = utc_now()
+    due_at = _as_utc(next_retry_at) or now
+
+    existing = session.exec(
+        select(ImportJob).where(
+            col(ImportJob.receipt_scan_id) == receipt_scan_id,
+            col(ImportJob.job_type) == DOCUMENT_JOB_TYPE,
+            col(ImportJob.status).in_(
+                [ImportJobStatus.PENDING.value, ImportJobStatus.RUNNING.value]
+            ),
+        )
+    ).first()
+    if existing is not None:
+        existing_due = _as_utc(existing.next_retry_at)
+        if (
+            expedite_if_pending
+            and existing.status == ImportJobStatus.PENDING
+            and (existing_due is None or due_at < existing_due)
+        ):
+            existing.next_retry_at = due_at
+            existing.updated_at = now
+            session.add(existing)
+            if commit:
+                session.commit()
+                session.refresh(existing)
+            else:
+                session.flush()
+            _log_job_event(logging.INFO, "document_job_expedited", job=existing)
+        return existing
+
+    job = ImportJob(
+        job_type=DOCUMENT_JOB_TYPE,
+        provider=provider,
+        connection_id=None,
+        budget_id=budget_id,
+        transaction_id=transaction_id,
+        receipt_scan_id=receipt_scan_id,
+        import_batch_id=import_batch_id,
+        source_filename=source_filename[:120] if source_filename else None,
+        status=ImportJobStatus.PENDING,
+        attempt_count=0,
+        max_attempts=max(1, max_attempts),
+        next_retry_at=due_at,
+        cursor=sanitize_cursor(cursor),
+        correlation_id=correlation_id or uuid.uuid4().hex,
+        lease_owner=None,
+        lease_expires_at=None,
+        last_error_code=None,
+        created_at=now,
+        updated_at=now,
+        completed_at=None,
+    )
+
+    try:
+        with session.begin_nested():
+            session.add(job)
+            session.flush()
+    except IntegrityError:
+        existing_raced = session.exec(
+            select(ImportJob).where(
+                col(ImportJob.receipt_scan_id) == receipt_scan_id,
+                col(ImportJob.job_type) == DOCUMENT_JOB_TYPE,
+                col(ImportJob.status).in_(
+                    [ImportJobStatus.PENDING.value, ImportJobStatus.RUNNING.value]
+                ),
+            )
+        ).first()
+        if existing_raced is not None:
+            return existing_raced
+        raise
+
+    if commit:
+        session.commit()
+        session.refresh(job)
+    _log_job_event(logging.INFO, "document_job_enqueued", job=job)
+    return job
+
+
 def schedule_due_connections(
     session: Session,
     *,
@@ -451,7 +588,11 @@ def recover_stale_jobs(
                 session.refresh(stale)
                 _log_job_event(logging.WARNING, "stale_lease_recovered", job=stale)
         else:
-            err_code = ConnectionErrorCode.SYNC_FAILED
+            err_str = (
+                "DOCUMENT_INGEST_FAILED"
+                if stale.job_type == DOCUMENT_JOB_TYPE
+                else ConnectionErrorCode.SYNC_FAILED.value
+            )
             res = session.exec(
                 update(ImportJob)
                 .where(
@@ -464,22 +605,36 @@ def recover_stale_jobs(
                     status=ImportJobStatus.FAILED.value,
                     lease_owner=None,
                     lease_expires_at=None,
-                    last_error_code=err_code.value,
+                    last_error_code=err_str,
                     completed_at=current,
                     updated_at=current,
                 )
             )
             if (res.rowcount or 0) == 1:
                 recovered_count += 1
-                conn = session.get(ExternalReceiptConnection, stale.connection_id)
-                if conn is not None:
-                    conn.status = ConnectionStatus.SYNC_ERROR
-                    conn.last_error_code = err_code.value
-                    conn.next_sync_at = None
-                    conn.sync_requested_at = None
-                    conn.updated_at = current
-                    session.add(conn)
-                    _create_connection_alert(session, conn=conn, error_code=err_code, now=current)
+                if stale.job_type == DOCUMENT_JOB_TYPE and stale.receipt_scan_id is not None:
+                    scan = session.get(ReceiptScan, stale.receipt_scan_id)
+                    if scan is not None:
+                        scan.status = ScanStatus.FAILED
+                        scan.needs_review = True
+                        if not scan.error_message:
+                            scan.error_message = err_str
+                        session.add(scan)
+                elif stale.connection_id is not None:
+                    conn = session.get(ExternalReceiptConnection, stale.connection_id)
+                    if conn is not None:
+                        conn.status = ConnectionStatus.SYNC_ERROR
+                        conn.last_error_code = err_str
+                        conn.next_sync_at = None
+                        conn.sync_requested_at = None
+                        conn.updated_at = current
+                        session.add(conn)
+                        _create_connection_alert(
+                            session,
+                            conn=conn,
+                            error_code=ConnectionErrorCode.SYNC_FAILED,
+                            now=current,
+                        )
                 session.refresh(stale)
                 _log_job_event(logging.ERROR, "stale_job_exhausted", job=stale)
 
@@ -574,6 +729,7 @@ def claim_next_job(
     now: Optional[datetime] = None,
     per_connection_concurrency: int = 1,
     provider_policies: Optional[dict[str, ProviderRatePolicy]] = None,
+    allowed_job_types: Optional[Sequence[str]] = None,
 ) -> Optional[ImportJob]:
     """Atomically claim the next eligible job respecting leases and throttling limits."""
     current = _as_utc(now) or utc_now()
@@ -586,6 +742,9 @@ def claim_next_job(
     for lock_attempt in range(8):
         try:
             recover_stale_jobs(session, now=current, commit=True)
+            if session.get_bind().dialect.name == "sqlite":
+                session.rollback()
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
 
             active_runs = session.exec(
                 select(ImportJob).where(
@@ -597,9 +756,10 @@ def claim_next_job(
             running_by_conn: dict[int, int] = {}
             running_by_provider: dict[str, int] = {}
             for active_job in active_runs:
-                running_by_conn[active_job.connection_id] = (
-                    running_by_conn.get(active_job.connection_id, 0) + 1
-                )
+                if active_job.connection_id is not None:
+                    running_by_conn[active_job.connection_id] = (
+                        running_by_conn.get(active_job.connection_id, 0) + 1
+                    )
                 running_by_provider[active_job.provider] = (
                     running_by_provider.get(active_job.provider, 0) + 1
                 )
@@ -626,8 +786,15 @@ def claim_next_job(
                 col(ImportJob.status) == ImportJobStatus.PENDING.value,
                 col(ImportJob.next_retry_at) <= current,
             )
+            if allowed_job_types is not None:
+                stmt = stmt.where(col(ImportJob.job_type).in_(list(allowed_job_types)))
             if blocked_connection_ids:
-                stmt = stmt.where(col(ImportJob.connection_id).not_in(blocked_connection_ids))
+                stmt = stmt.where(
+                    or_(
+                        col(ImportJob.connection_id).is_(None),
+                        col(ImportJob.connection_id).not_in(blocked_connection_ids),
+                    )
+                )
             if throttled_providers:
                 stmt = stmt.where(col(ImportJob.provider).not_in(throttled_providers))
 
@@ -635,6 +802,7 @@ def claim_next_job(
                 stmt.order_by(col(ImportJob.next_retry_at).asc(), col(ImportJob.id).asc()).limit(25)
             ).all()
             if not candidates:
+                session.rollback()
                 return None
 
             lost_race = False
@@ -875,15 +1043,16 @@ def finalize_job_success(
             return refreshed
         return job
 
-    conn = session.get(ExternalReceiptConnection, job.connection_id)
-    if conn is not None and conn.status != ConnectionStatus.DISCONNECTED:
-        conn.status = ConnectionStatus.ACTIVE
-        conn.last_error_code = None
-        conn.last_success_at = current
-        conn.sync_requested_at = None
-        conn.next_sync_at = next_sync_at
-        conn.updated_at = current
-        session.add(conn)
+    if job.connection_id is not None:
+        conn = session.get(ExternalReceiptConnection, job.connection_id)
+        if conn is not None and conn.status != ConnectionStatus.DISCONNECTED:
+            conn.status = ConnectionStatus.ACTIVE
+            conn.last_error_code = None
+            conn.last_success_at = current
+            conn.sync_requested_at = None
+            conn.next_sync_at = next_sync_at
+            conn.updated_at = current
+            session.add(conn)
 
     session.commit()
     session.refresh(job)
@@ -905,7 +1074,7 @@ def finalize_job_failure(
     job: ImportJob,
     worker_id: str,
     error_classification: str,
-    error_code: ConnectionErrorCode,
+    error_code: Union[ConnectionErrorCode, str],
     next_cursor: Optional[str] = None,
     retry_after_seconds: Optional[int] = None,
     now: Optional[datetime] = None,
@@ -915,6 +1084,7 @@ def finalize_job_failure(
     """Schedule exponential-backoff retry for transient errors or fail permanently + alert user."""
     current = _as_utc(now) or utc_now()
     safe_cursor = sanitize_cursor(next_cursor)
+    err_str = _error_code_str(error_code) or ConnectionErrorCode.SYNC_FAILED.value
     is_permanent = error_classification == "permanent" or job.attempt_count >= job.max_attempts
 
     if not is_permanent:
@@ -937,14 +1107,15 @@ def finalize_job_failure(
                 cursor=safe_cursor if safe_cursor is not None else job.cursor,
                 lease_owner=None,
                 lease_expires_at=None,
-                last_error_code=error_code.value,
+                last_error_code=err_str,
                 next_retry_at=retry_at,
                 updated_at=current,
             )
         )
         if (res.rowcount or 0) == 1:
-            if error_code == ConnectionErrorCode.RATE_LIMITED or (
-                retry_after_seconds is not None and retry_after_seconds > 0
+            if (
+                error_code == ConnectionErrorCode.RATE_LIMITED
+                or (retry_after_seconds is not None and retry_after_seconds > 0)
             ):
                 cooldown_secs = retry_after_seconds if retry_after_seconds else delay_seconds
                 _set_provider_cooldown(
@@ -953,13 +1124,14 @@ def finalize_job_failure(
                     cooldown_until=current + timedelta(seconds=max(1, cooldown_secs)),
                     now=current,
                 )
-            conn = session.get(ExternalReceiptConnection, job.connection_id)
-            if conn is not None and conn.status != ConnectionStatus.DISCONNECTED:
-                conn.status = ConnectionStatus.SYNC_ERROR
-                conn.last_error_code = error_code.value
-                conn.next_sync_at = retry_at
-                conn.updated_at = current
-                session.add(conn)
+            if job.connection_id is not None:
+                conn = session.get(ExternalReceiptConnection, job.connection_id)
+                if conn is not None and conn.status != ConnectionStatus.DISCONNECTED:
+                    conn.status = ConnectionStatus.SYNC_ERROR
+                    conn.last_error_code = err_str
+                    conn.next_sync_at = retry_at
+                    conn.updated_at = current
+                    session.add(conn)
             session.commit()
             session.refresh(job)
             _log_job_event(logging.WARNING, "job_retry_scheduled", job=job, worker_id=worker_id)
@@ -980,33 +1152,42 @@ def finalize_job_failure(
             cursor=safe_cursor if safe_cursor is not None else job.cursor,
             lease_owner=None,
             lease_expires_at=None,
-            last_error_code=error_code.value,
+            last_error_code=err_str,
             completed_at=current,
             updated_at=current,
         )
     )
     if (res.rowcount or 0) == 1:
-        conn = session.get(ExternalReceiptConnection, job.connection_id)
-        if conn is not None:
-            if conn.status != ConnectionStatus.DISCONNECTED:
+        if job.connection_id is not None:
+            conn = session.get(ExternalReceiptConnection, job.connection_id)
+            if conn is not None and conn.status != ConnectionStatus.DISCONNECTED:
                 reauth_codes = {
-                    ConnectionErrorCode.AUTH_EXPIRED,
-                    ConnectionErrorCode.REAUTH_REQUIRED,
-                    ConnectionErrorCode.MFA_REQUIRED,
-                    ConnectionErrorCode.ENCRYPTION_KEY_MISSING,
-                    ConnectionErrorCode.TOKEN_DECRYPTION_FAILED,
+                    ConnectionErrorCode.AUTH_EXPIRED.value,
+                    ConnectionErrorCode.REAUTH_REQUIRED.value,
+                    ConnectionErrorCode.MFA_REQUIRED.value,
+                    ConnectionErrorCode.ENCRYPTION_KEY_MISSING.value,
+                    ConnectionErrorCode.TOKEN_DECRYPTION_FAILED.value,
                 }
                 conn.status = (
                     ConnectionStatus.REAUTH_REQUIRED
-                    if error_code in reauth_codes
+                    if err_str in reauth_codes
                     else ConnectionStatus.SYNC_ERROR
                 )
-                conn.last_error_code = error_code.value
+                conn.last_error_code = err_str
                 conn.next_sync_at = None
                 conn.sync_requested_at = None
                 conn.updated_at = current
                 session.add(conn)
-                _create_connection_alert(session, conn=conn, error_code=error_code, now=current)
+                if isinstance(error_code, ConnectionErrorCode):
+                    _create_connection_alert(session, conn=conn, error_code=error_code, now=current)
+        if job.job_type == DOCUMENT_JOB_TYPE and job.receipt_scan_id is not None:
+            scan = session.get(ReceiptScan, job.receipt_scan_id)
+            if scan is not None:
+                scan.status = ScanStatus.FAILED
+                scan.needs_review = True
+                if not scan.error_message:
+                    scan.error_message = err_str
+                session.add(scan)
         session.commit()
         session.refresh(job)
         _log_job_event(logging.ERROR, "job_failed_permanently", job=job, worker_id=worker_id)
@@ -1025,20 +1206,77 @@ def _default_sync_executor(
     return ConnectionService.execute_connection_sync(session, conn, job=job)
 
 
+def _default_document_executor(
+    session: Session,
+    job: ImportJob,
+) -> SyncExecutionOutcome:
+    from app.api import execute_document_ingest_job
+
+    return execute_document_ingest_job(session, job)
+
+
 def process_claimed_job(
     session: Session,
     job: ImportJob,
     *,
     worker_id: str,
     sync_executor: Optional[SyncExecutorFn] = None,
+    document_executor: Optional[DocumentExecutorFn] = None,
     now: Optional[datetime] = None,
     provider_policies: Optional[dict[str, ProviderRatePolicy]] = None,
     base_backoff_seconds: Optional[int] = None,
     max_backoff_seconds: Optional[int] = None,
+    role: Optional[str] = None,
 ) -> ImportJob:
-    """Execute one already-leased job and transition queue + connection state."""
+    """Execute one already-leased job and transition queue + connection/document state."""
     current = _as_utc(now) or utc_now()
-    conn = session.get(ExternalReceiptConnection, job.connection_id)
+
+    if job.job_type == DOCUMENT_JOB_TYPE:
+        doc_executor = document_executor or _default_document_executor
+        try:
+            outcome = doc_executor(session, job)
+        except Exception:
+            session.rollback()
+            return finalize_job_failure(
+                session,
+                job=job,
+                worker_id=worker_id,
+                error_classification="transient",
+                error_code="OCR_TRANSIENT_ERROR",
+                now=current,
+                base_backoff_seconds=base_backoff_seconds,
+                max_backoff_seconds=max_backoff_seconds,
+            )
+
+        if outcome.error_classification is None:
+            return finalize_job_success(
+                session,
+                job=job,
+                worker_id=worker_id,
+                outcome=outcome,
+                now=now,
+                provider_policies=provider_policies,
+            )
+
+        return finalize_job_failure(
+            session,
+            job=job,
+            worker_id=worker_id,
+            error_classification=outcome.error_classification,
+            error_code=outcome.error_code or "DOCUMENT_INGEST_FAILED",
+            next_cursor=outcome.next_cursor,
+            retry_after_seconds=outcome.retry_after_seconds,
+            now=now,
+            base_backoff_seconds=base_backoff_seconds,
+            max_backoff_seconds=max_backoff_seconds,
+        )
+
+    assert_trusted_worker_environment(role)
+    conn = (
+        session.get(ExternalReceiptConnection, job.connection_id)
+        if job.connection_id is not None
+        else None
+    )
     if conn is None or conn.status == ConnectionStatus.DISCONNECTED:
         return finalize_job_failure(
             session,
@@ -1132,6 +1370,8 @@ class ImportWorker:
         per_connection_concurrency: int = 1,
         provider_policies: Optional[dict[str, ProviderRatePolicy]] = None,
         sync_executor: Optional[SyncExecutorFn] = None,
+        document_executor: Optional[DocumentExecutorFn] = None,
+        allowed_job_types: Optional[Sequence[str]] = None,
         role: Optional[str] = None,
         heartbeat_interval_seconds: Optional[float] = None,
     ) -> None:
@@ -1148,13 +1388,29 @@ class ImportWorker:
         self.per_connection_concurrency = per_connection_concurrency
         self.provider_policies = provider_policies
         self.sync_executor = sync_executor
+        self.document_executor = document_executor
+        self.allowed_job_types = tuple(allowed_job_types) if allowed_job_types is not None else None
         self.role = role
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.shutdown_event = asyncio.Event()
+        self.wakeup_event = asyncio.Event()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._in_flight_job_id: Optional[int] = None
+
+    def _allows_connection_sync(self) -> bool:
+        return self.allowed_job_types is None or DEFAULT_JOB_TYPE in self.allowed_job_types
 
     def request_shutdown(self) -> None:
         self.shutdown_event.set()
+        self.wake()
+
+    def wake(self) -> None:
+        loop = self._loop
+        if loop is not None and not loop.is_closed():
+            with suppress(RuntimeError):
+                loop.call_soon_threadsafe(self.wakeup_event.set)
+        else:
+            self.wakeup_event.set()
 
     def _can_run_background_heartbeat(self, session: Session) -> bool:
         if self.lease_seconds <= 0:
@@ -1202,12 +1458,15 @@ class ImportWorker:
 
     def run_once(self, *, now: Optional[datetime] = None) -> Optional[ImportJob]:
         """Claim and execute at most one due job synchronously."""
-        assert_trusted_worker_environment(self.role)
+        allows_sync = self._allows_connection_sync()
+        if allows_sync:
+            assert_trusted_worker_environment(self.role)
         if self.shutdown_event.is_set():
             return None
 
         with self._session_factory() as session:
-            schedule_due_connections(session, now=now, commit=True)
+            if allows_sync:
+                schedule_due_connections(session, now=now, commit=True)
             job = claim_next_job(
                 session,
                 worker_id=self.worker_id,
@@ -1215,6 +1474,7 @@ class ImportWorker:
                 now=now,
                 per_connection_concurrency=self.per_connection_concurrency,
                 provider_policies=self.provider_policies,
+                allowed_job_types=self.allowed_job_types,
             )
             if job is None or job.id is None:
                 return None
@@ -1230,8 +1490,10 @@ class ImportWorker:
                     job,
                     worker_id=self.worker_id,
                     sync_executor=self.sync_executor,
+                    document_executor=self.document_executor,
                     now=now,
                     provider_policies=self.provider_policies,
+                    role=self.role,
                 )
             finally:
                 if hb_stop is not None:
@@ -1257,14 +1519,18 @@ class ImportWorker:
 
     async def run_forever(self, *, install_signals: bool = False) -> None:
         """Run polling + processing loop until shutdown_event is triggered or cancelled."""
-        assert_trusted_worker_environment(self.role)
+        if self._allows_connection_sync():
+            assert_trusted_worker_environment(self.role)
         if install_signals:
             self.install_signal_handlers()
 
+        self._loop = asyncio.get_running_loop()
+        register_active_worker(self)
         logger.info("import_worker event=worker_started worker_id=%s", self.worker_id)
         was_cancelled = False
         try:
             while not self.shutdown_event.is_set():
+                self.wakeup_event.clear()
                 try:
                     processed = await asyncio.to_thread(self.run_once)
                 except asyncio.CancelledError:
@@ -1279,16 +1545,31 @@ class ImportWorker:
                     await asyncio.sleep(0)
                     continue
 
-                with suppress(asyncio.TimeoutError):
-                    await asyncio.wait_for(
-                        self.shutdown_event.wait(),
+                shutdown_waiter = asyncio.create_task(self.shutdown_event.wait())
+                wake_waiter = asyncio.create_task(self.wakeup_event.wait())
+                try:
+                    _, pending = await asyncio.wait(
+                        {shutdown_waiter, wake_waiter},
                         timeout=max(0.05, self.poll_interval_seconds),
+                        return_when=asyncio.FIRST_COMPLETED,
                     )
+                    for task in pending:
+                        task.cancel()
+                        with suppress(asyncio.CancelledError):
+                            await task
+                finally:
+                    for waiter in (shutdown_waiter, wake_waiter):
+                        if not waiter.done():
+                            waiter.cancel()
+                            with suppress(asyncio.CancelledError):
+                                await waiter
         except asyncio.CancelledError:
             was_cancelled = True
             self.request_shutdown()
             raise
         finally:
+            register_active_worker(None)
+            self._loop = None
             released = await asyncio.to_thread(self.release_active_leases)
             logger.info(
                 "import_worker event=%s worker_id=%s released_leases=%d",
