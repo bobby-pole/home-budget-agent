@@ -83,18 +83,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.getLogger(__name__).error("Failed to seed baseline demo environment on startup: %s", e)
     cleanup_task = asyncio.create_task(_periodic_demo_cleanup())
-    from .import_scheduler import ImportWorker, is_trusted_worker_environment
+    from .import_scheduler import (
+        DEFAULT_JOB_TYPE,
+        DOCUMENT_JOB_TYPE,
+        ImportWorker,
+        is_trusted_worker_environment,
+    )
 
     import_worker: ImportWorker | None = None
     import_worker_task: asyncio.Task[None] | None = None
-    if settings.is_import_worker_enabled() and is_trusted_worker_environment():
-        import_worker = ImportWorker(lambda: Session(operations_engine))
-        import_worker_task = asyncio.create_task(import_worker.run_forever())
-    elif settings.is_import_worker_enabled():
-        logging.getLogger(__name__).info(
-            "Merchant import worker disabled under IMPORT_WORKER_ROLE=%s.",
-            settings.IMPORT_WORKER_ROLE,
+    if settings.is_import_worker_enabled():
+        trusted = is_trusted_worker_environment()
+        allowed_types = (
+            (DEFAULT_JOB_TYPE, DOCUMENT_JOB_TYPE) if trusted else (DOCUMENT_JOB_TYPE,)
         )
+        if not trusted:
+            logging.getLogger(__name__).info(
+                "Merchant connection sync disabled under IMPORT_WORKER_ROLE=%s; document_ingest worker active.",
+                settings.IMPORT_WORKER_ROLE,
+            )
+        import_worker = ImportWorker(
+            lambda: Session(operations_engine),
+            allowed_job_types=allowed_types,
+        )
+        import_worker_task = asyncio.create_task(import_worker.run_forever())
 
     yield
     cleanup_task.cancel()

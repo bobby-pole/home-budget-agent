@@ -582,7 +582,7 @@ def test_scan_transaction_race_condition_returns_409_without_orphans(
     monkeypatch.setattr(app_api, "UPLOAD_DIR", str(tmp_path))
     monkeypatch.setattr(app_api, "process_transaction_in_background", lambda *a, **kw: None)
 
-    img_bytes = b"fake-jpeg-race-bytes"
+    img_bytes = b"\xff\xd8\xff\xe0fake-jpeg-race-bytes"
     first = client.post(
         "/api/transactions/scan",
         files={"file": ("race.jpg", io.BytesIO(img_bytes), "image/jpeg")},

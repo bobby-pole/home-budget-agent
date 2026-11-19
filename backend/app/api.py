@@ -2,15 +2,13 @@
 import asyncio
 import copy
 import logging
-import shutil
 import os
-import hashlib
 import re
 import time
 from uuid import uuid4
 from datetime import datetime, timezone
 from decimal import Decimal
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks, Path, Header, Query
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, Path, Header, Query
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete, SQLModel
 from sqlalchemy import extract, func, or_, and_
@@ -33,7 +31,8 @@ from .models import (
     ExternalReceiptConnection,
     ExternalReceiptConnectionRead, ExternalReceiptConnectionCreate,
     ConnectionSettingsUpdate,
-    ImportJob,
+    ImportJob, ImportJobRead, ImportJobStatus,
+    BatchUploadItemResult, BatchDocumentUploadResponse,
     ConnectionSyncNowResponse, ConnectionDisconnectResponse,
     ConnectionOAuthStartResponse, ConnectionOAuthCallbackRequest, ConnectionToggleRequest,
     ReconciliationActionResponse, ReconciliationListResponse, ReconciliationStatus,
@@ -59,8 +58,23 @@ from .inbox_service import (
     promote_transaction_to_approved,
     reject_transaction_preserving_provenance,
     restore_inbox_item,
+    serialize_import_job_read,
     serialize_transaction_read,
     serialize_transactions_read,
+)
+from .import_scheduler import (
+    DOCUMENT_JOB_TYPE,
+    SyncExecutionOutcome,
+    enqueue_document_ingest_job,
+    wake_import_worker,
+)
+from .upload_security import (
+    UploadRateLimitError,
+    UploadValidationError,
+    check_upload_rate_limit,
+    read_upload_bounded,
+    sanitize_filename,
+    validate_uploaded_document,
 )
 from .ingestion_service import (
     apply_receipt_result_to_existing_scan,
@@ -535,118 +549,225 @@ def _set_scan_status(
             s.commit()
 
 
-async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> None:
-    _set_scan_status(scan_id, ScanStatus.RUNNING)
+def _run_document_scan_on_session(
+    session: Session,
+    *,
+    scan_id: int,
+    transaction_id: int,
+    image_path: str,
+    auto_merge_policy: str = AutoMergePolicy.AUTO.value,
+    keep_pending_on_empty_ocr: bool = False,
+) -> tuple[ScanStatus, Optional[str]]:
+    """Execute OCR/adapter extraction + ingestion on an existing SQLModel session."""
+    scan_initial = session.get(ReceiptScan, scan_id)
+    if scan_initial:
+        scan_initial.status = ScanStatus.RUNNING
+        session.add(scan_initial)
+        session.commit()
     logger.info("OCR job started", extra={"scan_id": scan_id, "transaction_id": transaction_id})
 
-    with Session(operations_engine) as session:
-        transaction = session.get(Transaction, transaction_id)
-        scan = session.get(ReceiptScan, scan_id)
+    transaction = session.get(Transaction, transaction_id)
+    scan = session.get(ReceiptScan, scan_id)
 
-        if not transaction or not scan:
-            logger.error("Transaction or ReceiptScan not found", extra={"scan_id": scan_id})
-            _set_scan_status(scan_id, ScanStatus.FAILED, error_message="record not found")
-            return
+    if not transaction or not scan:
+        logger.error("Transaction or ReceiptScan not found", extra={"scan_id": scan_id})
+        if scan:
+            scan.status = ScanStatus.FAILED
+            scan.error_message = "record not found"
+            scan.needs_review = True
+            update_scan_source_metadata(session, receipt_scan_id=scan_id, quality="0.00")
+            session.add(scan)
+            session.commit()
+        return ScanStatus.FAILED, "RECORD_NOT_FOUND"
 
-        db_categories = (
-            get_budget_categories(session, transaction.budget_id)
-            if transaction.budget_id is not None
-            else []
+    db_categories = (
+        get_budget_categories(session, transaction.budget_id)
+        if transaction.budget_id is not None
+        else []
+    )
+    cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
+
+    stage_start = time.monotonic()
+    is_sample_biedronka = bool(scan.content_hash and "sample_biedronka" in scan.content_hash)
+    is_sample_lidl = bool(scan.content_hash and "sample_lidl" in scan.content_hash)
+
+    data = AIService.parse_receipt(
+        image_path,
+        categories=cat_dicts,
+        user_id=transaction.uploaded_by,
+    )
+
+    if not data and (is_sample_biedronka or is_sample_lidl):
+        logger.warning(
+            "Real OCR pipeline returned no data for sample receipt; falling back to curated sample data",
+            extra={"scan_id": scan_id},
         )
-        cat_dicts = [{"id": c.id, "name": c.name} for c in db_categories]
+        if is_sample_biedronka:
+            data = copy.deepcopy(SAMPLE_BIEDRONKA_DATA)
+        else:
+            data = copy.deepcopy(SAMPLE_LIDL_DATA)
+    logger.info(
+        "OCR completed",
+        extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+    )
 
-        stage_start = time.monotonic()
-        is_sample_biedronka = bool(scan.content_hash and "sample_biedronka" in scan.content_hash)
-        is_sample_lidl = bool(scan.content_hash and "sample_lidl" in scan.content_hash)
+    if not data:
+        logger.error("OCR pipeline returned no data", extra={"scan_id": scan_id})
+        if not keep_pending_on_empty_ocr:
+            scan.status = ScanStatus.FAILED
+            scan.error_message = "pipeline returned no data"
+            scan.needs_review = True
+            update_scan_source_metadata(session, receipt_scan_id=scan_id, quality="0.00")
+            session.add(scan)
+            session.commit()
+        return ScanStatus.FAILED, "OCR_NO_DATA"
 
-        # Real OCR pipeline: always parse via AIService for both custom uploads and sample receipts
-        data = await asyncio.get_running_loop().run_in_executor(
-            None, lambda: AIService.parse_receipt(image_path, categories=cat_dicts, user_id=transaction.uploaded_by)
-        )
+    scan.status = ScanStatus.OCR_OK
+    session.add(scan)
+    session.commit()
 
-        # Resilient fallback ONLY for sample receipts if real pipeline returned no data
-        # (e.g. offline unit testing or CI without Vision / OpenAI credentials)
-        if not data and (is_sample_biedronka or is_sample_lidl):
-            logger.warning(
-                "Real OCR pipeline returned no data for sample receipt; falling back to curated sample data",
-                extra={"scan_id": scan_id},
+    stage_start = time.monotonic()
+    scan2 = session.get(ReceiptScan, scan_id)
+    if not scan2:
+        return ScanStatus.FAILED, "RECORD_NOT_FOUND"
+
+    is_eparagon_scan = (
+        any(sr.source_type == SourceType.E_RECEIPT for sr in (scan2.source_records or []))
+        or data.get("_processed_via")
+        in ("eparagon_json_adapter", "biedronka_json_parser", "zabka_json_parser")
+    )
+    adapter_result = OcrPipelineReceiptAdapter.from_pipeline_output(
+        data,
+        file_hash=scan2.content_hash,
+        raw_payload_policy=(
+            RawPayloadPolicy.CANONICAL_ONLY
+            if is_eparagon_scan
+            else RawPayloadPolicy.EPHEMERAL_IMAGE
+        ),
+    )
+    if is_eparagon_scan and os.path.exists(image_path):
+        try:
+            with open(image_path, "rb") as ep_file:
+                ep_bytes = ep_file.read()
+            ep_result = EParagonReceiptAdapter().extract(
+                ep_bytes,
+                budget_id=transaction.budget_id or 0,
+                raw_payload_policy=RawPayloadPolicy.CANONICAL_ONLY,
             )
-            if is_sample_biedronka:
-                data = copy.deepcopy(SAMPLE_BIEDRONKA_DATA)
-            else:
-                data = copy.deepcopy(SAMPLE_LIDL_DATA)
-        logger.info(
-            "OCR completed",
-            extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+            adapter_result.warnings = list(
+                dict.fromkeys([*ep_result.warnings, *adapter_result.warnings])
+            )
+            adapter_result.quality = min(adapter_result.quality, ep_result.quality)
+        except AdapterContractError as ep_err:
+            logger.warning(
+                "EParagonReceiptAdapter metadata check failed",
+                extra={"scan_id": scan_id, "error": str(ep_err)},
+            )
+    uploader_is_demo = is_demo_user(transaction.uploader) if transaction.uploader else settings.DEMO_MODE
+    final_status = apply_receipt_result_to_existing_scan(
+        session,
+        scan=scan2,
+        transaction=transaction,
+        result=adapter_result,
+        db_categories=db_categories,
+        is_demo_uploader=settings.DEMO_MODE or uploader_is_demo,
+        auto_merge_policy=auto_merge_policy,
+    )
+    if final_status == ScanStatus.FAILED:
+        logger.warning(
+            "Validation failed on empty receipt",
+            extra={"scan_id": scan_id, "validation_message": adapter_result.validation_message},
+        )
+        return ScanStatus.FAILED, (scan2.validation_message or "RECEIPT_EMPTY")
+
+    logger.info(
+        "Categorization stage completed",
+        extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+    )
+    if scan2.needs_review:
+        logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
+    else:
+        logger.info("OCR job finished — CATEGORIZATION_OK", extra={"scan_id": scan_id, "transaction_id": transaction_id})
+    return final_status, None
+
+
+def execute_document_ingest_job(session: Session, job: ImportJob) -> SyncExecutionOutcome:
+    """Durable worker entry point for `document_ingest` jobs (#213)."""
+    if job.transaction_id is None or job.receipt_scan_id is None:
+        return SyncExecutionOutcome(
+            failed_count=1,
+            error_classification="permanent",
+            error_code="INVALID_DOCUMENT_JOB",
         )
 
-        if not data:
-            logger.error("OCR pipeline returned no data", extra={"scan_id": scan_id})
-            _set_scan_status(scan_id, ScanStatus.FAILED, error_message="pipeline returned no data")
-            return
-
-        _set_scan_status(scan_id, ScanStatus.OCR_OK)
-
-        stage_start = time.monotonic()
-        scan2 = session.get(ReceiptScan, scan_id)
-        if not scan2:
-            return
-
-        is_eparagon_scan = (
-            any(sr.source_type == SourceType.E_RECEIPT for sr in (scan2.source_records or []))
-            or data.get("_processed_via")
-            in ("eparagon_json_adapter", "biedronka_json_parser", "zabka_json_parser")
+    scan = session.get(ReceiptScan, job.receipt_scan_id)
+    tx = session.get(Transaction, job.transaction_id)
+    if scan is None or tx is None or not scan.image_path:
+        return SyncExecutionOutcome(
+            failed_count=1,
+            error_classification="permanent",
+            error_code="FILE_NOT_FOUND",
         )
-        adapter_result = OcrPipelineReceiptAdapter.from_pipeline_output(
-            data,
-            file_hash=scan2.content_hash,
-            raw_payload_policy=(
-                RawPayloadPolicy.CANONICAL_ONLY
-                if is_eparagon_scan
-                else RawPayloadPolicy.EPHEMERAL_IMAGE
-            ),
+    if tx.review_status == ReviewStatus.REJECTED:
+        return SyncExecutionOutcome(skipped_count=1)
+
+    if not os.path.exists(scan.image_path):
+        return SyncExecutionOutcome(
+            failed_count=1,
+            error_classification="permanent",
+            error_code="FILE_NOT_FOUND",
         )
-        if is_eparagon_scan and os.path.exists(image_path):
-            try:
-                with open(image_path, "rb") as ep_file:
-                    ep_bytes = ep_file.read()
-                ep_result = EParagonReceiptAdapter().extract(
-                    ep_bytes,
-                    budget_id=transaction.budget_id or 0,
-                    raw_payload_policy=RawPayloadPolicy.CANONICAL_ONLY,
-                )
-                adapter_result.warnings = list(
-                    dict.fromkeys([*ep_result.warnings, *adapter_result.warnings])
-                )
-                adapter_result.quality = min(adapter_result.quality, ep_result.quality)
-            except AdapterContractError as ep_err:
-                logger.warning(
-                    "EParagonReceiptAdapter metadata check failed",
-                    extra={"scan_id": scan_id, "error": str(ep_err)},
-                )
-        uploader_is_demo = is_demo_user(transaction.uploader) if transaction.uploader else settings.DEMO_MODE
-        final_status = apply_receipt_result_to_existing_scan(
+
+    auto_merge_policy = (
+        AutoMergePolicy.MANUAL.value
+        if job.cursor == "merge:manual"
+        else AutoMergePolicy.AUTO.value
+    )
+
+    try:
+        final_status, failure_code = _run_document_scan_on_session(
             session,
-            scan=scan2,
-            transaction=transaction,
-            result=adapter_result,
-            db_categories=db_categories,
-            is_demo_uploader=settings.DEMO_MODE or uploader_is_demo,
+            scan_id=job.receipt_scan_id,
+            transaction_id=job.transaction_id,
+            image_path=scan.image_path,
+            auto_merge_policy=auto_merge_policy,
+            keep_pending_on_empty_ocr=True,
         )
-        if final_status == ScanStatus.FAILED:
-            logger.warning(
-                "Validation failed on empty receipt",
-                extra={"scan_id": scan_id, "validation_message": adapter_result.validation_message},
+    except (TimeoutError, ConnectionError, OSError):
+        session.rollback()
+        return SyncExecutionOutcome(
+            failed_count=1,
+            error_classification="transient",
+            error_code="OCR_TRANSIENT_ERROR",
+        )
+
+    if final_status == ScanStatus.FAILED:
+        if failure_code == "OCR_NO_DATA":
+            return SyncExecutionOutcome(
+                failed_count=1,
+                error_classification="transient",
+                error_code="OCR_NO_DATA",
             )
-        else:
-            logger.info(
-                "Categorization stage completed",
-                extra={"scan_id": scan_id, "duration_ms": int((time.monotonic() - stage_start) * 1000)},
+        return SyncExecutionOutcome(
+            failed_count=1,
+            error_classification="permanent",
+            error_code=failure_code or "RECEIPT_EMPTY",
+        )
+
+    return SyncExecutionOutcome(imported_count=1)
+
+
+async def _process_scan(scan_id: int, transaction_id: int, image_path: str) -> None:
+    def _sync_exec() -> None:
+        with Session(operations_engine) as session:
+            _run_document_scan_on_session(
+                session,
+                scan_id=scan_id,
+                transaction_id=transaction_id,
+                image_path=image_path,
             )
-        if scan2.needs_review:
-            logger.info("OCR job finished — NEEDS_REVIEW", extra={"scan_id": scan_id, "transaction_id": transaction_id})
-        else:
-            logger.info("OCR job finished — CATEGORIZATION_OK", extra={"scan_id": scan_id, "transaction_id": transaction_id})
+
+    await asyncio.get_running_loop().run_in_executor(None, _sync_exec)
 
 
 async def _run_with_semaphore(scan_id: int, transaction_id: int, image_path: str) -> None:
@@ -861,75 +982,61 @@ def delete_transfer(
     return None
 
 
-@router.post("/transactions/scan", response_model=TransactionRead)
-async def scan_transaction(
-    background_tasks: BackgroundTasks,
+def _cleanup_uploaded_file(file_path: str) -> None:
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+
+def _ingest_single_document_upload(
+    *,
+    session: Session,
+    current_user: User,
+    current_budget: Budget,
+    filename: Optional[str],
+    content_type: Optional[str],
+    file_bytes: bytes,
     force: bool = False,
-    note: Optional[str] = Form(None),
-    file: UploadFile = File(...),
-    session: Session = Depends(get_ops_session),
-    current_user: User = Depends(get_current_user),
-    current_budget: Budget = Depends(get_current_budget),
-):
-    if not current_budget or current_budget.id is None:
+    note: Optional[str] = None,
+    account_id: Optional[int] = None,
+    auto_merge_policy: AutoMergePolicy = AutoMergePolicy.AUTO,
+    import_batch_id: Optional[str] = None,
+) -> tuple[Transaction, ReceiptScan, ImportJob]:
+    """Validate (#122), rate-limit (#121), persist, and enqueue a durable document job."""
+    if current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
 
-    file_content = await file.read()
-    await file.seek(0)
+    user_is_demo = is_demo_user(current_user)
+    check_upload_rate_limit(
+        session,
+        user=current_user,
+        budget_id=current_budget.id,
+        is_demo=user_is_demo,
+    )
 
-    if is_demo_user(current_user):
-        # 1. Quota check: max 5 custom scans today (persistent + legacy fallback)
-        start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        custom_logs_used = session.exec(
-            select(func.count(col(ScanUsageLog.id))).where(
-                col(ScanUsageLog.user_id) == current_user.id,
-                col(ScanUsageLog.scan_type) == "custom",
-                col(ScanUsageLog.created_at) >= start_of_day,
-            )
-        ).one()
-        legacy_custom_used = session.exec(
-            select(func.count(col(ReceiptScan.id)))
-            .join(Transaction, col(ReceiptScan.transaction_id) == col(Transaction.id))
-            .where(
-                col(Transaction.uploaded_by) == current_user.id,
-                col(ReceiptScan.created_at) >= start_of_day,
-                col(ReceiptScan.status) != ScanStatus.FAILED.value,
-                ~col(ReceiptScan.content_hash).startswith("sample_"),
-            )
-        ).one()
-        daily_scans_used = max(custom_logs_used, legacy_custom_used)
-        if daily_scans_used >= 5:
-            raise HTTPException(
-                status_code=429,
-                detail="Dzienny limit 5 skanów demonstracyjnych został wyczerpany. Spróbuj ponownie jutro lub przetestuj wzorcowe paragony demo.",
-            )
-
-        # 2. File size check (max 5 MB)
-        if len(file_content) > 5 * 1024 * 1024:
-            raise HTTPException(
-                status_code=400,
-                detail="Plik przekracza maksymalny rozmiar 5 MB dla wersji demonstracyjnej.",
-            )
-
-        # 3. MIME type check
-        allowed_types = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
-        if file.content_type and file.content_type.lower() not in allowed_types:
-            raise HTTPException(
-                status_code=400,
-                detail="Nieobsługiwany format pliku. Dozwolone formaty: JPG, PNG, WebP, PDF.",
-            )
-
-    file_hash = hashlib.sha256(file_content).hexdigest()
-    filename = file.filename or "upload.jpg"
-    detected_source = ReceiptSourceDetector.detect(
+    validated = validate_uploaded_document(
         filename=filename,
-        content_type=file.content_type,
-        file_bytes=file_content,
+        content_type=content_type,
+        file_bytes=file_bytes,
+        is_demo=user_is_demo,
+    )
+
+    if account_id is not None:
+        validate_transaction_accounts(session, current_budget.id, account_id, None)
+
+    file_hash = validated.file_hash
+    safe_name = validated.filename
+    detected_source = ReceiptSourceDetector.detect(
+        filename=safe_name,
+        content_type=validated.content_type,
+        file_bytes=file_bytes,
     )
     if detected_source == ReceiptSource.EPARAGON:
         src_type = SourceType.E_RECEIPT
         src_provider = "eparagon_json"
-        src_external_id = extract_eparagon_external_id(file_content)
+        src_external_id = extract_eparagon_external_id(file_bytes)
         src_adapter_version = "eparagon_v1"
         src_quality = "1.00"
         src_policy = RawPayloadPolicy.CANONICAL_ONLY
@@ -959,97 +1066,274 @@ async def scan_transaction(
             detail="Duplicate receipt detected. Use force=true to upload anyway.",
         )
 
-    file_extension = filename.split(".")[-1]
-    unique_filename = f"{uuid4()}.{file_extension}"
+    unique_filename = f"{uuid4()}.{validated.safe_extension}"
     file_path = f"{UPLOAD_DIR}/{unique_filename}"
 
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(file_bytes)
 
     allow_unique_keys = not (force and existing_provenance is not None)
     new_transaction: Optional[Transaction] = None
     scan: Optional[ReceiptScan] = None
+    doc_job: Optional[ImportJob] = None
 
-    for attempt in range(2):
-        try:
-            with session.begin_nested():
-                candidate_tx = Transaction(
-                    merchant_name="Processing...",
-                    uploaded_by=current_user.id,
-                    budget_id=current_budget.id,
-                    note=note,
-                    review_status=ReviewStatus.PENDING,
-                )
-                session.add(candidate_tx)
-                session.flush()
-                if candidate_tx.id is None:
-                    raise HTTPException(status_code=500, detail="Failed to create transaction")
+    try:
+        for attempt in range(2):
+            try:
+                with session.begin_nested():
+                    candidate_tx = Transaction(
+                        merchant_name="Processing...",
+                        uploaded_by=current_user.id,
+                        budget_id=current_budget.id,
+                        account_id=account_id,
+                        note=note,
+                        import_batch_id=import_batch_id,
+                        review_status=ReviewStatus.PENDING,
+                    )
+                    session.add(candidate_tx)
+                    session.flush()
+                    if candidate_tx.id is None:
+                        raise HTTPException(status_code=500, detail="Failed to create transaction")
 
-                candidate_scan = ReceiptScan(
-                    transaction_id=candidate_tx.id,
-                    image_path=file_path,
-                    status=ScanStatus.QUEUED,
-                    content_hash=file_hash,
-                    # keep_image defaults to False; final decision is made by user at verify time
-                )
-                session.add(candidate_scan)
-                if is_demo_user(current_user) and current_user.id is not None:
-                    session.add(ScanUsageLog(user_id=current_user.id, scan_type="custom"))
-                session.flush()
-                if candidate_scan.id is None:
-                    raise HTTPException(status_code=500, detail="Failed to create receipt scan")
+                    candidate_scan = ReceiptScan(
+                        transaction_id=candidate_tx.id,
+                        image_path=file_path,
+                        status=ScanStatus.QUEUED,
+                        content_hash=file_hash,
+                    )
+                    session.add(candidate_scan)
+                    if user_is_demo and current_user.id is not None:
+                        session.add(ScanUsageLog(user_id=current_user.id, scan_type="custom"))
+                    session.flush()
+                    if candidate_scan.id is None:
+                        raise HTTPException(status_code=500, detail="Failed to create receipt scan")
 
-                session.add(
-                    build_source_record(
+                    session.add(
+                        build_source_record(
+                            budget_id=current_budget.id,
+                            transaction_id=candidate_tx.id,
+                            receipt_scan_id=candidate_scan.id,
+                            source_type=src_type,
+                            provider=src_provider,
+                            external_id=src_external_id if allow_unique_keys else None,
+                            canonical_hash=file_hash if allow_unique_keys else None,
+                            adapter_version=src_adapter_version,
+                            quality=src_quality,
+                            raw_payload_policy=src_policy,
+                        )
+                    )
+                    candidate_job = enqueue_document_ingest_job(
+                        session,
                         budget_id=current_budget.id,
                         transaction_id=candidate_tx.id,
                         receipt_scan_id=candidate_scan.id,
-                        source_type=src_type,
                         provider=src_provider,
-                        external_id=src_external_id if allow_unique_keys else None,
-                        canonical_hash=file_hash if allow_unique_keys else None,
-                        adapter_version=src_adapter_version,
-                        quality=src_quality,
-                        raw_payload_policy=src_policy,
+                        import_batch_id=import_batch_id,
+                        source_filename=safe_name,
+                        cursor=f"merge:{auto_merge_policy.value}",
+                        commit=False,
                     )
+                    session.flush()
+                    new_transaction = candidate_tx
+                    scan = candidate_scan
+                    doc_job = candidate_job
+                break
+            except IntegrityError:
+                raced = find_existing_source_record(
+                    session,
+                    budget_id=current_budget.id,
+                    provider=src_provider,
+                    external_id=src_external_id,
+                    canonical_hash=file_hash,
                 )
-                session.flush()
-                new_transaction = candidate_tx
-                scan = candidate_scan
-            break
-        except IntegrityError:
-            raced = find_existing_source_record(
-                session,
-                budget_id=current_budget.id,
-                provider=src_provider,
-                external_id=src_external_id,
-                canonical_hash=file_hash,
-            )
-            if raced is not None and not force:
-                if os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                    except OSError:
-                        pass
-                raise HTTPException(
-                    status_code=409,
-                    detail="Duplicate receipt detected. Use force=true to upload anyway.",
-                )
-            if force and allow_unique_keys and attempt == 0:
-                allow_unique_keys = False
-                continue
-            raise
+                if raced is not None and not force:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Duplicate receipt detected. Use force=true to upload anyway.",
+                    )
+                if force and allow_unique_keys and attempt == 0:
+                    allow_unique_keys = False
+                    continue
+                raise
+    except Exception:
+        _cleanup_uploaded_file(file_path)
+        raise
 
-    if new_transaction is None or new_transaction.id is None or scan is None or scan.id is None:
+    if new_transaction is None or scan is None or doc_job is None:
+        _cleanup_uploaded_file(file_path)
         raise HTTPException(status_code=500, detail="Failed to persist receipt scan")
+
+    return new_transaction, scan, doc_job
+
+
+@router.post("/transactions/scan", response_model=TransactionRead)
+async def scan_transaction(
+    force: bool = False,
+    note: Optional[str] = Form(None),
+    account_id: Optional[int] = Form(None),
+    auto_merge_policy: AutoMergePolicy = Form(AutoMergePolicy.AUTO),
+    file: UploadFile = File(...),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    user_is_demo = is_demo_user(current_user)
+    try:
+        file_content = await read_upload_bounded(file, is_demo=user_is_demo)
+        new_transaction, scan, _ = _ingest_single_document_upload(
+            session=session,
+            current_user=current_user,
+            current_budget=current_budget,
+            filename=file.filename,
+            content_type=file.content_type,
+            file_bytes=file_content,
+            force=force,
+            note=note,
+            account_id=account_id,
+            auto_merge_policy=auto_merge_policy,
+        )
+    except UploadRateLimitError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except UploadValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     session.commit()
     session.refresh(scan)
-
-    background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
-
     session.refresh(new_transaction)
+    wake_import_worker()
     return serialize_transaction_read(new_transaction, session=session)
+
+
+@router.post("/transactions/scan-batch", response_model=BatchDocumentUploadResponse)
+async def scan_batch_transactions(
+    files: List[UploadFile] = File(...),
+    force: bool = Form(False),
+    account_id: Optional[int] = Form(None),
+    auto_merge_policy: AutoMergePolicy = Form(AutoMergePolicy.AUTO),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Upload multiple receipts/PDFs/e-Paragons in one batch backed by independent durable jobs (#213)."""
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+    if len(files) > settings.BATCH_UPLOAD_MAX_FILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many files in one batch (maximum {settings.BATCH_UPLOAD_MAX_FILES}).",
+        )
+    if account_id is not None:
+        validate_transaction_accounts(session, current_budget.id, account_id, None)
+
+    user_is_demo = is_demo_user(current_user)
+    batch_id = f"batch_{uuid4().hex[:12]}"
+    results: list[BatchUploadItemResult] = []
+    queued_count = 0
+    duplicate_count = 0
+    failed_count = 0
+    rate_limited_count = 0
+
+    for upload in files:
+        safe_name = sanitize_filename(upload.filename)
+        try:
+            file_bytes = await read_upload_bounded(upload, is_demo=user_is_demo)
+            tx, scan, job = _ingest_single_document_upload(
+                session=session,
+                current_user=current_user,
+                current_budget=current_budget,
+                filename=upload.filename,
+                content_type=upload.content_type,
+                file_bytes=file_bytes,
+                force=force,
+                account_id=account_id,
+                auto_merge_policy=auto_merge_policy,
+                import_batch_id=batch_id,
+            )
+            session.commit()
+            queued_count += 1
+            results.append(
+                BatchUploadItemResult(
+                    filename=safe_name,
+                    status="queued",
+                    transaction_id=tx.id,
+                    receipt_scan_id=scan.id,
+                    job_id=job.id,
+                )
+            )
+        except UploadRateLimitError as exc:
+            session.rollback()
+            rate_limited_count += 1
+            results.append(
+                BatchUploadItemResult(
+                    filename=safe_name,
+                    status="rate_limited",
+                    error_code=exc.error_code,
+                    detail=exc.detail,
+                )
+            )
+        except UploadValidationError as exc:
+            session.rollback()
+            failed_count += 1
+            results.append(
+                BatchUploadItemResult(
+                    filename=safe_name,
+                    status="rejected",
+                    error_code=exc.error_code,
+                    detail=exc.detail,
+                )
+            )
+        except HTTPException as exc:
+            session.rollback()
+            if exc.status_code == 409:
+                duplicate_count += 1
+                results.append(
+                    BatchUploadItemResult(
+                        filename=safe_name,
+                        status="duplicate",
+                        error_code="DUPLICATE_FILE",
+                        detail=str(exc.detail),
+                    )
+                )
+            else:
+                failed_count += 1
+                results.append(
+                    BatchUploadItemResult(
+                        filename=safe_name,
+                        status="rejected",
+                        error_code="UPLOAD_REJECTED",
+                        detail=str(exc.detail),
+                    )
+                )
+
+    if queued_count > 0:
+        wake_import_worker()
+
+    return BatchDocumentUploadResponse(
+        import_batch_id=batch_id,
+        total_files=len(files),
+        queued_count=queued_count,
+        duplicate_count=duplicate_count,
+        failed_count=failed_count,
+        rate_limited_count=rate_limited_count,
+        results=results,
+    )
 
 
 @router.get("/demo/quota")
@@ -1174,7 +1458,6 @@ def get_demo_quota(
 
 @router.post("/transactions/scan-sample", response_model=TransactionRead)
 async def scan_sample_transaction(
-    background_tasks: BackgroundTasks,
     sample_id: str = Query(..., pattern="^(biedronka|lidl)$"),
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
@@ -1184,8 +1467,12 @@ async def scan_sample_transaction(
     Instantly trigger processing of a curated sample receipt (Biedronka or Lidl)
     without requiring file upload from client or consuming custom upload quota.
     """
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     if is_demo_user(current_user):
         start_of_day = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1269,24 +1556,99 @@ async def scan_sample_transaction(
         quality="1.00",
         raw_payload_policy=RawPayloadPolicy.EPHEMERAL_IMAGE,
     )
+    enqueue_document_ingest_job(
+        session,
+        budget_id=current_budget.id,
+        transaction_id=new_transaction.id,
+        receipt_scan_id=scan.id,
+        provider="demo_sample",
+        source_filename=sample_filename,
+        commit=False,
+    )
     session.commit()
     session.refresh(scan)
-
-    background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
     session.refresh(new_transaction)
+    wake_import_worker()
     return serialize_transaction_read(new_transaction, session=session)
+
+
+def _requeue_scan_and_job(
+    session: Session,
+    *,
+    budget_id: int,
+    transaction: Transaction,
+    scan: ReceiptScan,
+    existing_job: Optional[ImportJob] = None,
+) -> ImportJob:
+    """Reset scan to QUEUED and re-enqueue or reset its durable ImportJob."""
+    if transaction.id is None or scan.id is None:
+        raise HTTPException(status_code=500, detail="Invalid transaction or scan state")
+    if not scan.image_path or not os.path.exists(scan.image_path):
+        raise HTTPException(status_code=404, detail="Original image file not found. Please re-upload.")
+
+    now = datetime.now(timezone.utc)
+    scan.status = ScanStatus.QUEUED
+    scan.error_message = None
+    scan.needs_review = False
+    session.add(scan)
+
+    target_job = existing_job or session.exec(
+        select(ImportJob)
+        .where(
+            col(ImportJob.receipt_scan_id) == scan.id,
+            col(ImportJob.job_type) == DOCUMENT_JOB_TYPE,
+        )
+        .order_by(desc(ImportJob.id))
+    ).first()
+
+    if target_job is not None and target_job.status in (
+        ImportJobStatus.FAILED,
+        ImportJobStatus.PENDING,
+    ):
+        target_job.status = ImportJobStatus.PENDING
+        target_job.next_retry_at = now
+        target_job.lease_owner = None
+        target_job.lease_expires_at = None
+        target_job.last_error_code = None
+        target_job.completed_at = None
+        target_job.updated_at = now
+        if target_job.attempt_count >= target_job.max_attempts:
+            target_job.max_attempts = target_job.attempt_count + 3
+        session.add(target_job)
+        job = target_job
+    else:
+        job = enqueue_document_ingest_job(
+            session,
+            budget_id=budget_id,
+            transaction_id=transaction.id,
+            receipt_scan_id=scan.id,
+            provider="receipt_upload",
+            import_batch_id=transaction.import_batch_id,
+            commit=False,
+        )
+
+    session.commit()
+    session.refresh(scan)
+    session.refresh(transaction)
+    session.refresh(job)
+    wake_import_worker()
+    return job
 
 
 @router.post("/transactions/{transaction_id}/retry", response_model=TransactionRead)
 async def retry_transaction(
     transaction_id: int,
-    background_tasks: BackgroundTasks,
     session: Session = Depends(get_ops_session),
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
     transaction = session.get(Transaction, transaction_id)
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -1303,23 +1665,82 @@ async def retry_transaction(
     if scan.status not in (ScanStatus.FAILED, "error"):
         raise HTTPException(status_code=400, detail="Only failed scans can be retried")
 
-    if not scan.image_path or not os.path.exists(scan.image_path):
-        raise HTTPException(status_code=404, detail="Original image file not found. Please re-upload.")
-
-    scan.status = ScanStatus.QUEUED
-    scan.error_message = None
-    scan.needs_review = False
-    session.add(scan)
-    session.commit()
-    session.refresh(transaction)
-
-    if transaction.id is None:
-        raise HTTPException(status_code=500, detail="Invalid transaction state")
-    if scan.id is None:
-        raise HTTPException(status_code=500, detail="Invalid scan state")
-    background_tasks.add_task(process_transaction_in_background, transaction.id, scan.id, scan.image_path)
-
+    _requeue_scan_and_job(
+        session,
+        budget_id=current_budget.id,
+        transaction=transaction,
+        scan=scan,
+    )
     return serialize_transaction_read(transaction, session=session)
+
+
+@router.get("/import-jobs", response_model=List[ImportJobRead])
+async def list_import_jobs(
+    import_batch_id: Optional[str] = Query(default=None),
+    job_type: Optional[str] = Query(default=DOCUMENT_JOB_TYPE),
+    active_only: bool = Query(default=False),
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """List durable import jobs for the active budget."""
+    del current_user
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+
+    stmt = select(ImportJob).where(ImportJob.budget_id == current_budget.id)
+    if job_type:
+        stmt = stmt.where(col(ImportJob.job_type) == job_type)
+    if import_batch_id:
+        stmt = stmt.where(col(ImportJob.import_batch_id) == import_batch_id)
+    if active_only:
+        stmt = stmt.where(
+            col(ImportJob.status).in_(
+                [ImportJobStatus.PENDING.value, ImportJobStatus.RUNNING.value]
+            )
+        )
+    stmt = stmt.order_by(desc(ImportJob.id)).limit(limit)
+    jobs = session.exec(stmt).all()
+    return [serialize_import_job_read(job) for job in jobs]
+
+
+@router.post("/import-jobs/{job_id}/retry", response_model=ImportJobRead)
+async def retry_import_job(
+    job_id: int,
+    session: Session = Depends(get_ops_session),
+    current_user: User = Depends(get_current_user),
+    current_budget: Budget = Depends(get_current_budget),
+):
+    """Retry a failed or backoff-scheduled durable document import job."""
+    if not current_budget or current_budget.id is None:
+        raise HTTPException(status_code=404, detail="Budget not found")
+    try:
+        require_reconciliation_write_access(session, current_user, current_budget.id)
+    except ReconciliationPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    job = session.get(ImportJob, job_id)
+    if job is None or job.budget_id != current_budget.id:
+        raise HTTPException(status_code=404, detail="Import job not found")
+    if job.job_type != DOCUMENT_JOB_TYPE:
+        raise HTTPException(status_code=400, detail="Only document import jobs can be retried here")
+    if job.status not in (ImportJobStatus.FAILED, ImportJobStatus.PENDING):
+        raise HTTPException(status_code=400, detail="Only failed or retry-pending jobs can be retried")
+
+    tx = session.get(Transaction, job.transaction_id) if job.transaction_id is not None else None
+    scan = session.get(ReceiptScan, job.receipt_scan_id) if job.receipt_scan_id is not None else None
+    if tx is None or scan is None:
+        raise HTTPException(status_code=404, detail="Associated transaction or scan not found")
+
+    requeued = _requeue_scan_and_job(
+        session,
+        budget_id=current_budget.id,
+        transaction=tx,
+        scan=scan,
+        existing_job=job,
+    )
+    return serialize_import_job_read(requeued)
 
 
 @router.get("/transactions", response_model=List[TransactionRead])
@@ -1753,6 +2174,21 @@ async def delete_transaction(
     scan = session.exec(
         select(ReceiptScan).where(ReceiptScan.transaction_id == transaction_id)
     ).first()
+
+    if scan and scan.id is not None:
+        session.exec(
+            delete(ImportJob).where(
+                or_(
+                    col(ImportJob.transaction_id) == transaction_id,
+                    col(ImportJob.receipt_scan_id) == scan.id,
+                )
+            )
+        )
+    else:
+        session.exec(
+            delete(ImportJob).where(col(ImportJob.transaction_id) == transaction_id)
+        )
+
     if scan:
         if scan.image_path and os.path.exists(scan.image_path):
             try:

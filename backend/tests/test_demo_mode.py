@@ -187,12 +187,14 @@ def test_demo_inbox_staging_receipts(mock_bg, client: TestClient, session: Sessi
     inbox_items = response.json()
     assert len(inbox_items) == 0
 
-    # 2. Scanning sample receipt adds transaction and queues background processing
+    # 2. Scanning sample receipt adds transaction and enqueues durable import job
     res_sample = client.post("/api/transactions/scan-sample?sample_id=biedronka")
     assert res_sample.status_code == 200
     tx_data = res_sample.json()
     assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
-    mock_bg.assert_called_once()
+    assert tx_data["import_job"] is not None
+    assert tx_data["import_job"]["job_type"] == "document_ingest"
+    assert tx_data["import_job"]["status"] == "pending"
 
     # 3. When scan reaches review status, it appears in inbox
     scan = session.exec(select(ReceiptScan).where(ReceiptScan.transaction_id == tx_data["id"])).first()
@@ -445,14 +447,13 @@ def test_demo_quota_endpoint_and_limit(client: TestClient, session: Session):
     # Attempt 6th scan -> should return HTTP 429
     upload_res = client.post(
         "/api/transactions/scan",
-        files={"file": ("receipt.jpg", b"dummy image bytes", "image/jpeg")},
+        files={"file": ("receipt.jpg", b"\xff\xd8\xff\xe0dummy image bytes", "image/jpeg")},
     )
     assert upload_res.status_code == 429
     assert "Dzienny limit 5 skanów demonstracyjnych" in upload_res.text
 
 
-@patch("app.api.process_transaction_in_background")
-def test_demo_sample_scan_endpoint(mock_bg, client: TestClient, session: Session):
+def test_demo_sample_scan_endpoint(client: TestClient, session: Session):
     """POST /api/transactions/scan-sample creates transaction from curated sample."""
     demo_user = seed_demo_environment(session, force_reset=True)
     assert demo_user.default_budget_id is not None
@@ -466,7 +467,9 @@ def test_demo_sample_scan_endpoint(mock_bg, client: TestClient, session: Session
     assert res.status_code == 200
     tx_data = res.json()
     assert "Biedronka (Wzorzec)" in tx_data["merchant_name"]
-    mock_bg.assert_called_once()
+    assert tx_data["import_job"] is not None
+    assert tx_data["import_job"]["job_type"] == "document_ingest"
+    assert tx_data["import_job"]["status"] == "pending"
 
 
 @patch("app.api.process_transaction_in_background")
@@ -542,7 +545,7 @@ def test_demo_custom_scan_deletion_immunity(mock_bg, client: TestClient, session
     for i in range(5):
         res = client.post(
             "/api/transactions/scan",
-            files={"file": (f"rec_{i}.jpg", f"fake_content_{i}".encode(), "image/jpeg")},
+            files={"file": (f"rec_{i}.jpg", b"\xff\xd8\xff\xe0" + f"fake_content_{i}".encode(), "image/jpeg")},
         )
         assert res.status_code == 200
         uploaded_ids.append(res.json()["id"])
@@ -550,7 +553,7 @@ def test_demo_custom_scan_deletion_immunity(mock_bg, client: TestClient, session
     # 6th scan is blocked
     res6 = client.post(
         "/api/transactions/scan",
-        files={"file": ("rec_6.jpg", b"fake_content_6", "image/jpeg")},
+        files={"file": ("rec_6.jpg", b"\xff\xd8\xff\xe0fake_content_6", "image/jpeg")},
     )
     assert res6.status_code == 429
 
@@ -561,7 +564,7 @@ def test_demo_custom_scan_deletion_immunity(mock_bg, client: TestClient, session
     # Retrying scan is STILL blocked because ScanUsageLog persists
     res_again = client.post(
         "/api/transactions/scan",
-        files={"file": ("rec_again.jpg", b"fake_content_again", "image/jpeg")},
+        files={"file": ("rec_again.jpg", b"\xff\xd8\xff\xe0fake_content_again", "image/jpeg")},
     )
     assert res_again.status_code == 429
 

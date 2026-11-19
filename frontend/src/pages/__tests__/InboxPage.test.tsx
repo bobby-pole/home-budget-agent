@@ -24,6 +24,8 @@ vi.mock("@/lib/api", () => ({
     bulkApproveInbox: vi.fn(),
     rejectInboxItem: vi.fn(),
     restoreInboxItem: vi.fn(),
+    getImportJobs: vi.fn(),
+    retryImportJob: vi.fn(),
     getCategories: vi.fn().mockResolvedValue([]),
     getEnvelopes: vi.fn().mockResolvedValue([]),
     getAccounts: vi.fn(),
@@ -160,6 +162,7 @@ describe("InboxPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getAccounts).mockResolvedValue(mockAccounts);
+    vi.mocked(api.getImportJobs).mockResolvedValue([]);
     vi.mocked(api.getInbox).mockImplementation(async (params) => {
       if (params?.tab === "rejected") return mockRejectedScans;
       return mockInboxScans;
@@ -247,6 +250,68 @@ describe("InboxPage", () => {
 
     await waitFor(() => {
       expect(api.restoreInboxItem).toHaveBeenCalledWith(99);
+    });
+  });
+
+  it("renders document import jobs queue panel and triggers retry on failed jobs", async () => {
+    vi.mocked(api.getImportJobs).mockResolvedValue([
+      {
+        id: 77,
+        job_type: "document_ingest",
+        provider: "receipt_upload",
+        connection_id: null,
+        budget_id: 1,
+        transaction_id: 1,
+        receipt_scan_id: 11,
+        import_batch_id: "batch_999",
+        source_filename: "biedronka_piatek.jpg",
+        status: "failed",
+        attempt_count: 3,
+        max_attempts: 3,
+        next_retry_at: "2026-05-10T10:05:00Z",
+        last_error_code: "OCR_TRANSIENT_ERROR",
+        is_retryable: true,
+        created_at: "2026-05-10T10:00:00Z",
+        updated_at: "2026-05-10T10:05:00Z",
+        completed_at: null,
+      },
+    ]);
+    vi.mocked(api.retryImportJob).mockResolvedValue({
+      id: 77,
+      job_type: "document_ingest",
+      provider: "receipt_upload",
+      connection_id: null,
+      budget_id: 1,
+      transaction_id: 1,
+      receipt_scan_id: 11,
+      import_batch_id: "batch_999",
+      source_filename: "biedronka_piatek.jpg",
+      status: "pending",
+      attempt_count: 0,
+      max_attempts: 3,
+      next_retry_at: "2026-05-10T10:06:00Z",
+      last_error_code: null,
+      is_retryable: true,
+      created_at: "2026-05-10T10:00:00Z",
+      updated_at: "2026-05-10T10:06:00Z",
+      completed_at: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <InboxPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText(/Kolejka importu dokumentów/i)).toBeInTheDocument();
+    expect(screen.getByText("biedronka_piatek.jpg")).toBeInTheDocument();
+    expect(screen.getByText(/Próba 3\/3/i)).toBeInTheDocument();
+
+    const retryBtn = screen.getByRole("button", { name: /Ponów/i });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(api.retryImportJob).toHaveBeenCalledWith(77);
     });
   });
 });

@@ -738,21 +738,40 @@ class ImportJob(SQLModel, table=True):
         Index("ix_import_jobs_claimable", "status", "next_retry_at", "lease_expires_at"),
         Index("ix_import_jobs_connection_status", "connection_id", "status"),
         Index("ix_import_jobs_provider_status", "provider", "status"),
+        Index("ix_import_jobs_batch_status", "import_batch_id", "status"),
         Index(
             "uq_import_jobs_active_connection_type",
             "connection_id",
             "job_type",
             unique=True,
-            sqlite_where=text("status IN ('pending', 'running')"),
-            postgresql_where=text("status IN ('pending', 'running')"),
+            sqlite_where=text("status IN ('pending', 'running') AND connection_id IS NOT NULL"),
+            postgresql_where=text("status IN ('pending', 'running') AND connection_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_import_jobs_active_scan_type",
+            "receipt_scan_id",
+            "job_type",
+            unique=True,
+            sqlite_where=text("status IN ('pending', 'running') AND receipt_scan_id IS NOT NULL"),
+            postgresql_where=text("status IN ('pending', 'running') AND receipt_scan_id IS NOT NULL"),
         ),
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     job_type: str = Field(default="connection_sync", index=True)
     provider: str = Field(index=True)
-    connection_id: int = Field(foreign_key="external_receipt_connection.id", index=True)
+    connection_id: Optional[int] = Field(
+        default=None, foreign_key="external_receipt_connection.id", index=True
+    )
     budget_id: int = Field(foreign_key="budget.id", index=True)
+    transaction_id: Optional[int] = Field(
+        default=None, foreign_key="transaction.id", index=True
+    )
+    receipt_scan_id: Optional[int] = Field(
+        default=None, foreign_key="receiptscan.id", index=True
+    )
+    import_batch_id: Optional[str] = Field(default=None, index=True)
+    source_filename: Optional[str] = Field(default=None)
 
     status: ImportJobStatus = Field(
         default=ImportJobStatus.PENDING,
@@ -1015,6 +1034,47 @@ class ReceiptScanRead(SQLModel):
     reconstructed_lines: Optional[list[str]] = None
 
 
+class ImportJobRead(SQLModel):
+    id: int
+    job_type: str
+    provider: str
+    connection_id: Optional[int] = None
+    budget_id: int
+    transaction_id: Optional[int] = None
+    receipt_scan_id: Optional[int] = None
+    import_batch_id: Optional[str] = None
+    source_filename: Optional[str] = None
+    status: ImportJobStatus
+    attempt_count: int
+    max_attempts: int
+    next_retry_at: datetime
+    last_error_code: Optional[str] = None
+    is_retryable: bool = False
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime] = None
+
+
+class BatchUploadItemResult(SQLModel):
+    filename: str
+    status: str  # queued | duplicate | rejected | rate_limited
+    error_code: Optional[str] = None
+    detail: Optional[str] = None
+    transaction_id: Optional[int] = None
+    receipt_scan_id: Optional[int] = None
+    job_id: Optional[int] = None
+
+
+class BatchDocumentUploadResponse(SQLModel):
+    import_batch_id: str
+    total_files: int
+    queued_count: int
+    duplicate_count: int
+    failed_count: int
+    rate_limited_count: int
+    results: List[BatchUploadItemResult] = []
+
+
 class TransactionRead(TransactionBase):
     id: int
     note: Optional[str] = None
@@ -1026,6 +1086,7 @@ class TransactionRead(TransactionBase):
     suggested_account_id: Optional[int] = None
     review_reasons: List[str] = Field(default_factory=list)
     canonical_total_valid: Optional[bool] = None
+    import_job: Optional[ImportJobRead] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None

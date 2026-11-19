@@ -31,6 +31,38 @@ export function translateValidationMessage(message: string | null | undefined): 
       return t("errors.receipt.missing_receipt_keywords");
     case "MISSING_PRICE_PATTERNS":
       return t("errors.receipt.missing_price_patterns");
+    case "OCR_TRANSIENT_ERROR":
+      return t("errors.receipt.ocr_transient_error");
+    case "OCR_NO_DATA":
+      return t("errors.receipt.ocr_no_data");
+    case "FILE_NOT_FOUND":
+      return t("errors.receipt.file_not_found");
+    case "DUPLICATE_FILE":
+      return t("errors.receipt.duplicate_file");
+    case "UPLOAD_TOO_LARGE":
+    case "FILE_TOO_LARGE":
+      return t("errors.receipt.upload_too_large");
+    case "UNSUPPORTED_FILE_TYPE":
+      return t("errors.receipt.unsupported_file_type");
+    case "INVALID_FILE_SIGNATURE":
+      return t("errors.receipt.invalid_file_signature");
+    case "MAGIC_BYTE_MISMATCH":
+    case "FILE_SIGNATURE_MISMATCH":
+      return t("errors.receipt.magic_byte_mismatch");
+    case "UPLOAD_RATE_LIMITED":
+      return t("errors.receipt.upload_rate_limited");
+    case "UPLOAD_QUEUE_FULL":
+      return t("errors.receipt.upload_queue_full");
+    case "DEMO_DAILY_LIMIT_EXCEEDED":
+      return t("errors.receipt.demo_daily_limit_exceeded");
+    case "INVALID_DOCUMENT_JOB":
+      return t("errors.receipt.invalid_document_job");
+    case "DOCUMENT_INGEST_FAILED":
+      return t("errors.receipt.document_ingest_failed");
+    case "EMPTY_FILE":
+      return t("errors.receipt.empty_file");
+    case "CORRUPT_DOCUMENT":
+      return t("errors.receipt.corrupt_document");
     default:
       return message; // fallback: show original string (backward compat)
   }

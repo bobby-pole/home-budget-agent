@@ -1050,11 +1050,12 @@ class ConnectionService:
                     detail="Stored connection token could not be decrypted; re-authorization required.",
                 )
 
+            err_str = err_code.value if isinstance(err_code, ConnectionErrorCode) else str(err_code)
             if err_code in (ConnectionErrorCode.AUTH_EXPIRED, ConnectionErrorCode.MFA_REQUIRED):
                 conn.status = ConnectionStatus.REAUTH_REQUIRED
             else:
                 conn.status = ConnectionStatus.SYNC_ERROR
-            conn.last_error_code = err_code.value
+            conn.last_error_code = err_str
             conn.sync_requested_at = None
             conn.next_sync_at = None
             conn.updated_at = datetime.now(timezone.utc)
@@ -1062,12 +1063,13 @@ class ConnectionService:
             session.commit()
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Lidl synchronization failed ({err_code.value}).",
+                detail=f"Lidl synchronization failed ({err_str}).",
             )
 
         finish_now = datetime.now(timezone.utc)
         if outcome.failed_count:
             err_code = outcome.error_code or ConnectionErrorCode.SYNC_FAILED
+            err_str = err_code.value if isinstance(err_code, ConnectionErrorCode) else str(err_code)
             if err_code in (
                 ConnectionErrorCode.AUTH_EXPIRED,
                 ConnectionErrorCode.MFA_REQUIRED,
@@ -1076,7 +1078,7 @@ class ConnectionService:
                 conn.status = ConnectionStatus.REAUTH_REQUIRED
             else:
                 conn.status = ConnectionStatus.SYNC_ERROR
-            conn.last_error_code = err_code.value
+            conn.last_error_code = err_str
             conn.next_sync_at = None
         else:
             conn.status = ConnectionStatus.ACTIVE

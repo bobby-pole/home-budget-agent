@@ -74,6 +74,17 @@ class Settings:
     LIDL_SYNC_MAX_TICKETS: int = int(os.getenv("LIDL_SYNC_MAX_TICKETS", "50"))
     _initial_lidl_sync_max_tickets: int = LIDL_SYNC_MAX_TICKETS
 
+    # Upload ingress validation & rate limits (#121, #122, #213)
+    UPLOAD_MAX_FILE_BYTES: int = int(os.getenv("UPLOAD_MAX_FILE_BYTES", str(10 * 1024 * 1024)))
+    DEMO_UPLOAD_MAX_FILE_BYTES: int = int(
+        os.getenv("DEMO_UPLOAD_MAX_FILE_BYTES", str(5 * 1024 * 1024))
+    )
+    BATCH_UPLOAD_MAX_FILES: int = int(os.getenv("BATCH_UPLOAD_MAX_FILES", "15"))
+    UPLOAD_RATE_LIMIT_MAX_COUNT: int = int(os.getenv("UPLOAD_RATE_LIMIT_MAX_COUNT", "30"))
+    UPLOAD_RATE_LIMIT_WINDOW_SECONDS: int = int(
+        os.getenv("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", "600")
+    )
+
     def is_provider_enabled(self, provider: str) -> bool:
         """Evaluate per-provider connector availability dynamically."""
         provider_clean = (provider or "").strip().lower()
