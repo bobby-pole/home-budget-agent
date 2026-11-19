@@ -260,7 +260,7 @@ def test_user_created_category_learned_on_inbox_verify(client: TestClient, sessi
 
     session.refresh(line)
     assert line.category_id == custom_cat["id"]
-    assert line.category_source == "manual"
+    assert line.category_source == "user"
 
     cache_entry = session.exec(
         select(ProductCategoryCache).where(

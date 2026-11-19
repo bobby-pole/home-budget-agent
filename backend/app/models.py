@@ -1024,6 +1024,8 @@ class TransactionRead(TransactionBase):
     rejection_reason: Optional[str] = None
     import_batch_id: Optional[str] = None
     suggested_account_id: Optional[int] = None
+    review_reasons: List[str] = Field(default_factory=list)
+    canonical_total_valid: Optional[bool] = None
     lines: List[TransactionLineRead] = []
     budget_id: Optional[int] = None
     uploaded_by: Optional[int] = None

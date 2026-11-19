@@ -4,6 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/dates";
 import { AlertCircle, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import type { TransactionRead as Transaction } from "@/client";
+import { translateValidationMessage } from "@/lib/errorCodes";
+import {
+  getEffectiveReviewReasons,
+  getLiveSumComparison,
+  getTransactionProvenance,
+} from "@/lib/provenance";
 import { getStatusLabel, getStatusVariant, isInProgress } from "@/lib/receiptStatus";
 import { t } from "@/lib/i18n";
 import { formatMoneyFixed } from "@/lib/money";
@@ -14,20 +20,6 @@ interface PendingVerificationListProps {
   selectedIds?: number[];
   onToggleSelect?: (id: number) => void;
   onSelect: (transaction: Transaction) => void;
-}
-
-function getSourceBadge(tx: Transaction): string | null {
-  const first = tx.source_records?.[0];
-  if (!first) return null;
-  const st = String(first.source_type || "").toUpperCase();
-  if (st === "OCR_PHOTO") return t("inbox.list.source_ocr_photo");
-  if (st === "MERCHANT_API") {
-    return first.provider === "lidl" ? "Lidl Plus" : t("inbox.list.source_merchant_api");
-  }
-  if (st === "E_RECEIPT") return t("inbox.list.source_e_receipt");
-  if (st === "BANK_CSV") return t("inbox.list.source_bank_csv");
-  if (st === "MANUAL") return t("inbox.list.source_manual");
-  return null;
 }
 
 export function PendingVerificationList({
@@ -59,7 +51,10 @@ export function PendingVerificationList({
         const variant = hasScan ? getStatusVariant(status) : "warning";
         const label = hasScan ? getStatusLabel(status) : t("inbox.list.missing_account_hint");
         const inProgress = hasScan && isInProgress(status);
-        const sourceLabel = getSourceBadge(tx);
+        const provenance = getTransactionProvenance(tx);
+        const sourceLabel = provenance.sourceLabel;
+        const reviewReasons = getEffectiveReviewReasons(tx);
+        const sumComparison = getLiveSumComparison(tx);
 
         return (
           <Card
@@ -102,7 +97,21 @@ export function PendingVerificationList({
                           {sourceLabel}
                         </Badge>
                       )}
+                      {sumComparison.showVerifiedTotalBadge && (
+                        <Badge
+                          variant="outline"
+                          className="text-[10px] h-4 px-1.5 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25 gap-0.5"
+                        >
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          <span>{t("provenance.validation.sum_ok")}</span>
+                        </Badge>
+                      )}
                     </div>
+                    {reviewReasons.length > 0 && (
+                      <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-300 line-clamp-2">
+                        {translateValidationMessage(reviewReasons[0])}
+                      </p>
+                    )}
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-sm font-bold">

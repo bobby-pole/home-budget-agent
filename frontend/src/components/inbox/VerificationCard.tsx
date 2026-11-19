@@ -7,6 +7,7 @@ import { format } from "date-fns";
 import {
   AlertTriangle,
   Check,
+  CheckCircle2,
   Trash2,
   ImageIcon,
   Loader2,
@@ -47,7 +48,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TransactionRead as Transaction } from "@/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { translateValidationMessage } from "@/lib/errorCodes";
+import { getLiveSumComparison } from "@/lib/provenance";
+import { ProvenanceSummaryCard } from "@/components/shared/ProvenanceSummaryCard";
 import {
   addMoney,
   computeLineTotal,
@@ -387,6 +389,8 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
   };
 
   const lines = useWatch({ control: form.control, name: "lines" }) || [];
+  const watchedTotalAmount = useWatch({ control: form.control, name: "total_amount" }) || "";
+  const watchedCurrency = useWatch({ control: form.control, name: "currency" }) || transaction.currency || "PLN";
   const linesTotal = lines.reduce((acc, l) => {
     if (l.is_adjustment) {
       return addMoney(acc, l.unit_price || "0.00");
@@ -396,6 +400,8 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
       computeLineTotal(l.unit_price || "0.00", l.quantity || "1", l.discount_total || "0.00")
     );
   }, "0.00");
+  const liveHeaderTotal = parseMoneyInput(watchedTotalAmount) ?? transaction.total_amount ?? "0.00";
+  const sumComparison = getLiveSumComparison(transaction, linesTotal, liveHeaderTotal);
 
   const receiptPreview = (
     <Card className="flex flex-col h-full bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden shadow-sm">
@@ -590,14 +596,13 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
               </div>
             </CardHeader>
 
-            {transaction.receipt_scan?.validation_message && (
-              <div className="mx-4 md:mx-6 mt-4 flex items-start gap-3 rounded-lg border border-yellow-400/40 bg-yellow-400/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-300">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{translateValidationMessage(transaction.receipt_scan.validation_message)}</span>
-              </div>
-            )}
-
             <CardContent className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
+              <ProvenanceSummaryCard
+                transaction={transaction}
+                liveLinesTotal={linesTotal}
+                liveHeaderTotal={liveHeaderTotal}
+              />
+
               <div className="bg-muted/30 p-4 rounded-xl border border-border/50 space-y-4">
                 <FormField
                   control={form.control}
@@ -756,8 +761,37 @@ export function VerificationCard({ transaction, onSuccess, onBack }: Verificatio
                     </FormItem>
                   )}
                 />
-                <div className="text-xs md:text-sm font-bold shrink-0">
-                  {t("inbox.verification_card.sum_prefix")} {formatMoneyFixed(linesTotal)} {form.getValues("currency")}
+                <div className="flex items-center gap-2 text-xs md:text-sm font-bold shrink-0 tabular-nums">
+                  {sumComparison.showVerifiedTotalBadge && (
+                    <span
+                      title={t("provenance.validation.sum_ok_tooltip")}
+                      className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[11px] font-semibold"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>{t("provenance.validation.sum_ok")}</span>
+                    </span>
+                  )}
+                  {!sumComparison.showVerifiedTotalBadge &&
+                    (sumComparison.canonicalValid === false ||
+                      (sumComparison.canonicalValid === true && !sumComparison.isExactMatch)) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 px-2 py-0.5 text-[11px] font-semibold">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        <span>
+                          {sumComparison.canonicalValid === true
+                            ? t("provenance.validation.sum_edited", {
+                                delta: sumComparison.formattedAbsDiff,
+                                currency: watchedCurrency,
+                              })
+                            : t("provenance.validation.sum_mismatch", {
+                                delta: sumComparison.formattedAbsDiff,
+                                currency: watchedCurrency,
+                              })}
+                        </span>
+                      </span>
+                    )}
+                  <span>
+                    {t("inbox.verification_card.sum_prefix")} {formatMoneyFixed(linesTotal)} {watchedCurrency}
+                  </span>
                 </div>
               </div>
             </CardFooter>

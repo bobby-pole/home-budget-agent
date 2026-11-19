@@ -43,6 +43,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useTransactionActions } from "@/hooks/use-transaction-actions";
 import { formatDate } from "@/lib/dates";
 import { formatMoneyFixed } from "@/lib/money";
+import { getTransactionProvenance } from "@/lib/provenance";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -50,16 +51,7 @@ type InboxTab = "exceptions" | "reconciliation" | "rejected";
 type SourceFilter = "all" | "ocr_photo" | "merchant_api" | "e_receipt" | "bank_csv";
 
 function getRejectedSourceLabel(tx: TransactionRead): string | null {
-  const first = tx.source_records?.[0];
-  if (!first) return null;
-  const st = String(first.source_type || "").toUpperCase();
-  if (st === "OCR_PHOTO") return t("inbox.list.source_ocr_photo");
-  if (st === "MERCHANT_API") {
-    return first.provider === "lidl" ? t("transactions.table.source_lidl") : t("inbox.list.source_merchant_api");
-  }
-  if (st === "E_RECEIPT") return t("inbox.list.source_e_receipt");
-  if (st === "BANK_CSV") return t("inbox.list.source_bank_csv");
-  return t("inbox.list.source_manual");
+  return getTransactionProvenance(tx).sourceLabel;
 }
 
 export function InboxPage() {

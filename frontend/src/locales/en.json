@@ -924,7 +924,15 @@
       "sum_mismatch": "Sum of items differs from receipt total by {delta} PLN.",
       "zero_price_item": "At least one item has a price of 0.00 PLN.",
       "future_date": "Receipt date is in the future.",
-      "duplicate_review": "Possible duplicate from another source detected — review or merge in Reconciliation & Duplicates."
+      "duplicate_review": "Possible duplicate from another source detected — review or merge in Reconciliation & Duplicates.",
+      "validation_failed": "Document validation failed — please check items manually.",
+      "low_confidence": "Low OCR reading confidence — verify item names and amounts.",
+      "unknown_issue": "Document data issue detected — review required.",
+      "missing_account": "No account assigned — select an account before approving.",
+      "needs_review": "Item requires manual review before posting.",
+      "text_too_short": "Recognized text is too short to parse a receipt.",
+      "missing_receipt_keywords": "Document does not look like a store receipt.",
+      "missing_price_patterns": "No price patterns detected on the document."
     },
     "csv_import_complete": "Imported {imported} transactions from {filename}. Skipped {skipped} duplicates."
   },
@@ -1023,5 +1031,59 @@
     "Vegetables": "Food",
     "Chemicals": "Household Chemicals",
     "Electronics": "Electronics"
+  },
+  "provenance": {
+    "sources": {
+      "lidl": "Lidl Plus",
+      "merchant_api": "Store API",
+      "e_receipt": "e-Receipt",
+      "bank_csv": "Bank CSV/PDF",
+      "ocr_photo": "OCR Scan",
+      "manual": "Manual entry",
+      "unknown": "Unknown source"
+    },
+    "kinds": {
+      "structured": "Structured data",
+      "ocr": "OCR / AI extraction",
+      "manual": "Entered manually"
+    },
+    "category_source": {
+      "cache": "Cache",
+      "cache_tooltip": "Category matched from product cache",
+      "ai": "AI",
+      "ai_tooltip": "Category suggested by AI — please verify",
+      "user": "User",
+      "user_tooltip": "Category selected or edited by user",
+      "auto": "Auto",
+      "auto_tooltip": "Category assigned automatically",
+      "unassigned": "Uncategorized"
+    },
+    "validation": {
+      "sum_ok": "Total verified",
+      "sum_ok_tooltip": "Canonical receipt total validation passed (±0.01 PLN)",
+      "sum_mismatch": "Total mismatch: {delta} {currency}",
+      "sum_edited": "Modified locally (diff: {delta} {currency})",
+      "sum_failed": "Validation failed",
+      "sum_pending": "Validation in progress"
+    },
+    "labels": {
+      "section_title": "Provenance & verification",
+      "review_reasons_title": "Why review is needed",
+      "provider": "Provider",
+      "adapter": "Adapter",
+      "acquired_at": "Imported at",
+      "processed_via": "Processed via",
+      "external_id": "External ID",
+      "data_mode": "Data mode",
+      "ocr_quality": "OCR quality",
+      "structured_verified": "Confidence: deterministic (API / file)",
+      "retention": "Retention",
+      "retention_retained_image": "Image retained",
+      "retention_ephemeral_image": "Ephemeral image",
+      "retention_canonical_only": "Canonical data only",
+      "retention_none": "No raw payload",
+      "missing_category_warning": "Item missing category",
+      "source_details_toggle": "Provenance details"
+    }
   }
 }

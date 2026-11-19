@@ -10,6 +10,7 @@ import type { TransactionRead } from "@/client";
 import { TransactionHeaderForm } from "./transaction/TransactionHeaderForm";
 import { TransactionCategoryChart } from "./transaction/TransactionCategoryChart";
 import { TransactionItemsSection } from "./transaction/TransactionItemsSection";
+import { ProvenanceSummaryCard } from "@/components/shared/ProvenanceSummaryCard";
 import { t } from "@/lib/i18n";
 
 interface TransactionDetailModalProps {
@@ -29,6 +30,7 @@ export function TransactionDetailModal({ transaction, isOpen, onClose }: Transac
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto p-1 space-y-6">
+          <ProvenanceSummaryCard transaction={transaction} defaultExpanded />
           <TransactionHeaderForm transaction={transaction} />
           <TransactionCategoryChart lines={transaction.lines ?? []} currency={transaction.currency ?? "PLN"} />
           <TransactionItemsSection lines={transaction.lines ?? []} currency={transaction.currency ?? "PLN"} transactionId={transaction.id} />

@@ -15,9 +15,9 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session, select, desc, col, delete, SQLModel
 from sqlalchemy import extract, func, or_, and_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 from .models import (
-    Transaction, TransactionLine, TransactionRead, TransactionUpdate,
+    Transaction, TransactionLine, TransactionLineRead, TransactionRead, TransactionUpdate,
     TransactionLineUpdate, ManualTransactionCreate, TransferCreate,
     ReceiptScan, ScanStatus, TransactionStatus, VerifyRequest,
     ReviewStatus, AutoMergePolicy,
@@ -59,6 +59,8 @@ from .inbox_service import (
     promote_transaction_to_approved,
     reject_transaction_preserving_provenance,
     restore_inbox_item,
+    serialize_transaction_read,
+    serialize_transactions_read,
 )
 from .ingestion_service import (
     apply_receipt_result_to_existing_scan,
@@ -773,7 +775,7 @@ def create_manual_transaction(
         discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=True)
     session.refresh(transaction)
 
-    return transaction
+    return serialize_transaction_read(transaction, session=session)
 
 
 # --- TRANSFERS ---
@@ -837,7 +839,7 @@ def create_transfer(
 
     session.commit()
     session.refresh(transaction)
-    return transaction
+    return serialize_transaction_read(transaction, session=session)
 
 
 @router.delete("/transfers/{transfer_id}", status_code=204)
@@ -1047,7 +1049,7 @@ async def scan_transaction(
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
 
     session.refresh(new_transaction)
-    return new_transaction
+    return serialize_transaction_read(new_transaction, session=session)
 
 
 @router.get("/demo/quota")
@@ -1272,7 +1274,7 @@ async def scan_sample_transaction(
 
     background_tasks.add_task(process_transaction_in_background, new_transaction.id, scan.id, file_path)
     session.refresh(new_transaction)
-    return new_transaction
+    return serialize_transaction_read(new_transaction, session=session)
 
 
 @router.post("/transactions/{transaction_id}/retry", response_model=TransactionRead)
@@ -1317,7 +1319,7 @@ async def retry_transaction(
         raise HTTPException(status_code=500, detail="Invalid scan state")
     background_tasks.add_task(process_transaction_in_background, transaction.id, scan.id, scan.image_path)
 
-    return transaction
+    return serialize_transaction_read(transaction, session=session)
 
 
 @router.get("/transactions", response_model=List[TransactionRead])
@@ -1331,10 +1333,16 @@ async def get_transactions(
     current_user: User = Depends(get_current_user),
     current_budget: Budget = Depends(get_current_budget),
 ):
-    if not current_budget:
+    if not current_budget or current_budget.id is None:
         raise HTTPException(status_code=404, detail="Budget not found")
     statement = (
         select(Transaction)
+        .options(
+            selectinload(Transaction.lines),  # type: ignore[arg-type]
+            selectinload(Transaction.tags),  # type: ignore[arg-type]
+            selectinload(Transaction.receipt_scan),  # type: ignore[arg-type]
+            selectinload(Transaction.source_records),  # type: ignore[arg-type]
+        )
         .where(
             Transaction.budget_id == current_budget.id,
             col(Transaction.reconciled_into_id).is_(None),
@@ -1357,8 +1365,13 @@ async def get_transactions(
         statement = statement.where(col(Transaction.status) == status)
 
     statement = statement.order_by(desc(Transaction.date)).offset(offset).limit(limit)
-    results = session.exec(statement).all()
-    return results
+    results = list(session.exec(statement).unique().all())
+    return serialize_transactions_read(
+        session,
+        results,
+        budget_id=current_budget.id,
+        include_suggested_account=False,
+    )
 
 
 @router.get("/status", response_model=AppStatusRead)
@@ -1534,7 +1547,7 @@ async def verify_transaction(
                 for key, value in line_dict.items():
                     setattr(db_line, key, value)
                 if category_changed:
-                    db_line.category_source = "manual"
+                    db_line.category_source = "user"
                     if new_cat_id is not None and db_line.name:
                         cache_updates[db_line.name] = new_cat_id
                 session.add(db_line)
@@ -1543,7 +1556,7 @@ async def verify_transaction(
                 new_line = TransactionLine(
                     **line_dict,
                     transaction_id=db_transaction.id,
-                    category_source="manual" if new_cat_id is not None else None,
+                    category_source="user" if new_cat_id is not None else None,
                 )
                 session.add(new_line)
                 if new_cat_id is not None and new_line.name:
@@ -1551,6 +1564,7 @@ async def verify_transaction(
 
     # Persist user's keep_image decision and promote to approved ledger state
     scan.keep_image = body.keep_image
+    scan.validation_message = None
     if scan.id is not None:
         update_scan_source_metadata(
             session,
@@ -1573,7 +1587,6 @@ async def verify_transaction(
         save_to_cache(session, current_user.id, cache_updates, overwrite=True)
     if current_budget.id is not None:
         discover_reconciliation_candidates(session, budget_id=current_budget.id, commit=True)
-    session.refresh(db_transaction)
 
     # Delete image only if user did not request to keep it
     if not scan.keep_image and scan.image_path and os.path.exists(scan.image_path):
@@ -1586,7 +1599,8 @@ async def verify_transaction(
         except Exception as e:
             print(f"⚠️ Failed to delete image {scan.image_path}: {e}")
 
-    return db_transaction
+    session.refresh(db_transaction)
+    return serialize_transaction_read(db_transaction, session=session)
 
 
 @router.patch("/transactions/{transaction_id}", response_model=TransactionRead)
@@ -1645,10 +1659,10 @@ async def update_transaction(
     session.commit()
     session.refresh(db_transaction)
 
-    return db_transaction
+    return serialize_transaction_read(db_transaction, session=session)
 
 
-@router.patch("/transactions/{transaction_id}/lines/{line_id}", response_model=TransactionLine)
+@router.patch("/transactions/{transaction_id}/lines/{line_id}", response_model=TransactionLineRead)
 async def update_line(
     transaction_id: int,
     line_id: int,
@@ -1683,7 +1697,7 @@ async def update_line(
         setattr(db_line, key, value)
 
     if category_changed:
-        db_line.category_source = "manual"
+        db_line.category_source = "user"
 
     session.add(db_line)
     session.commit()
@@ -1693,7 +1707,8 @@ async def update_line(
         from .cache_service import save_to_cache
         save_to_cache(session, current_user.id, {db_line.name: new_category_id}, overwrite=True)
 
-    return db_line
+    session.refresh(db_line)
+    return TransactionLineRead.model_validate(db_line)
 
 
 @router.delete("/transactions/{transaction_id}", status_code=204)

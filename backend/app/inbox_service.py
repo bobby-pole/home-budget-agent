@@ -23,6 +23,7 @@ from app.models import (
     ReceiptScan,
     ReceiptScanRead,
     ReconciliationLink,
+    ReconciliationMatchKind,
     ReconciliationStatus,
     ReviewStatus,
     ScanStatus,
@@ -298,6 +299,7 @@ def promote_transaction_to_approved(
         if target_scan is not None:
             target_scan.status = ScanStatus.DONE
             target_scan.needs_review = False
+            target_scan.validation_message = None
             session.add(target_scan)
 
     session.flush()
@@ -308,12 +310,201 @@ def promote_transaction_to_approved(
         session.commit()
 
 
+_IN_PROGRESS_SCAN_STATUSES: tuple[str, ...] = (
+    ScanStatus.QUEUED.value,
+    ScanStatus.RUNNING.value,
+    ScanStatus.OCR_OK.value,
+    ScanStatus.PARSING_OK.value,
+    "processing",
+)
+
+_TOTAL_ERROR_PREFIXES: tuple[str, ...] = (
+    "RECEIPT_SUM_MISMATCH",
+    "RECEIPT_EMPTY",
+    "RECEIPT_ZERO_PRICE_ITEM",
+    "RECEIPT_FUTURE_DATE",
+    "VALIDATION_FAILED",
+)
+
+_RECEIPT_TOLERANCE = Decimal("0.01")
+
+
+def _compute_lines_total_decimal(lines: Sequence[TransactionLine]) -> Decimal:
+    """Compute the exact sum of transaction lines using Decimal arithmetic."""
+    total = Decimal("0.00")
+    for line in lines:
+        qty = Decimal(str(line.quantity if line.quantity is not None else "1"))
+        disc = Decimal(str(line.discount_total if line.discount_total is not None else "0.00"))
+        if (
+            not line.is_adjustment
+            and line.original_price is not None
+            and disc < Decimal("0.00")
+        ):
+            line_sum = Decimal(str(line.original_price)) * qty + disc
+        else:
+            line_sum = Decimal(str(line.price)) * qty
+        total += line_sum
+    return quantize_money(total)
+
+
+def compute_canonical_total_valid(tx: Transaction) -> Optional[bool]:
+    """Return canonical receipt total validation state using Decimal precision.
+
+    Returns:
+      - ``True`` only when a receipt scan finished validation without math errors,
+        has at least one line, and ``|sum(lines) - total_amount| <= 0.01``.
+      - ``False`` when receipt validation failed or line sum mismatches ``total_amount``.
+      - ``None`` for non-receipt records or in-progress scans.
+    """
+    scan = tx.receipt_scan
+    if scan is None:
+        return None
+
+    status_val = _enum_str(scan.status)
+    if status_val in _IN_PROGRESS_SCAN_STATUSES:
+        return None
+
+    if status_val in (ScanStatus.FAILED.value, "error"):
+        return False
+
+    is_finalized = status_val in (ScanStatus.DONE.value, "done")
+    msg = (scan.validation_message or "").strip()
+    if not is_finalized and msg and msg.startswith(_TOTAL_ERROR_PREFIXES):
+        return False
+
+    lines = tx.lines or []
+    if not lines:
+        return False
+
+    lines_sum = _compute_lines_total_decimal(lines)
+    tx_total = quantize_money(tx.total_amount if tx.total_amount is not None else Decimal("0.00"))
+    return abs(lines_sum - tx_total) <= _RECEIPT_TOLERANCE
+
+
+def compute_review_reasons(
+    tx: Transaction,
+    *,
+    canonical_total_valid: Optional[bool],
+    has_pending_duplicate: bool = False,
+) -> list[str]:
+    """Build deterministic deduplicated review reason codes explaining why an item needs attention."""
+    reasons: list[str] = []
+
+    def _add(code: str) -> None:
+        cleaned = code.strip()
+        if cleaned and cleaned not in reasons:
+            reasons.append(cleaned)
+
+    scan = tx.receipt_scan
+    scan_status = _enum_str(scan.status) if scan is not None else ""
+    in_progress = bool(scan is not None and scan_status in _IN_PROGRESS_SCAN_STATUSES)
+    is_finalized_scan = bool(scan is not None and scan_status in (ScanStatus.DONE.value, "done"))
+
+    if scan is not None and not in_progress:
+        val_msg = (scan.validation_message or "").strip()
+        if scan_status in (ScanStatus.FAILED.value, "error"):
+            if val_msg:
+                _add(val_msg)
+            elif scan.error_message and scan.error_message.strip():
+                _add(scan.error_message.strip())
+            else:
+                _add("VALIDATION_FAILED")
+        elif val_msg and not is_finalized_scan:
+            _add(val_msg)
+
+    if canonical_total_valid is False and not any(
+        r.startswith(_TOTAL_ERROR_PREFIXES) for r in reasons
+    ):
+        lines = tx.lines or []
+        if not lines:
+            _add("RECEIPT_EMPTY")
+        else:
+            lines_sum = _compute_lines_total_decimal(lines)
+            tx_total = quantize_money(tx.total_amount if tx.total_amount is not None else Decimal("0.00"))
+            delta = abs(lines_sum - tx_total)
+            _add(f"RECEIPT_SUM_MISMATCH:{delta:.2f}")
+
+    if has_pending_duplicate:
+        _add("DUPLICATE_REVIEW_REQUIRED")
+
+    if (
+        tx.account_id is None
+        and _enum_str(tx.review_status) == ReviewStatus.PENDING.value
+        and not in_progress
+    ):
+        _add("MISSING_ACCOUNT")
+
+    if not reasons and not in_progress:
+        needs_attention = (
+            _enum_str(tx.review_status) == ReviewStatus.PENDING.value
+            or (scan is not None and bool(scan.needs_review) and not is_finalized_scan)
+        )
+        if needs_attention:
+            _add("NEEDS_REVIEW")
+
+    return reasons
+
+
+def _fetch_pending_duplicate_tx_ids(
+    session: Session,
+    *,
+    budget_id: Optional[int],
+    transaction_ids: Sequence[int],
+) -> set[int]:
+    if budget_id is None or not transaction_ids:
+        return set()
+    id_set = list(set(transaction_ids))
+    links = session.exec(
+        select(
+            ReconciliationLink.bank_transaction_id,
+            ReconciliationLink.target_transaction_id,
+        ).where(
+            ReconciliationLink.budget_id == budget_id,
+            col(ReconciliationLink.match_kind) == ReconciliationMatchKind.RECEIPT_DUPLICATE.value,
+            col(ReconciliationLink.status) == ReconciliationStatus.PENDING.value,
+            (
+                col(ReconciliationLink.bank_transaction_id).in_(id_set)
+                | col(ReconciliationLink.target_transaction_id).in_(id_set)
+            ),
+        )
+    ).all()
+    matched: set[int] = set()
+    wanted = set(id_set)
+    for bank_id, target_id in links:
+        if bank_id in wanted:
+            matched.add(bank_id)
+        if target_id in wanted:
+            matched.add(target_id)
+    return matched
+
+
 def serialize_transaction_read(
     tx: Transaction,
     *,
     suggested_account_id: Optional[int] = None,
+    has_pending_duplicate: Optional[bool] = None,
+    session: Optional[Session] = None,
 ) -> TransactionRead:
-    """Serialize a ``Transaction`` ORM instance into ``TransactionRead`` with suggestion metadata."""
+    """Serialize a ``Transaction`` ORM instance into ``TransactionRead`` with provenance signals."""
+    if has_pending_duplicate is None:
+        if session is not None and tx.id is not None and tx.budget_id is not None:
+            has_dup = tx.id in _fetch_pending_duplicate_tx_ids(
+                session,
+                budget_id=tx.budget_id,
+                transaction_ids=[tx.id],
+            )
+        else:
+            has_dup = False
+    else:
+        has_dup = has_pending_duplicate
+
+    canonical_total_valid = compute_canonical_total_valid(tx)
+    review_reasons = compute_review_reasons(
+        tx,
+        canonical_total_valid=canonical_total_valid,
+        has_pending_duplicate=has_dup,
+    )
+
     lines = [
         TransactionLineRead.model_validate(line)
         for line in (tx.lines or [])
@@ -332,9 +523,42 @@ def serialize_transaction_read(
             "receipt_scan": scan_read,
             "source_records": source_records,
             "suggested_account_id": tx.account_id if tx.account_id is not None else suggested_account_id,
+            "review_reasons": review_reasons,
+            "canonical_total_valid": canonical_total_valid,
         },
     )
     return tx_data
+
+
+def serialize_transactions_read(
+    session: Session,
+    transactions: Sequence[Transaction],
+    *,
+    budget_id: int,
+    include_suggested_account: bool = True,
+) -> list[TransactionRead]:
+    """Batch-serialize transactions into ``TransactionRead`` without N+1 duplicate lookups."""
+    if not transactions:
+        return []
+    suggested_account_id = (
+        suggest_account_for_budget(session, budget_id=budget_id)
+        if include_suggested_account
+        else None
+    )
+    tx_ids = [tx.id for tx in transactions if tx.id is not None]
+    pending_dup_ids = _fetch_pending_duplicate_tx_ids(
+        session,
+        budget_id=budget_id,
+        transaction_ids=tx_ids,
+    )
+    return [
+        serialize_transaction_read(
+            tx,
+            suggested_account_id=suggested_account_id,
+            has_pending_duplicate=(tx.id in pending_dup_ids if tx.id is not None else False),
+        )
+        for tx in transactions
+    ]
 
 
 def _has_exception_scan(tx: Transaction) -> bool:
@@ -354,8 +578,6 @@ def list_inbox_items(
     needs_review: Optional[bool] = None,
 ) -> list[TransactionRead]:
     """Return Inbox transactions scoped to ``budget_id`` filtered by hybrid tab and source provenance."""
-    suggested_account_id = suggest_account_for_budget(session, budget_id=budget_id)
-
     stmt = (
         select(Transaction)
         .options(
@@ -416,7 +638,7 @@ def list_inbox_items(
 
     stmt = stmt.order_by(desc(Transaction.date), desc(Transaction.id))
     rows = list(session.exec(stmt).unique().all())
-    return [serialize_transaction_read(tx, suggested_account_id=suggested_account_id) for tx in rows]
+    return serialize_transactions_read(session, rows, budget_id=budget_id)
 
 
 def _validate_target_account(session: Session, *, budget_id: int, account_id: int) -> Account:
@@ -571,7 +793,7 @@ def reject_transaction_preserving_provenance(
 
     session.refresh(tx)
     suggested_acc = suggest_account_for_budget(session, budget_id=budget_id)
-    return serialize_transaction_read(tx, suggested_account_id=suggested_acc)
+    return serialize_transaction_read(tx, suggested_account_id=suggested_acc, session=session)
 
 
 def restore_inbox_item(
@@ -610,4 +832,4 @@ def restore_inbox_item(
 
     session.refresh(tx)
     suggested_acc = suggest_account_for_budget(session, budget_id=budget_id)
-    return serialize_transaction_read(tx, suggested_account_id=suggested_acc)
+    return serialize_transaction_read(tx, suggested_account_id=suggested_acc, session=session)

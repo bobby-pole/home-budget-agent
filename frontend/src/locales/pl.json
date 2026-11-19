@@ -924,7 +924,15 @@
       "sum_mismatch": "Suma pozycji różni się od paragonu o {delta} zł.",
       "zero_price_item": "Co najmniej jedna pozycja ma cenę 0,00 zł.",
       "future_date": "Data na paragonie jest w przyszłości.",
-      "duplicate_review": "Wykryto podobny paragon z innego źródła — zweryfikuj lub scal w zakładce Uzgodnienia i duplikaty."
+      "duplicate_review": "Wykryto podobny paragon z innego źródła — zweryfikuj lub scal w zakładce Uzgodnienia i duplikaty.",
+      "validation_failed": "Walidacja dokumentu nie powiodła się — sprawdź pozycje ręcznie.",
+      "low_confidence": "Niska pewność odczytu OCR — zweryfikuj nazwy i kwoty.",
+      "unknown_issue": "Wykryto problem z danymi dokumentu — wymagana weryfikacja.",
+      "missing_account": "Brak przypisanego konta — wybierz konto przed zatwierdzeniem.",
+      "needs_review": "Pozycja wymaga ręcznego sprawdzenia przed zaksięgowaniem.",
+      "text_too_short": "Rozpoznany tekst jest zbyt krótki, aby odczytać paragon.",
+      "missing_receipt_keywords": "Dokument nie przypomina paragonu fiskalnego.",
+      "missing_price_patterns": "Nie wykryto wzorców cen na dokumencie."
     },
     "csv_import_complete": "Zaimportowano {imported} transakcji z pliku {filename}. Pominięto {skipped} duplikatów."
   },
@@ -1023,5 +1031,59 @@
     "Vegetables": "Jedzenie",
     "Chemicals": "Chemia",
     "Electronics": "Elektronika"
+  },
+  "provenance": {
+    "sources": {
+      "lidl": "Lidl Plus",
+      "merchant_api": "API sklepu",
+      "e_receipt": "e-Paragon",
+      "bank_csv": "Bank CSV/PDF",
+      "ocr_photo": "Skan OCR",
+      "manual": "Wpis ręczny",
+      "unknown": "Nieznane źródło"
+    },
+    "kinds": {
+      "structured": "Dane ustrukturyzowane",
+      "ocr": "Rozpoznanie OCR / AI",
+      "manual": "Wprowadzone ręcznie"
+    },
+    "category_source": {
+      "cache": "Cache",
+      "cache_tooltip": "Kategoria dopasowana z pamięci wcześniejszych zakupów",
+      "ai": "AI",
+      "ai_tooltip": "Kategoria zasugerowana przez AI — warto sprawdzić",
+      "user": "Użytkownik",
+      "user_tooltip": "Kategoria wybrana lub poprawiona przez użytkownika",
+      "auto": "Auto",
+      "auto_tooltip": "Kategoria przypisana automatycznie",
+      "unassigned": "Brak kategorii"
+    },
+    "validation": {
+      "sum_ok": "Suma zgodna",
+      "sum_ok_tooltip": "Kanoniczna walidacja sumy pozycji zakończona pomyślnie (±0,01 zł)",
+      "sum_mismatch": "Niezgodność sumy: {delta} {currency}",
+      "sum_edited": "Zmodyfikowano lokalnie (różnica: {delta} {currency})",
+      "sum_failed": "Walidacja nie powiodła się",
+      "sum_pending": "Walidacja w toku"
+    },
+    "labels": {
+      "section_title": "Pochodzenie i weryfikacja",
+      "review_reasons_title": "Dlaczego wymaga przeglądu",
+      "provider": "Dostawca",
+      "adapter": "Adapter",
+      "acquired_at": "Zaimportowano",
+      "processed_via": "Przetworzono przez",
+      "external_id": "ID zewnętrzne",
+      "data_mode": "Charakter danych",
+      "ocr_quality": "Jakość OCR",
+      "structured_verified": "Pewność: deterministyczna (API / plik)",
+      "retention": "Przechowywanie",
+      "retention_retained_image": "Zachowano zdjęcie",
+      "retention_ephemeral_image": "Tymczasowe zdjęcie",
+      "retention_canonical_only": "Tylko dane kanoniczne",
+      "retention_none": "Brak surowego pliku",
+      "missing_category_warning": "Pozycja bez przypisanej kategorii",
+      "source_details_toggle": "Szczegóły pochodzenia"
+    }
   }
 }
