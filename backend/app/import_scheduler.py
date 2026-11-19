@@ -742,6 +742,9 @@ def claim_next_job(
     for lock_attempt in range(8):
         try:
             recover_stale_jobs(session, now=current, commit=True)
+            if session.get_bind().dialect.name == "sqlite":
+                session.rollback()
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
 
             active_runs = session.exec(
                 select(ImportJob).where(
@@ -799,6 +802,7 @@ def claim_next_job(
                 stmt.order_by(col(ImportJob.next_retry_at).asc(), col(ImportJob.id).asc()).limit(25)
             ).all()
             if not candidates:
+                session.rollback()
                 return None
 
             lost_race = False
